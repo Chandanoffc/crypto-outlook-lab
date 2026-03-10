@@ -1,7 +1,0 @@
-services:
-  - type: web
-    name: crypto-outlook-lab
-    runtime: static
-    buildCommand: "echo 'No build step required'"
-    staticPublishPath: .
-

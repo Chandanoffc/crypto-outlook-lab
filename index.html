@@ -21,8 +21,8 @@
           <p class="eyebrow">Educational Dashboard</p>
           <h1>Crypto Outlook Lab</h1>
           <p class="subtitle">
-            Live token dashboard for short-horizon structure, flow, funding, and
-            news context.
+            Futures-first dashboard for structure, leverage, order flow,
+            liquidation pressure, and short-horizon setups.
           </p>
         </div>
 
@@ -55,20 +55,23 @@
       </header>
 
       <div id="status-banner" class="status-banner">
-        Preparing dashboard...
+        Preparing futures dashboard...
       </div>
 
       <main class="dashboard-grid">
         <section class="panel panel-hero">
           <div class="panel-head">
             <div>
-              <p class="panel-label">Price Structure</p>
-              <h2 id="asset-title">BTC / USDT</h2>
+              <p class="panel-label">Perpetual Structure</p>
+              <h2 id="asset-title">BTCUSDT Perpetual</h2>
+              <p id="asset-subtitle" class="subtitle-inline">
+                Binance USDT perpetual contract
+              </p>
             </div>
 
             <div class="headline-metrics">
               <div class="headline-chip">
-                <span>Last Price</span>
+                <span>Mark Price</span>
                 <strong id="headline-price">-</strong>
               </div>
               <div class="headline-chip">
@@ -105,6 +108,10 @@
             <div id="bias-score" class="score-badge neutral">0</div>
           </div>
 
+          <div id="stream-status" class="stream-status neutral">
+            Live feeds offline
+          </div>
+
           <div id="outlook-summary" class="outlook-copy">
             Loading directional summary...
           </div>
@@ -119,9 +126,9 @@
 
         <section class="metric-strip">
           <article class="metric-card">
-            <span class="metric-label">Spot Volume</span>
+            <span class="metric-label">Perp Volume</span>
             <strong id="metric-volume">-</strong>
-            <small id="metric-volume-note">Quote volume</small>
+            <small id="metric-volume-note">24H quote volume</small>
           </article>
           <article class="metric-card">
             <span class="metric-label">Orderbook Imbalance</span>
@@ -129,9 +136,9 @@
             <small id="metric-imbalance-note">Bid vs ask depth</small>
           </article>
           <article class="metric-card">
-            <span class="metric-label">Smart Money Tape</span>
-            <strong id="metric-flow">-</strong>
-            <small id="metric-flow-note">Large trade aggression</small>
+            <span class="metric-label">CVD</span>
+            <strong id="metric-cvd">-</strong>
+            <small id="metric-cvd-note">Rolling futures delta</small>
           </article>
           <article class="metric-card">
             <span class="metric-label">Funding</span>
@@ -141,12 +148,12 @@
           <article class="metric-card">
             <span class="metric-label">Open Interest</span>
             <strong id="metric-oi">-</strong>
-            <small id="metric-oi-note">Recent trend</small>
+            <small id="metric-oi-note">1H delta</small>
           </article>
           <article class="metric-card">
-            <span class="metric-label">Market Regime</span>
-            <strong id="metric-regime">-</strong>
-            <small id="metric-regime-note">BTC / ETH context</small>
+            <span class="metric-label">Liquidations</span>
+            <strong id="metric-liq">-</strong>
+            <small id="metric-liq-note">Live forced orders</small>
           </article>
         </section>
 
@@ -164,6 +171,28 @@
         <section class="panel">
           <div class="panel-head">
             <div>
+              <p class="panel-label">Perps Engine</p>
+              <h2>CVD, leverage, and basis flow</h2>
+            </div>
+          </div>
+
+          <div id="flow-grid" class="analysis-grid"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="panel-label">Trade Setups</p>
+              <h2>Actionable perps scenarios</h2>
+            </div>
+          </div>
+
+          <div id="setup-grid" class="setup-grid"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
               <p class="panel-label">Smart Money & Orderbook</p>
               <h2>Large flow and whale walls</h2>
             </div>
@@ -171,7 +200,7 @@
 
           <div class="split-grid">
             <div>
-              <h3>Large Aggressive Trades</h3>
+              <h3>Large Aggressive Futures Trades</h3>
               <div id="flow-table" class="table-card"></div>
             </div>
             <div>
@@ -179,6 +208,17 @@
               <div id="depth-table" class="table-card"></div>
             </div>
           </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="panel-label">Liquidation Tape</p>
+              <h2>Recent forced orders and squeeze fuel</h2>
+            </div>
+          </div>
+
+          <div id="liquidation-table" class="table-card"></div>
         </section>
 
         <section class="panel">

@@ -70,6 +70,12 @@ select {
   line-height: 1.6;
 }
 
+.subtitle-inline {
+  margin: 8px 0 0;
+  color: var(--text-soft);
+  font-size: 0.92rem;
+}
+
 .token-form {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, auto));
@@ -173,6 +179,7 @@ select {
 .headline-chip,
 .metric-card,
 .analysis-card,
+.setup-card,
 .news-item,
 .signal-item,
 .table-row {
@@ -189,6 +196,7 @@ select {
 .headline-chip span,
 .metric-label,
 .analysis-card span,
+.setup-card span,
 .signal-item span,
 .table-row span {
   display: block;
@@ -199,6 +207,7 @@ select {
 .headline-chip strong,
 .metric-card strong,
 .analysis-card strong,
+.setup-card strong,
 .signal-item strong {
   display: block;
   margin-top: 6px;
@@ -211,6 +220,20 @@ select {
   margin-top: 6px;
   color: var(--text-soft);
   line-height: 1.5;
+}
+
+.setup-card p {
+  margin: 10px 0 12px;
+  color: var(--text-main);
+  line-height: 1.55;
+  font-size: 0.92rem;
+}
+
+.setup-meta {
+  display: grid;
+  gap: 6px;
+  color: var(--text-soft);
+  font-size: 0.82rem;
 }
 
 .chart-frame {
@@ -284,6 +307,17 @@ select {
   font-size: 1.1rem;
 }
 
+.stream-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  margin-bottom: 16px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
 .outlook-copy {
   line-height: 1.7;
   color: var(--text-main);
@@ -326,13 +360,22 @@ select {
   color: var(--text-soft);
 }
 
-.analysis-grid {
+.analysis-grid,
+.setup-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 12px;
 }
 
-.analysis-card {
+.analysis-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.setup-grid {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.analysis-card,
+.setup-card {
   padding: 14px;
   border-radius: 18px;
 }
@@ -358,10 +401,6 @@ select {
 
 .table-row strong {
   font-size: 0.95rem;
-}
-
-.funding-row {
-  align-items: center;
 }
 
 .news-feed {
