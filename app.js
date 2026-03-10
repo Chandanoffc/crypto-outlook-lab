@@ -923,6 +923,9 @@ function marketRegimeLabel(btcChange, ethChange) {
 }
 
 function buildBiasScore(context) {
+  const takerSummary = context.takerSummary || {
+    latestRatio: 1,
+  };
   let score = 0;
 
   if (context.currentPrice > context.ema20) score += 12;
@@ -947,8 +950,8 @@ function buildBiasScore(context) {
   if (context.oiChange1h > 0) score += 7;
   else score -= 7;
 
-  if (context.takerSummary.latestRatio > 1.03) score += 8;
-  else if (context.takerSummary.latestRatio < 0.97) score -= 8;
+  if (takerSummary.latestRatio > 1.03) score += 8;
+  else if (takerSummary.latestRatio < 0.97) score -= 8;
 
   if (context.fundingRate > 0 && context.fundingRate < 0.03) score += 5;
   else if (context.fundingRate >= 0.03) score -= 5;
@@ -979,6 +982,9 @@ function confidenceScore(score) {
 }
 
 function buildTradeSetups(context) {
+  const takerSummary = context.takerSummary || {
+    latestRatio: 1,
+  };
   const support = context.supportLevels[0];
   const resistance = context.resistanceLevels[0];
   const vwapLevel = context.latestVwap || context.currentPrice;
@@ -990,7 +996,7 @@ function buildTradeSetups(context) {
       (context.tradeSummary.cvdSlope > 0 ? 12 : -10) +
       (context.depthSummary.imbalance > 0 ? 10 : -8) +
       (context.oiChange1h > 0 ? 8 : -6) +
-      (context.takerSummary.latestRatio > 1 ? 8 : -6) +
+      (takerSummary.latestRatio > 1 ? 8 : -6) +
       (context.latestRsi < 72 ? 6 : -4)
   );
 
@@ -1001,7 +1007,7 @@ function buildTradeSetups(context) {
       (context.tradeSummary.cvdSlope < 0 ? 12 : -10) +
       (context.depthSummary.imbalance < 0 ? 10 : -8) +
       (context.oiChange1h > 0 ? 8 : -4) +
-      (context.takerSummary.latestRatio < 1 ? 8 : -6) +
+      (takerSummary.latestRatio < 1 ? 8 : -6) +
       (context.latestRsi > 28 ? 5 : -5)
   );
 
@@ -1528,6 +1534,7 @@ function buildDerivedState() {
       fundingRate,
       tradeSummary,
       depthSummary,
+      takerSummary,
       oiChange1h,
       topLongShortRatio,
       supportLevels: supportResistance.supportLevels,
