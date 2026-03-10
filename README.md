@@ -15,7 +15,7 @@ Educational crypto dashboard built for perpetual futures analysis on Vercel.
 - Cross-exchange venue matrix for Binance, Bybit, and OKX when available
 - In-session depth and liquidation heatmaps with replay
 - Browser-stored alert center for breakouts, funding flips, OI spikes, and CVD reversals
-- Paper-trade risk lab with sizing, margin, liquidation estimate, and saved positions
+- Dedicated auto paper-trader page with a $200 starting balance, high-quality signal scanning, and TP/SL trade logs
 - Major crypto headlines
 - Rule-based 5H to 24H outlook
 
@@ -28,6 +28,8 @@ vercel dev
 ```
 
 Then open the local URL Vercel prints, usually [http://localhost:3000](http://localhost:3000).
+
+The main analysis dashboard is at `/`, and the automated paper-trader page is at `/paper.html`.
 
 ## Notes
 

@@ -127,11 +127,25 @@ select {
   font-size: 0.8rem;
 }
 
+.nav-links {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.nav-link {
+  text-decoration: none;
+}
+
 .token-form {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, auto));
   gap: 12px;
   align-items: end;
+}
+
+.token-form-wide {
+  grid-template-columns: repeat(4, minmax(0, auto));
 }
 
 .token-form label {
@@ -662,6 +676,14 @@ select {
   border-radius: 18px;
 }
 
+.control-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
 .analysis-grid,
 .setup-grid {
   display: grid;
@@ -927,6 +949,10 @@ select {
   }
 
   .token-form {
+    grid-template-columns: 1fr;
+  }
+
+  .token-form-wide {
     grid-template-columns: 1fr;
   }
 

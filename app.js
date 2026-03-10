@@ -1193,6 +1193,7 @@ function buildPaperRiskPlan(derived) {
 }
 
 function renderRiskGrid(plan, precisionHint = 2) {
+  if (!dom.riskGrid) return;
   if (!plan) {
     renderAnalysisGrid(dom.riskGrid, [
       {
@@ -1246,6 +1247,7 @@ function renderRiskGrid(plan, precisionHint = 2) {
 }
 
 function renderPaperTable(precisionHint = 2) {
+  if (!dom.paperTable) return;
   renderTable(
     dom.paperTable,
     state.paperPositions.slice(0, 8).map((position) => ({
@@ -2986,6 +2988,7 @@ function scheduleTradeAutoRefresh() {
 }
 
 function syncPaperInputs() {
+  if (!dom.paperAccount || !dom.paperRisk || !dom.paperLeverage) return;
   dom.paperAccount.value = `${state.paperSettings.accountSize}`;
   dom.paperRisk.value = `${state.paperSettings.riskPct}`;
   dom.paperLeverage.value = `${state.paperSettings.leverage}`;
@@ -3686,9 +3689,11 @@ dom.alertForm.addEventListener("submit", (event) => {
   addAlertRuleFromForm();
 });
 
-dom.paperForm.addEventListener("submit", (event) => {
-  event.preventDefault();
-});
+if (dom.paperForm) {
+  dom.paperForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+  });
+}
 
 dom.alertRules.addEventListener("click", (event) => {
   const button = event.target.closest("[data-alert-remove]");
@@ -3696,33 +3701,55 @@ dom.alertRules.addEventListener("click", (event) => {
   removeAlertRule(button.dataset.alertRemove);
 });
 
-dom.paperAccount.addEventListener("input", () => {
-  state.paperSettings.accountSize = Math.max(0, Number(dom.paperAccount.value) || 0);
-  persistPaperState();
-  if (state.lastDerived) renderRiskGrid(buildPaperRiskPlan(state.lastDerived), state.snapshot?.pricePrecision || 2);
-});
+if (dom.paperAccount) {
+  dom.paperAccount.addEventListener("input", () => {
+    state.paperSettings.accountSize = Math.max(0, Number(dom.paperAccount.value) || 0);
+    persistPaperState();
+    if (state.lastDerived) {
+      renderRiskGrid(buildPaperRiskPlan(state.lastDerived), state.snapshot?.pricePrecision || 2);
+    }
+  });
+}
 
-dom.paperRisk.addEventListener("input", () => {
-  state.paperSettings.riskPct = Math.max(0.1, Number(dom.paperRisk.value) || DEFAULT_PAPER_SETTINGS.riskPct);
-  persistPaperState();
-  if (state.lastDerived) renderRiskGrid(buildPaperRiskPlan(state.lastDerived), state.snapshot?.pricePrecision || 2);
-});
+if (dom.paperRisk) {
+  dom.paperRisk.addEventListener("input", () => {
+    state.paperSettings.riskPct = Math.max(
+      0.1,
+      Number(dom.paperRisk.value) || DEFAULT_PAPER_SETTINGS.riskPct
+    );
+    persistPaperState();
+    if (state.lastDerived) {
+      renderRiskGrid(buildPaperRiskPlan(state.lastDerived), state.snapshot?.pricePrecision || 2);
+    }
+  });
+}
 
-dom.paperLeverage.addEventListener("input", () => {
-  state.paperSettings.leverage = Math.max(1, Number(dom.paperLeverage.value) || DEFAULT_PAPER_SETTINGS.leverage);
-  persistPaperState();
-  if (state.lastDerived) renderRiskGrid(buildPaperRiskPlan(state.lastDerived), state.snapshot?.pricePrecision || 2);
-});
+if (dom.paperLeverage) {
+  dom.paperLeverage.addEventListener("input", () => {
+    state.paperSettings.leverage = Math.max(
+      1,
+      Number(dom.paperLeverage.value) || DEFAULT_PAPER_SETTINGS.leverage
+    );
+    persistPaperState();
+    if (state.lastDerived) {
+      renderRiskGrid(buildPaperRiskPlan(state.lastDerived), state.snapshot?.pricePrecision || 2);
+    }
+  });
+}
 
-dom.paperSaveButton.addEventListener("click", () => {
-  savePaperTrade();
-});
+if (dom.paperSaveButton) {
+  dom.paperSaveButton.addEventListener("click", () => {
+    savePaperTrade();
+  });
+}
 
-dom.paperClearButton.addEventListener("click", () => {
-  state.paperPositions = [];
-  persistPaperState();
-  renderPaperTable(state.snapshot?.pricePrecision || 2);
-});
+if (dom.paperClearButton) {
+  dom.paperClearButton.addEventListener("click", () => {
+    state.paperPositions = [];
+    persistPaperState();
+    renderPaperTable(state.snapshot?.pricePrecision || 2);
+  });
+}
 
 syncPaperInputs();
 renderAlertRules();

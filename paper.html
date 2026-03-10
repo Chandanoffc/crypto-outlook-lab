@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Apex Signals Auto Paper Trader</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="./paper.js" defer></script>
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Auto Paper Trader</p>
+          <h1>Apex Signals</h1>
+          <p class="subtitle">
+            Automated paper-trading simulator. It scans a watchlist, only takes
+            high-quality setups, starts at $200, and logs every TP or SL outcome.
+          </p>
+          <div class="nav-links">
+            <a class="mini-button nav-link" href="./index.html">Main Dashboard</a>
+          </div>
+        </div>
+
+        <form id="auto-form" class="token-form token-form-wide">
+          <label>
+            Watchlist
+            <input
+              id="watchlist-input"
+              type="text"
+              value="BTC,ETH,SOL,BNB,XRP"
+              autocomplete="off"
+              spellcheck="false"
+            />
+          </label>
+
+          <label>
+            Signal Interval
+            <select id="scan-interval">
+              <option value="5m">5m</option>
+              <option value="15m" selected>15m</option>
+              <option value="1h">1h</option>
+              <option value="4h">4h</option>
+            </select>
+          </label>
+
+          <label>
+            Min Quality
+            <input id="quality-threshold" type="number" min="50" max="95" step="1" value="68" />
+          </label>
+
+          <button id="scan-button" type="submit">Run Scan</button>
+        </form>
+      </header>
+
+      <div id="paper-status-banner" class="status-banner">
+        Initializing auto paper trader...
+      </div>
+
+      <div class="control-row">
+        <button id="auto-toggle-button" class="mini-button" type="button">Pause Auto</button>
+        <button id="reset-sim-button" class="mini-button" type="button">Reset to $200</button>
+        <span id="auto-run-note" class="subsection-meta">Auto-scans every 90 seconds.</span>
+      </div>
+
+      <main class="dashboard-grid">
+        <section class="metric-strip">
+          <article class="metric-card">
+            <span class="metric-label">Starting Balance</span>
+            <strong id="metric-start-balance">$200.00</strong>
+            <small>Simulation resets to this value</small>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">Current Equity</span>
+            <strong id="metric-current-equity">$200.00</strong>
+            <small id="metric-current-note">No closed trades yet</small>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">Realized PnL</span>
+            <strong id="metric-realized-pnl">$0.00</strong>
+            <small id="metric-realized-note">0.00% vs start</small>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">Win Rate</span>
+            <strong id="metric-win-rate">0%</strong>
+            <small id="metric-win-rate-note">0 winners / 0 trades</small>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">Open Trade</span>
+            <strong id="metric-open-trade">None</strong>
+            <small id="metric-open-note">Waiting for a high-quality setup</small>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">Last Scan</span>
+            <strong id="metric-last-scan">-</strong>
+            <small id="metric-last-scan-note">Auto engine idle</small>
+          </article>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="panel-label">Engine</p>
+              <h2>High-quality signal selection</h2>
+            </div>
+          </div>
+
+          <div id="engine-summary" class="outlook-copy">
+            The engine is waiting for the first scan.
+          </div>
+
+          <div id="candidate-grid" class="analysis-grid"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="panel-label">Open Position</p>
+              <h2>Live paper trade state</h2>
+            </div>
+          </div>
+
+          <div id="open-position-grid" class="analysis-grid"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="panel-label">Trade Log</p>
+              <h2>Every TP and SL outcome</h2>
+            </div>
+          </div>
+
+          <div id="trade-log-table" class="table-card"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="panel-label">Activity Feed</p>
+              <h2>Scan decisions and engine actions</h2>
+            </div>
+          </div>
+
+          <div id="activity-table" class="table-card"></div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

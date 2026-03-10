@@ -24,6 +24,9 @@
             Futures-first dashboard for structure, leverage, order flow,
             liquidation pressure, and short-horizon setups.
           </p>
+          <div class="nav-links">
+            <a class="mini-button nav-link" href="./paper.html">Auto Paper Trader</a>
+          </div>
         </div>
 
         <form id="token-form" class="token-form">
@@ -307,54 +310,6 @@
             <div>
               <h3>Triggered Events</h3>
               <div id="alert-events" class="table-card"></div>
-            </div>
-          </div>
-        </section>
-
-        <section class="panel">
-          <div class="panel-head">
-            <div>
-              <p class="panel-label">Risk Lab</p>
-              <h2>Paper trade sizing and leverage stress</h2>
-            </div>
-          </div>
-
-          <div class="split-grid">
-            <div>
-              <form id="paper-form" class="mini-form">
-                <label>
-                  Account Size (USD)
-                  <input id="paper-account" type="number" step="any" min="0" value="10000" />
-                </label>
-
-                <label>
-                  Risk Per Trade %
-                  <input id="paper-risk" type="number" step="0.1" min="0.1" value="1" />
-                </label>
-
-                <label>
-                  Leverage
-                  <input id="paper-leverage" type="number" step="1" min="1" value="5" />
-                </label>
-
-                <button id="paper-save-button" type="button">Save Paper Trade</button>
-              </form>
-
-              <div class="subsection-meta">
-                Uses the live potential trade setup to estimate position size, margin, and stop-based loss.
-              </div>
-
-              <div id="risk-grid" class="analysis-grid"></div>
-            </div>
-
-            <div>
-              <div class="panel-head panel-head-inline">
-                <div>
-                  <h3>Paper Positions</h3>
-                </div>
-                <button id="paper-clear-button" class="mini-button" type="button">Clear</button>
-              </div>
-              <div id="paper-table" class="table-card"></div>
             </div>
           </div>
         </section>
