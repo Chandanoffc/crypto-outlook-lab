@@ -5,6 +5,14 @@ const MAX_TRADE_SAMPLES = 450;
 const MAX_FORCE_ORDERS = 50;
 const STREAM_RECONNECT_DELAY_MS = 1500;
 const RENDER_THROTTLE_MS = 220;
+const TIMEFRAME_FETCH_LIMIT = 240;
+const TIMEFRAME_SUMMARY_CONFIG = [
+  { key: "10m", label: "10m", fetchInterval: "5m", aggregateSeconds: 10 * 60 },
+  { key: "30m", label: "30m", fetchInterval: "30m", aggregateSeconds: null },
+  { key: "1h", label: "1H", fetchInterval: "1h", aggregateSeconds: null },
+  { key: "4h", label: "4H", fetchInterval: "4h", aggregateSeconds: null },
+  { key: "1d", label: "1D", fetchInterval: "1d", aggregateSeconds: null },
+];
 
 const dom = {
   assetTitle: document.getElementById("asset-title"),
@@ -39,6 +47,8 @@ const dom = {
   depthTable: document.getElementById("depth-table"),
   liquidationTable: document.getElementById("liquidation-table"),
   newsFeed: document.getElementById("news-feed"),
+  timeframeSummaryCopy: document.getElementById("timeframe-summary-copy"),
+  timeframeGrid: document.getElementById("timeframe-grid"),
   tokenForm: document.getElementById("token-form"),
   tokenInput: document.getElementById("token-input"),
   intervalSelect: document.getElementById("interval-select"),
@@ -59,6 +69,8 @@ const state = {
   liveLastPrice: null,
   streams: [],
   renderTimer: null,
+  timeframeSummary: [],
+  timeframeSummaryLoading: false,
 };
 
 let chart;
@@ -265,6 +277,17 @@ function createPill(text, tone) {
   return pill;
 }
 
+function mapKlineEntry(entry) {
+  return {
+    time: Math.floor(Number(entry[0]) / 1000),
+    open: Number(entry[1]),
+    high: Number(entry[2]),
+    low: Number(entry[3]),
+    close: Number(entry[4]),
+    volume: Number(entry[5]),
+  };
+}
+
 function renderLevelBands(container, levels, bandWidth, tone, precisionHint) {
   container.innerHTML = "";
   if (!levels.length) {
@@ -457,20 +480,20 @@ function initChart() {
     width: dom.chart.clientWidth,
     height: dom.chart.clientHeight,
     layout: {
-      background: { color: "rgba(228, 231, 235, 0.95)" },
-      textColor: "#47515d",
+      background: { color: "#12161d" },
+      textColor: "#a0a9b6",
       fontFamily: "Manrope, sans-serif",
     },
     grid: {
-      vertLines: { color: "rgba(80, 90, 102, 0.08)" },
-      horzLines: { color: "rgba(80, 90, 102, 0.08)" },
+      vertLines: { color: "rgba(255, 152, 46, 0.07)" },
+      horzLines: { color: "rgba(255, 152, 46, 0.09)" },
     },
     timeScale: {
-      borderColor: "rgba(80, 90, 102, 0.12)",
+      borderColor: "rgba(255, 152, 46, 0.16)",
       timeVisible: true,
     },
     rightPriceScale: {
-      borderColor: "rgba(80, 90, 102, 0.12)",
+      borderColor: "rgba(255, 152, 46, 0.16)",
     },
   });
 
@@ -485,7 +508,7 @@ function initChart() {
   volumeSeries = chart.addHistogramSeries({
     priceFormat: { type: "volume" },
     priceScaleId: "",
-    color: "rgba(74, 84, 98, 0.35)",
+    color: "rgba(255, 152, 46, 0.28)",
   });
 
   volumeSeries.priceScale().applyOptions({
@@ -523,8 +546,8 @@ function addLevelLine(price, label, color) {
 
 function volumeColor(candle) {
   return candle.close >= candle.open
-    ? "rgba(13, 143, 84, 0.35)"
-    : "rgba(194, 58, 58, 0.35)";
+    ? "rgba(17, 187, 109, 0.4)"
+    : "rgba(224, 76, 76, 0.38)";
 }
 
 function ema(values, period) {
@@ -657,6 +680,206 @@ function vwap(candles) {
     cumulativeVolume += candle.volume;
     cumulativePv += typicalPrice * candle.volume;
     return cumulativeVolume === 0 ? null : cumulativePv / cumulativeVolume;
+  });
+}
+
+function aggregateCandlesBySeconds(candles, bucketSeconds) {
+  if (!bucketSeconds) return candles.map((candle) => ({ ...candle }));
+
+  return candles.reduce((buckets, candle) => {
+    const bucketTime = Math.floor(candle.time / bucketSeconds) * bucketSeconds;
+    const lastBucket = buckets[buckets.length - 1];
+
+    if (!lastBucket || lastBucket.time !== bucketTime) {
+      buckets.push({
+        time: bucketTime,
+        open: candle.open,
+        high: candle.high,
+        low: candle.low,
+        close: candle.close,
+        volume: candle.volume,
+      });
+      return buckets;
+    }
+
+    lastBucket.high = Math.max(lastBucket.high, candle.high);
+    lastBucket.low = Math.min(lastBucket.low, candle.low);
+    lastBucket.close = candle.close;
+    lastBucket.volume += candle.volume;
+    return buckets;
+  }, []);
+}
+
+function timeframeBiasDescriptor(score) {
+  if (score >= 18) return { label: "Bullish", tone: "up" };
+  if (score >= 6) return { label: "Leaning Bullish", tone: "up" };
+  if (score <= -18) return { label: "Bearish", tone: "down" };
+  if (score <= -6) return { label: "Leaning Bearish", tone: "down" };
+  return { label: "Balanced", tone: "neutral" };
+}
+
+function timeframeConviction(score) {
+  return Math.max(52, Math.min(96, 52 + Math.abs(score) * 2));
+}
+
+function summarizeTimeframe(config, candles, precisionHint = 2) {
+  const timeframeCandles = config.aggregateSeconds
+    ? aggregateCandlesBySeconds(candles, config.aggregateSeconds)
+    : candles.map((candle) => ({ ...candle }));
+
+  if (timeframeCandles.length < 60) {
+    return {
+      key: config.key,
+      label: config.label,
+      opinion: "Unavailable",
+      tone: "neutral",
+      conviction: 0,
+      changePct: 0,
+      latestClose: null,
+      latestRsi: null,
+      summary: "Not enough candle history to score this timeframe yet.",
+      note: "Waiting for more market data",
+      pricePrecision: precisionHint,
+    };
+  }
+
+  const closes = timeframeCandles.map((candle) => candle.close);
+  const volumes = timeframeCandles.map((candle) => candle.volume);
+  const ema20Series = ema(closes, 20);
+  const ema50Series = ema(closes, 50);
+  const rsiSeries = rsi(closes, 14);
+  const macdSeries = macd(closes);
+  const vwapSeries = vwap(timeframeCandles);
+
+  const latestClose = closes[closes.length - 1];
+  const latestEma20 = latestDefinedValue(ema20Series) ?? latestClose;
+  const latestEma50 = latestDefinedValue(ema50Series) ?? latestClose;
+  const latestRsi = latestDefinedValue(rsiSeries) ?? 50;
+  const latestMacdHistogram = latestDefinedValue(macdSeries.histogram) ?? 0;
+  const latestVwap = latestDefinedValue(vwapSeries) ?? latestClose;
+  const changeLookback = Math.max(1, Math.min(8, closes.length - 1));
+  const changePctValue = pctChangeFromLookback(closes, changeLookback);
+  const averageVolume = average(volumes.slice(-20));
+  const volumePulse = averageVolume ? volumes[volumes.length - 1] / averageVolume : 1;
+
+  let score = 0;
+  score += latestClose > latestEma20 ? 10 : -10;
+  score += latestEma20 > latestEma50 ? 12 : -12;
+  score += latestMacdHistogram > 0 ? 8 : -8;
+  score += latestClose > latestVwap ? 6 : -6;
+  if (latestRsi >= 54 && latestRsi <= 68) score += 8;
+  else if (latestRsi < 46) score -= 8;
+  else if (latestRsi > 74) score -= 4;
+  if (changePctValue > 0) score += 6;
+  else if (changePctValue < 0) score -= 6;
+  if (volumePulse > 1.15 && changePctValue > 0) score += 4;
+  else if (volumePulse > 1.15 && changePctValue < 0) score -= 4;
+
+  const bias = timeframeBiasDescriptor(score);
+  const drivers = [
+    latestClose > latestEma20 ? "Price above EMA20" : "Price below EMA20",
+    latestEma20 > latestEma50 ? "EMA stack constructive" : "EMA stack weak",
+    latestMacdHistogram > 0 ? "MACD momentum positive" : "MACD momentum negative",
+  ];
+
+  if (latestRsi > 70) drivers.push("RSI stretched");
+  else if (latestRsi < 32) drivers.push("RSI washed out");
+  else if (latestRsi >= 50) drivers.push("RSI constructive");
+  else drivers.push("RSI soft");
+
+  return {
+    key: config.key,
+    label: config.label,
+    opinion: bias.label,
+    tone: bias.tone,
+    conviction: timeframeConviction(score),
+    changePct: changePctValue,
+    latestClose,
+    latestRsi,
+    summary: drivers.slice(0, 3).join(" • "),
+    note: latestClose > latestVwap ? "Trading above VWAP" : "Trading below VWAP",
+    pricePrecision: precisionHint,
+  };
+}
+
+function buildTimeframeSummaryCopy(entries) {
+  const bullish = entries.filter((entry) => entry.tone === "up").length;
+  const bearish = entries.filter((entry) => entry.tone === "down").length;
+  const balanced = entries.filter((entry) => entry.tone === "neutral").length;
+  const shortTerm = entries.filter((entry) => ["10m", "30m", "1h"].includes(entry.key));
+  const longTerm = entries.filter((entry) => ["4h", "1d"].includes(entry.key));
+  const shortBullish = shortTerm.filter((entry) => entry.tone === "up").length;
+  const longBullish = longTerm.filter((entry) => entry.tone === "up").length;
+
+  if (bullish === entries.length) {
+    return `All ${entries.length} tracked timeframes are bullish. Short-horizon momentum and higher-timeframe structure are aligned for continuation unless order flow abruptly deteriorates.`;
+  }
+
+  if (bearish === entries.length) {
+    return `All ${entries.length} tracked timeframes are bearish. The tape is aligned lower across intraday and swing structure, so upside moves should be treated as reactive until trend conditions improve.`;
+  }
+
+  if (shortBullish >= 2 && longBullish === 0) {
+    return `${bullish}/${entries.length} timeframes are bullish, but the higher-timeframe structure is still heavy. This usually behaves like a relief bounce unless 4H and 1D trend alignment improves.`;
+  }
+
+  if (shortBullish === 0 && longBullish >= 1) {
+    return `${bearish}/${entries.length} timeframes are bearish even while the higher-timeframe trend still has support. That mix often creates pullback opportunities rather than full trend failure.`;
+  }
+
+  return `${bullish}/${entries.length} timeframes lean bullish, ${bearish}/${entries.length} lean bearish, and ${balanced}/${entries.length} are balanced. Use agreement across 10m, 30m, and 1H for timing, then confirm with 4H and 1D before sizing up.`;
+}
+
+function renderTimeframeSummary() {
+  dom.timeframeGrid.innerHTML = "";
+
+  if (state.timeframeSummaryLoading && !state.timeframeSummary.length) {
+    dom.timeframeSummaryCopy.textContent =
+      "Scanning 10m, 30m, 1H, 4H, and 1D futures structure...";
+    return;
+  }
+
+  if (!state.timeframeSummary.length) {
+    dom.timeframeSummaryCopy.textContent =
+      "Multi-timeframe summary will appear here after the contract loads.";
+    const card = document.createElement("article");
+    card.className = "timeframe-card neutral";
+    card.innerHTML = `
+      <div class="timeframe-top">
+        <span class="timeframe-label">Status</span>
+        <span class="pill neutral">Idle</span>
+      </div>
+      <strong>Waiting for data</strong>
+      <p>No multi-timeframe scan is active yet.</p>
+      <div class="timeframe-meta">
+        <span>-</span>
+        <span>-</span>
+      </div>
+    `;
+    dom.timeframeGrid.appendChild(card);
+    return;
+  }
+
+  dom.timeframeSummaryCopy.textContent = buildTimeframeSummaryCopy(state.timeframeSummary);
+
+  state.timeframeSummary.forEach((entry) => {
+    const card = document.createElement("article");
+    card.className = `timeframe-card ${entry.tone}`;
+    card.innerHTML = `
+      <div class="timeframe-top">
+        <span class="timeframe-label">${entry.label}</span>
+        <span class="pill ${entry.tone}">${entry.opinion}</span>
+      </div>
+      <strong class="${entry.tone}">${entry.conviction ? `${entry.conviction}% conviction` : entry.opinion}</strong>
+      <p>${entry.summary}</p>
+      <div class="timeframe-meta">
+        <span>${entry.latestClose == null ? "-" : formatPrice(entry.latestClose, entry.pricePrecision)}</span>
+        <span>${Number.isFinite(entry.changePct) ? formatPercent(entry.changePct) : "-"}</span>
+        <span>${entry.latestRsi == null ? "RSI -" : `RSI ${entry.latestRsi.toFixed(1)}`}</span>
+        <span>${entry.note}</span>
+      </div>
+    `;
+    dom.timeframeGrid.appendChild(card);
   });
 }
 
@@ -1180,6 +1403,7 @@ function renderEmptyDashboard(message) {
   renderTable(dom.depthTable, [], "No order-book data");
   renderTable(dom.liquidationTable, [], "No liquidation tape");
   renderNews([]);
+  renderTimeframeSummary();
 
   [
     dom.metricVolume,
@@ -1337,14 +1561,7 @@ async function fetchDirectSnapshot(token, interval) {
     suggestions: resolved.suggestions,
     interval,
     fetchedAt: Date.now(),
-    candles: klinesResult.value.map((entry) => ({
-      time: Math.floor(entry[0] / 1000),
-      open: Number(entry[1]),
-      high: Number(entry[2]),
-      low: Number(entry[3]),
-      close: Number(entry[4]),
-      volume: Number(entry[5]),
-    })),
+    candles: klinesResult.value.map(mapKlineEntry),
     ticker: tickerResult.value,
     depth: depthResult.status === "fulfilled" ? depthResult.value : { bids: [], asks: [] },
     trades: tradesResult.status === "fulfilled" ? tradesResult.value : [],
@@ -1370,6 +1587,77 @@ async function fetchDirectSnapshot(token, interval) {
         : [],
     dataSource: "browser",
   };
+}
+
+async function fetchTimeframeSummary(symbol, selectedInterval, selectedCandles, precisionHint) {
+  const cache = new Map();
+
+  async function loadCandles(interval) {
+    if (interval === selectedInterval && Array.isArray(selectedCandles) && selectedCandles.length) {
+      return selectedCandles.map((candle) => ({ ...candle }));
+    }
+
+    if (!cache.has(interval)) {
+      cache.set(
+        interval,
+        fetchDirectJson(
+          `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${TIMEFRAME_FETCH_LIMIT}`,
+          `${interval} timeframe`
+        ).then((entries) => entries.map(mapKlineEntry))
+      );
+    }
+
+    return cache.get(interval);
+  }
+
+  const results = await Promise.allSettled(
+    TIMEFRAME_SUMMARY_CONFIG.map(async (config) =>
+      summarizeTimeframe(config, await loadCandles(config.fetchInterval), precisionHint)
+    )
+  );
+
+  return results.map((result, index) => {
+    if (result.status === "fulfilled") return result.value;
+
+    const config = TIMEFRAME_SUMMARY_CONFIG[index];
+    return {
+      key: config.key,
+      label: config.label,
+      opinion: "Unavailable",
+      tone: "neutral",
+      conviction: 0,
+      changePct: 0,
+      latestClose: null,
+      latestRsi: null,
+      summary: "Unable to fetch this timeframe right now.",
+      note: "Data request failed",
+      pricePrecision: precisionHint,
+    };
+  });
+}
+
+async function refreshTimeframeSummary(requestId, snapshot, interval) {
+  state.timeframeSummaryLoading = true;
+
+  try {
+    const summary = await fetchTimeframeSummary(
+      snapshot.symbol,
+      interval,
+      snapshot.candles || [],
+      snapshot.pricePrecision || 2
+    );
+
+    if (requestId !== state.requestId) return;
+    state.timeframeSummary = summary;
+  } catch (error) {
+    if (requestId !== state.requestId) return;
+    state.timeframeSummary = [];
+    console.error("timeframe summary error", error);
+  } finally {
+    if (requestId !== state.requestId) return;
+    state.timeframeSummaryLoading = false;
+    renderDashboard();
+  }
 }
 
 function primeState(snapshot) {
@@ -1946,6 +2234,7 @@ function renderDashboard() {
   );
 
   renderNews(derived.newsItems);
+  renderTimeframeSummary();
 
   setStatus(
     `${snapshot.symbol} live on Binance futures via ${
@@ -2114,6 +2403,8 @@ function connectStreams(symbol, interval) {
 async function loadDashboard(token, interval) {
   const requestId = ++state.requestId;
   disconnectStreams();
+  state.timeframeSummary = [];
+  state.timeframeSummaryLoading = true;
   renderEmptyDashboard(`Loading ${normalizeToken(token)} perpetual market snapshot...`);
   setStatus(`Loading ${normalizeToken(token)} perpetual market structure...`);
 
@@ -2124,9 +2415,12 @@ async function loadDashboard(token, interval) {
     primeState(snapshot);
     renderDashboard();
     connectStreams(snapshot.symbol, interval);
+    refreshTimeframeSummary(requestId, snapshot, interval);
   } catch (error) {
     if (requestId !== state.requestId) return;
     state.snapshot = null;
+    state.timeframeSummary = [];
+    state.timeframeSummaryLoading = false;
     renderEmptyDashboard(error.message);
     setStatus(error.message, "down");
     setStreamStatus("Live feeds offline", "down");
