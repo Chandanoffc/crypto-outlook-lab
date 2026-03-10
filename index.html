@@ -121,8 +121,18 @@
 
           <div class="trade-idea-card">
             <div class="trade-idea-head">
-              <span class="stack-label">Potential Trade</span>
-              <span id="trade-stance" class="pill neutral">Waiting</span>
+              <div>
+                <span class="stack-label">Potential Trade</span>
+                <small id="trade-refresh-note" class="trade-refresh-note">
+                  Auto refresh every 15m
+                </small>
+              </div>
+              <div class="trade-actions">
+                <button id="trade-refresh-button" class="trade-refresh-button" type="button">
+                  Refresh
+                </button>
+                <span id="trade-stance" class="pill neutral">Waiting</span>
+              </div>
             </div>
 
             <div class="trade-idea-grid">

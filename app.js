@@ -5,6 +5,7 @@ const MAX_TRADE_SAMPLES = 450;
 const MAX_FORCE_ORDERS = 50;
 const STREAM_RECONNECT_DELAY_MS = 1500;
 const RENDER_THROTTLE_MS = 220;
+const TRADE_AUTO_REFRESH_MS = 15 * 60 * 1000;
 const TIMEFRAME_FETCH_LIMIT = 240;
 const TIMEFRAME_SUMMARY_CONFIG = [
   { key: "10m", label: "10m", fetchInterval: "5m", aggregateSeconds: 10 * 60 },
@@ -58,6 +59,8 @@ const dom = {
   tradeTp2: document.getElementById("trade-tp2"),
   tradeSl: document.getElementById("trade-sl"),
   tradeSummary: document.getElementById("trade-summary"),
+  tradeRefreshButton: document.getElementById("trade-refresh-button"),
+  tradeRefreshNote: document.getElementById("trade-refresh-note"),
   tokenForm: document.getElementById("token-form"),
   tokenInput: document.getElementById("token-input"),
   intervalSelect: document.getElementById("interval-select"),
@@ -78,8 +81,11 @@ const state = {
   liveLastPrice: null,
   streams: [],
   renderTimer: null,
+  tradeRefreshTimer: null,
   timeframeSummary: [],
   timeframeSummaryLoading: false,
+  activeToken: DEFAULT_TOKEN,
+  activeInterval: DEFAULT_INTERVAL,
 };
 
 let chart;
@@ -98,6 +104,10 @@ function setStatus(message, tone = "neutral") {
 function setStreamStatus(message, tone = "neutral") {
   dom.streamStatus.textContent = message;
   dom.streamStatus.className = `stream-status ${tone}`;
+}
+
+function setTradeRefreshNote(message) {
+  dom.tradeRefreshNote.textContent = message;
 }
 
 function normalizeToken(rawToken) {
@@ -501,20 +511,20 @@ function initChart() {
     height: dom.chart.clientHeight,
     layout: {
       background: { color: "#040907" },
-      textColor: "#8ea79c",
+      textColor: "#92a79d",
       fontFamily:
         '"Prima Sans Mono Std", "SFMono-Regular", Consolas, "Liberation Mono", monospace',
     },
     grid: {
-      vertLines: { color: "rgba(0, 239, 163, 0.06)" },
-      horzLines: { color: "rgba(0, 239, 163, 0.08)" },
+      vertLines: { color: "rgba(42, 103, 75, 0.08)" },
+      horzLines: { color: "rgba(42, 103, 75, 0.1)" },
     },
     timeScale: {
-      borderColor: "rgba(0, 239, 163, 0.14)",
+      borderColor: "rgba(42, 103, 75, 0.16)",
       timeVisible: true,
     },
     rightPriceScale: {
-      borderColor: "rgba(0, 239, 163, 0.14)",
+      borderColor: "rgba(42, 103, 75, 0.16)",
     },
   });
 
@@ -527,7 +537,7 @@ function initChart() {
   });
 
   ema20LineSeries = chart.addLineSeries({
-    color: "#7effd3",
+    color: "#87d9ba",
     lineWidth: 2,
     priceLineVisible: false,
     lastValueVisible: false,
@@ -535,7 +545,7 @@ function initChart() {
   });
 
   ema50LineSeries = chart.addLineSeries({
-    color: "#9eff6b",
+    color: "#9dc66d",
     lineWidth: 2,
     priceLineVisible: false,
     lastValueVisible: false,
@@ -545,7 +555,7 @@ function initChart() {
   volumeSeries = chart.addHistogramSeries({
     priceFormat: { type: "volume" },
     priceScaleId: "",
-    color: "rgba(0, 239, 163, 0.22)",
+    color: "rgba(42, 103, 75, 0.24)",
   });
 
   volumeSeries.priceScale().applyOptions({
@@ -1513,6 +1523,7 @@ function renderPotentialTrade(trade, precisionHint = 2) {
     dom.tradeSl.textContent = "-";
     dom.tradeSl.className = "";
     dom.tradeSummary.textContent = "AI trade setup will appear here once the token is loaded.";
+    setTradeRefreshNote("Auto refresh every 15m");
     return;
   }
 
@@ -2052,6 +2063,21 @@ function clearRenderTimer() {
   if (!state.renderTimer) return;
   window.clearTimeout(state.renderTimer);
   state.renderTimer = null;
+}
+
+function clearTradeRefreshTimer() {
+  if (!state.tradeRefreshTimer) return;
+  window.clearTimeout(state.tradeRefreshTimer);
+  state.tradeRefreshTimer = null;
+}
+
+function scheduleTradeAutoRefresh() {
+  clearTradeRefreshTimer();
+  state.tradeRefreshTimer = window.setTimeout(() => {
+    if (!state.activeToken || !state.activeInterval) return;
+    setTradeRefreshNote("Refreshing trade setup...");
+    loadDashboard(state.activeToken, state.activeInterval);
+  }, TRADE_AUTO_REFRESH_MS);
 }
 
 function renderDashboard() {
@@ -2601,13 +2627,17 @@ function connectStreams(symbol, interval) {
 
 async function loadDashboard(token, interval) {
   const requestId = ++state.requestId;
+  state.activeToken = normalizeToken(token);
+  state.activeInterval = interval;
   disconnectStreams();
   clearRenderTimer();
+  clearTradeRefreshTimer();
   state.snapshot = null;
   state.timeframeSummary = [];
   state.timeframeSummaryLoading = true;
   resetChart();
   renderEmptyDashboard(`Loading ${normalizeToken(token)} perpetual market snapshot...`);
+  setTradeRefreshNote("Refreshing trade setup...");
   setStatus(`Loading ${normalizeToken(token)} perpetual market structure...`);
 
   try {
@@ -2618,6 +2648,13 @@ async function loadDashboard(token, interval) {
     renderDashboard();
     connectStreams(snapshot.symbol, interval);
     refreshTimeframeSummary(requestId, snapshot, interval);
+    setTradeRefreshNote(
+      `Updated ${new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      })} • auto 15m`
+    );
+    scheduleTradeAutoRefresh();
   } catch (error) {
     if (requestId !== state.requestId) return;
     state.snapshot = null;
@@ -2626,6 +2663,8 @@ async function loadDashboard(token, interval) {
     renderEmptyDashboard(error.message);
     setStatus(error.message, "down");
     setStreamStatus("Live feeds offline", "down");
+    setTradeRefreshNote("Auto refresh will retry in 15m");
+    scheduleTradeAutoRefresh();
     console.error(error);
   }
 }
@@ -2634,6 +2673,12 @@ dom.tokenForm.addEventListener("submit", (event) => {
   event.preventDefault();
   const token = dom.tokenInput.value || DEFAULT_TOKEN;
   const interval = dom.intervalSelect.value || DEFAULT_INTERVAL;
+  loadDashboard(token, interval);
+});
+
+dom.tradeRefreshButton.addEventListener("click", () => {
+  const token = state.activeToken || dom.tokenInput.value || DEFAULT_TOKEN;
+  const interval = state.activeInterval || dom.intervalSelect.value || DEFAULT_INTERVAL;
   loadDashboard(token, interval);
 });
 
