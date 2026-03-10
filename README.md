@@ -1,4 +1,4 @@
-# Crypto Outlook Lab
+# Signal Vault
 
 Educational crypto dashboard built for perpetual futures analysis on Vercel.
 
