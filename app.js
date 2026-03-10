@@ -482,18 +482,19 @@ function initChart() {
     layout: {
       background: { color: "#12161d" },
       textColor: "#a0a9b6",
-      fontFamily: "Manrope, sans-serif",
+      fontFamily:
+        '"Prima Sans Mono Std", "SFMono-Regular", Consolas, "Liberation Mono", monospace',
     },
     grid: {
-      vertLines: { color: "rgba(255, 152, 46, 0.07)" },
-      horzLines: { color: "rgba(255, 152, 46, 0.09)" },
+      vertLines: { color: "rgba(77, 114, 214, 0.08)" },
+      horzLines: { color: "rgba(77, 114, 214, 0.1)" },
     },
     timeScale: {
-      borderColor: "rgba(255, 152, 46, 0.16)",
+      borderColor: "rgba(77, 114, 214, 0.18)",
       timeVisible: true,
     },
     rightPriceScale: {
-      borderColor: "rgba(255, 152, 46, 0.16)",
+      borderColor: "rgba(77, 114, 214, 0.18)",
     },
   });
 
@@ -508,7 +509,7 @@ function initChart() {
   volumeSeries = chart.addHistogramSeries({
     priceFormat: { type: "volume" },
     priceScaleId: "",
-    color: "rgba(255, 152, 46, 0.28)",
+    color: "rgba(77, 114, 214, 0.3)",
   });
 
   volumeSeries.priceScale().applyOptions({
