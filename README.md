@@ -12,6 +12,10 @@ Educational crypto dashboard built for perpetual futures analysis on Vercel.
 - Funding and open-interest positioning
 - Liquidation tape and squeeze pressure
 - Rule-based trade setup scoring
+- Cross-exchange venue matrix for Binance, Bybit, and OKX when available
+- In-session depth and liquidation heatmaps with replay
+- Browser-stored alert center for breakouts, funding flips, OI spikes, and CVD reversals
+- Paper-trade risk lab with sizing, margin, liquidation estimate, and saved positions
 - Major crypto headlines
 - Rule-based 5H to 24H outlook
 

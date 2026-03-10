@@ -227,6 +227,141 @@
         <section class="panel">
           <div class="panel-head">
             <div>
+              <p class="panel-label">Venue Matrix</p>
+              <h2>Cross-exchange derivatives consensus</h2>
+            </div>
+          </div>
+
+          <div id="exchange-grid" class="analysis-grid"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="panel-label">Heatmaps & Replay</p>
+              <h2>Depth pressure and liquidation zones</h2>
+            </div>
+
+            <div class="replay-controls">
+              <button id="replay-back-button" class="mini-button" type="button">Back</button>
+              <button id="replay-play-button" class="mini-button" type="button">Play</button>
+              <button id="replay-live-button" class="mini-button" type="button">Live</button>
+            </div>
+          </div>
+
+          <div class="replay-meta">
+            <span id="replay-status" class="pill neutral">Live replay idle</span>
+          </div>
+
+          <div class="split-grid">
+            <div>
+              <h3>Depth Heatmap</h3>
+              <div id="depth-heatmap" class="heatmap-card"></div>
+            </div>
+            <div>
+              <h3>Liquidation Map</h3>
+              <div id="liq-heatmap" class="heatmap-card"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="panel-label">Alert Center</p>
+              <h2>Breakout, funding, and squeeze triggers</h2>
+            </div>
+          </div>
+
+          <div class="split-grid">
+            <div>
+              <form id="alert-form" class="mini-form">
+                <label>
+                  Alert Type
+                  <select id="alert-type">
+                    <option value="breakout_up">Breakout Above</option>
+                    <option value="breakdown_down">Breakdown Below</option>
+                    <option value="funding_flip_positive">Funding Turns Positive</option>
+                    <option value="funding_flip_negative">Funding Turns Negative</option>
+                    <option value="oi_spike_up">OI Spike %</option>
+                    <option value="cvd_reversal_up">CVD Reversal Up</option>
+                    <option value="cvd_reversal_down">CVD Reversal Down</option>
+                  </select>
+                </label>
+
+                <label>
+                  Trigger Level
+                  <input id="alert-level" type="number" step="any" placeholder="Optional" />
+                </label>
+
+                <button id="alert-add-button" type="submit">Add Alert</button>
+              </form>
+
+              <div class="subsection-meta">
+                Alerts are stored in your browser for this device and checked against the live feed.
+              </div>
+
+              <div id="alert-rules" class="stack-list"></div>
+            </div>
+
+            <div>
+              <h3>Triggered Events</h3>
+              <div id="alert-events" class="table-card"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="panel-label">Risk Lab</p>
+              <h2>Paper trade sizing and leverage stress</h2>
+            </div>
+          </div>
+
+          <div class="split-grid">
+            <div>
+              <form id="paper-form" class="mini-form">
+                <label>
+                  Account Size (USD)
+                  <input id="paper-account" type="number" step="any" min="0" value="10000" />
+                </label>
+
+                <label>
+                  Risk Per Trade %
+                  <input id="paper-risk" type="number" step="0.1" min="0.1" value="1" />
+                </label>
+
+                <label>
+                  Leverage
+                  <input id="paper-leverage" type="number" step="1" min="1" value="5" />
+                </label>
+
+                <button id="paper-save-button" type="button">Save Paper Trade</button>
+              </form>
+
+              <div class="subsection-meta">
+                Uses the live potential trade setup to estimate position size, margin, and stop-based loss.
+              </div>
+
+              <div id="risk-grid" class="analysis-grid"></div>
+            </div>
+
+            <div>
+              <div class="panel-head panel-head-inline">
+                <div>
+                  <h3>Paper Positions</h3>
+                </div>
+                <button id="paper-clear-button" class="mini-button" type="button">Clear</button>
+              </div>
+              <div id="paper-table" class="table-card"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
               <p class="panel-label">Technical Analysis</p>
               <h2>Momentum, trend, volatility</h2>
             </div>

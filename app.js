@@ -3,10 +3,21 @@ const DEFAULT_INTERVAL = "15m";
 const QUOTE_ASSET = "USDT";
 const MAX_TRADE_SAMPLES = 450;
 const MAX_FORCE_ORDERS = 50;
+const MAX_REPLAY_FRAMES = 64;
 const STREAM_RECONNECT_DELAY_MS = 1500;
 const RENDER_THROTTLE_MS = 220;
+const REPLAY_CAPTURE_MS = 2500;
+const REPLAY_PLAY_MS = 900;
 const TRADE_AUTO_REFRESH_MS = 15 * 60 * 1000;
 const TIMEFRAME_FETCH_LIMIT = 240;
+const ALERT_STORAGE_KEY = "apex-signals-alert-rules";
+const ALERT_EVENT_STORAGE_KEY = "apex-signals-alert-events";
+const PAPER_STORAGE_KEY = "apex-signals-paper-state";
+const DEFAULT_PAPER_SETTINGS = {
+  accountSize: 10000,
+  riskPct: 1,
+  leverage: 5,
+};
 const TIMEFRAME_SUMMARY_CONFIG = [
   { key: "10m", label: "10m", fetchInterval: "5m", aggregateSeconds: 10 * 60 },
   { key: "30m", label: "30m", fetchInterval: "30m", aggregateSeconds: null },
@@ -14,6 +25,15 @@ const TIMEFRAME_SUMMARY_CONFIG = [
   { key: "4h", label: "4H", fetchInterval: "4h", aggregateSeconds: null },
   { key: "1d", label: "1D", fetchInterval: "1d", aggregateSeconds: null },
 ];
+const ALERT_TYPE_LABELS = {
+  breakout_up: "Breakout Above",
+  breakdown_down: "Breakdown Below",
+  funding_flip_positive: "Funding Turns Positive",
+  funding_flip_negative: "Funding Turns Negative",
+  oi_spike_up: "OI Spike",
+  cvd_reversal_up: "CVD Reversal Up",
+  cvd_reversal_down: "CVD Reversal Down",
+};
 
 const dom = {
   assetTitle: document.getElementById("asset-title"),
@@ -40,6 +60,26 @@ const dom = {
   metricOiNote: document.getElementById("metric-oi-note"),
   metricLiq: document.getElementById("metric-liq"),
   metricLiqNote: document.getElementById("metric-liq-note"),
+  exchangeGrid: document.getElementById("exchange-grid"),
+  depthHeatmap: document.getElementById("depth-heatmap"),
+  liqHeatmap: document.getElementById("liq-heatmap"),
+  replayStatus: document.getElementById("replay-status"),
+  replayBackButton: document.getElementById("replay-back-button"),
+  replayPlayButton: document.getElementById("replay-play-button"),
+  replayLiveButton: document.getElementById("replay-live-button"),
+  alertForm: document.getElementById("alert-form"),
+  alertType: document.getElementById("alert-type"),
+  alertLevel: document.getElementById("alert-level"),
+  alertRules: document.getElementById("alert-rules"),
+  alertEvents: document.getElementById("alert-events"),
+  paperForm: document.getElementById("paper-form"),
+  paperAccount: document.getElementById("paper-account"),
+  paperRisk: document.getElementById("paper-risk"),
+  paperLeverage: document.getElementById("paper-leverage"),
+  paperSaveButton: document.getElementById("paper-save-button"),
+  paperClearButton: document.getElementById("paper-clear-button"),
+  riskGrid: document.getElementById("risk-grid"),
+  paperTable: document.getElementById("paper-table"),
   taGrid: document.getElementById("ta-grid"),
   flowGrid: document.getElementById("flow-grid"),
   fundingGrid: document.getElementById("funding-grid"),
@@ -82,8 +122,19 @@ const state = {
   streams: [],
   renderTimer: null,
   tradeRefreshTimer: null,
+  replayTimer: null,
   timeframeSummary: [],
   timeframeSummaryLoading: false,
+  lastDerived: null,
+  replayFrames: [],
+  replayIndex: -1,
+  replayPlaying: false,
+  lastReplayCaptureAt: 0,
+  liveReplayFrame: null,
+  alerts: loadAlertRules(),
+  alertEvents: loadAlertEvents(),
+  paperSettings: loadPaperState().settings,
+  paperPositions: loadPaperState().positions,
   activeToken: DEFAULT_TOKEN,
   activeInterval: DEFAULT_INTERVAL,
 };
@@ -108,6 +159,47 @@ function setStreamStatus(message, tone = "neutral") {
 
 function setTradeRefreshNote(message) {
   dom.tradeRefreshNote.textContent = message;
+}
+
+function readStoredJson(key, fallback) {
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw);
+  } catch (error) {
+    console.error(`storage read failed for ${key}`, error);
+    return fallback;
+  }
+}
+
+function writeStoredJson(key, value) {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch (error) {
+    console.error(`storage write failed for ${key}`, error);
+  }
+}
+
+function loadPaperState() {
+  const stored = readStoredJson(PAPER_STORAGE_KEY, {});
+  return {
+    settings: {
+      accountSize: Number(stored?.settings?.accountSize) || DEFAULT_PAPER_SETTINGS.accountSize,
+      riskPct: Number(stored?.settings?.riskPct) || DEFAULT_PAPER_SETTINGS.riskPct,
+      leverage: Number(stored?.settings?.leverage) || DEFAULT_PAPER_SETTINGS.leverage,
+    },
+    positions: Array.isArray(stored?.positions) ? stored.positions : [],
+  };
+}
+
+function loadAlertRules() {
+  const rules = readStoredJson(ALERT_STORAGE_KEY, []);
+  return Array.isArray(rules) ? rules : [];
+}
+
+function loadAlertEvents() {
+  const events = readStoredJson(ALERT_EVENT_STORAGE_KEY, []);
+  return Array.isArray(events) ? events : [];
 }
 
 function normalizeToken(rawToken) {
@@ -495,6 +587,681 @@ function renderNews(items) {
     `;
     dom.newsFeed.appendChild(article);
   });
+}
+
+function uniqueValues(values) {
+  return Array.from(new Set(values.filter(Boolean)));
+}
+
+function strippedVenueToken(token) {
+  return String(token || "").replace(/^\d+/, "") || token || DEFAULT_TOKEN;
+}
+
+function toNumber(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function computeSpreadBps(bid, ask, referencePrice) {
+  if (!Number.isFinite(bid) || !Number.isFinite(ask)) return 0;
+  const reference =
+    Number.isFinite(referencePrice) && referencePrice > 0 ? referencePrice : average([bid, ask]);
+  if (!reference) return 0;
+  return ((ask - bid) / reference) * 10000;
+}
+
+function buildVenueSymbolCandidates(resolved) {
+  const baseAsset = resolved?.baseAsset || resolved?.cleanedToken || DEFAULT_TOKEN;
+  const strippedBase = strippedVenueToken(baseAsset);
+  const strippedToken = strippedVenueToken(resolved?.cleanedToken || baseAsset);
+
+  return {
+    bybit: uniqueValues([
+      `${baseAsset}${QUOTE_ASSET}`,
+      `${resolved.cleanedToken}${QUOTE_ASSET}`,
+      `${strippedBase}${QUOTE_ASSET}`,
+      `${strippedToken}${QUOTE_ASSET}`,
+    ]),
+    okx: uniqueValues([
+      `${baseAsset}-USDT-SWAP`,
+      `${resolved.cleanedToken}-USDT-SWAP`,
+      `${strippedBase}-USDT-SWAP`,
+      `${strippedToken}-USDT-SWAP`,
+    ]),
+  };
+}
+
+function buildVenueConsensus(venues) {
+  const activeVenues = (venues || []).filter((venue) => Number.isFinite(venue.lastPrice));
+  if (!activeVenues.length) {
+    return {
+      label: "Venue matrix offline",
+      tone: "neutral",
+      priceSpreadBps: 0,
+      fundingSpreadPct: 0,
+      leadVenue: null,
+    };
+  }
+
+  const prices = activeVenues.map((venue) => venue.lastPrice);
+  const fundings = activeVenues
+    .map((venue) => venue.fundingRatePct)
+    .filter((value) => Number.isFinite(value));
+  const leadVenue = [...activeVenues].sort(
+    (left, right) => (right.openInterestUsd || 0) - (left.openInterestUsd || 0)
+  )[0];
+  const priceSpreadBps =
+    prices.length > 1 ? ((Math.max(...prices) - Math.min(...prices)) / average(prices)) * 10000 : 0;
+  const fundingSpreadPct =
+    fundings.length > 1 ? Math.max(...fundings) - Math.min(...fundings) : 0;
+
+  return {
+    label: priceSpreadBps > 6 ? "Divergence active" : "Consensus aligned",
+    tone: priceSpreadBps > 6 || Math.abs(fundingSpreadPct) > 0.01 ? "down" : "up",
+    priceSpreadBps,
+    fundingSpreadPct,
+    leadVenue,
+  };
+}
+
+function renderVenueGrid(venues) {
+  const activeVenues = Array.isArray(venues) ? venues.filter(Boolean) : [];
+  if (!activeVenues.length) {
+    renderAnalysisGrid(dom.exchangeGrid, [
+      {
+        label: "Venue matrix",
+        value: "Waiting",
+        note: "Cross-exchange data is not available on this request path yet.",
+        tone: "neutral",
+      },
+    ]);
+    return;
+  }
+
+  const consensus = buildVenueConsensus(activeVenues);
+  const cards = activeVenues.map((venue) => ({
+    label: venue.venue,
+    value: formatPrice(venue.lastPrice, state.snapshot?.pricePrecision || 2),
+    note: `${formatPercent(venue.change24hPct)} • funding ${formatSigned(
+      venue.fundingRatePct || 0,
+      4,
+      "%"
+    )} • OI ${formatCompactUsdAbs(venue.openInterestUsd || 0, 1)} • spread ${(
+      venue.spreadBps || 0
+    ).toFixed(1)} bps`,
+    tone: toneFromNumber(venue.change24hPct, 0.15),
+  }));
+
+  cards.push({
+    label: "Consensus",
+    value: `${consensus.priceSpreadBps.toFixed(1)} bps`,
+    note: consensus.leadVenue
+      ? `Funding spread ${formatSigned(consensus.fundingSpreadPct, 4, "%")} • OI leader ${consensus.leadVenue.venue}`
+      : "Not enough venue overlap to score divergence.",
+    tone: consensus.tone,
+  });
+
+  renderAnalysisGrid(dom.exchangeGrid, cards);
+}
+
+function renderHeatmap(container, heatmap, emptyText) {
+  container.innerHTML = "";
+  if (!heatmap?.rows?.length) {
+    const empty = document.createElement("div");
+    empty.className = "heatmap-empty";
+    empty.textContent = emptyText;
+    container.appendChild(empty);
+    return;
+  }
+
+  heatmap.rows.forEach((row) => {
+    const element = document.createElement("div");
+    element.className = `heatmap-row ${row.tone || "neutral"}`;
+    element.innerHTML = `
+      <div class="heatmap-row-head">
+        <span>${row.label}</span>
+        <strong class="${row.tone || "neutral"}">${row.secondary || ""}</strong>
+      </div>
+      <div class="heatmap-track">
+        <div class="heatmap-fill ${row.tone || "neutral"}" style="width: ${Math.max(
+          8,
+          Math.round((row.intensity || 0) * 100)
+        )}%"></div>
+      </div>
+      <div class="heatmap-row-foot">
+        <small>${row.note || ""}</small>
+        <span>${row.value}</span>
+      </div>
+    `;
+    container.appendChild(element);
+  });
+}
+
+function buildDepthHeatmap(rawDepth, currentPrice, latestAtr, precisionHint) {
+  const bucketCount = 6;
+  const stepPct = Math.max(((latestAtr || currentPrice * 0.01) / currentPrice) * 18, 0.08);
+  const maxRangePct = stepPct * bucketCount;
+  const buckets = new Map();
+
+  const seedBucket = (tone, index, anchorPct) => {
+    const key = `${tone}-${index}`;
+    if (!buckets.has(key)) {
+      buckets.set(key, {
+        tone,
+        index,
+        anchorPct,
+        price: currentPrice * (1 + anchorPct / 100),
+        notional: 0,
+      });
+    }
+    return buckets.get(key);
+  };
+
+  (rawDepth?.bids || []).slice(0, 40).forEach(([price, quantity]) => {
+    const levelPrice = Number(price);
+    const diffPct = ((levelPrice - currentPrice) / currentPrice) * 100;
+    if (diffPct >= 0 || Math.abs(diffPct) > maxRangePct) return;
+    const index = Math.min(bucketCount - 1, Math.floor(Math.abs(diffPct) / stepPct));
+    const bucket = seedBucket("up", index, -((index + 0.5) * stepPct));
+    bucket.notional += levelPrice * Number(quantity);
+  });
+
+  (rawDepth?.asks || []).slice(0, 40).forEach(([price, quantity]) => {
+    const levelPrice = Number(price);
+    const diffPct = ((levelPrice - currentPrice) / currentPrice) * 100;
+    if (diffPct <= 0 || Math.abs(diffPct) > maxRangePct) return;
+    const index = Math.min(bucketCount - 1, Math.floor(Math.abs(diffPct) / stepPct));
+    const bucket = seedBucket("down", index, (index + 0.5) * stepPct);
+    bucket.notional += levelPrice * Number(quantity);
+  });
+
+  const rows = [
+    ...Array.from({ length: bucketCount }, (_, index) => buckets.get(`down-${bucketCount - 1 - index}`)),
+    ...Array.from({ length: bucketCount }, (_, index) => buckets.get(`up-${index}`)),
+  ]
+    .filter(Boolean)
+    .map((bucket) => ({
+      label: `${bucket.anchorPct >= 0 ? "+" : ""}${bucket.anchorPct.toFixed(2)}%`,
+      secondary: formatPrice(bucket.price, precisionHint),
+      note: bucket.tone === "up" ? "Bid liquidity stacked" : "Ask liquidity stacked",
+      value: formatCompactUsdAbs(bucket.notional, 1),
+      tone: bucket.tone,
+      intensity: bucket.notional,
+    }));
+
+  const maxIntensity = Math.max(...rows.map((row) => row.intensity), 0);
+  rows.forEach((row) => {
+    row.intensity = maxIntensity ? row.intensity / maxIntensity : 0;
+  });
+
+  return {
+    rows,
+    stepPct,
+  };
+}
+
+function buildLiquidationHeatmap(context) {
+  const bucketSize = Math.max(context.latestAtr * 0.45, context.currentPrice * 0.003);
+  const zones = [];
+
+  context.supportResistance.supportLevels.forEach((level, index) => {
+    zones.push({
+      price: level,
+      tone: "down",
+      score: Math.max(1, 2 - index * 0.35),
+      note: "Long liquidation pocket",
+    });
+  });
+
+  context.supportResistance.resistanceLevels.forEach((level, index) => {
+    zones.push({
+      price: level,
+      tone: "up",
+      score: Math.max(1, 2 - index * 0.35),
+      note: "Short squeeze pocket",
+    });
+  });
+
+  context.forceSummary.recentOrders.forEach((order) => {
+    zones.push({
+      price: order.price,
+      tone: order.side === "BUY" ? "up" : "down",
+      score: Math.max(1, order.notional / 75000),
+      notional: order.notional,
+      note: order.side === "BUY" ? "Recent shorts squeezed" : "Recent longs flushed",
+    });
+  });
+
+  const aggregated = Object.values(
+    zones.reduce((accumulator, zone) => {
+      const bucket = Math.round(zone.price / bucketSize) * bucketSize;
+      const key = `${zone.tone}-${bucket.toFixed(8)}`;
+      if (!accumulator[key]) {
+        accumulator[key] = {
+          label: formatPrice(bucket, context.pricePrecision),
+          secondary: zone.tone === "up" ? "Upside pocket" : "Downside pocket",
+          note: zone.note,
+          value: zone.notional ? formatCompactUsdAbs(zone.notional, 1) : "Level pocket",
+          tone: zone.tone,
+          intensity: 0,
+        };
+      }
+      accumulator[key].intensity += zone.score;
+      return accumulator;
+    }, {})
+  ).sort((left, right) => right.intensity - left.intensity);
+
+  const maxIntensity = Math.max(...aggregated.map((row) => row.intensity), 0);
+  aggregated.forEach((row) => {
+    row.intensity = maxIntensity ? row.intensity / maxIntensity : 0;
+  });
+
+  return {
+    rows: aggregated.slice(0, 8),
+  };
+}
+
+function buildReplayFrame(context) {
+  return {
+    capturedAt: Date.now(),
+    price: context.currentPrice,
+    depthHeatmap: buildDepthHeatmap(
+      state.liveDepth,
+      context.currentPrice,
+      context.latestAtr,
+      context.pricePrecision
+    ),
+    liquidationHeatmap: buildLiquidationHeatmap(context),
+  };
+}
+
+function clearReplayTimer() {
+  if (!state.replayTimer) return;
+  window.clearInterval(state.replayTimer);
+  state.replayTimer = null;
+}
+
+function resetReplayState() {
+  clearReplayTimer();
+  state.replayFrames = [];
+  state.replayIndex = -1;
+  state.replayPlaying = false;
+  state.lastReplayCaptureAt = 0;
+  state.liveReplayFrame = null;
+}
+
+function renderReplaySurface() {
+  const frame =
+    state.replayIndex >= 0 ? state.replayFrames[state.replayIndex] || null : state.liveReplayFrame;
+
+  renderHeatmap(
+    dom.depthHeatmap,
+    frame?.depthHeatmap || { rows: [] },
+    "Waiting for enough order-book updates to build the depth replay."
+  );
+  renderHeatmap(
+    dom.liqHeatmap,
+    frame?.liquidationHeatmap || { rows: [] },
+    "Waiting for liquidation pockets or replay frames."
+  );
+
+  if (!frame) {
+    dom.replayStatus.textContent = "Replay waiting";
+    dom.replayStatus.className = "pill neutral";
+    dom.replayPlayButton.textContent = "Play";
+    return;
+  }
+
+  if (state.replayIndex >= 0) {
+    dom.replayStatus.textContent = `Replay ${state.replayIndex + 1}/${state.replayFrames.length} • ${formatTimestamp(frame.capturedAt)}`;
+    dom.replayStatus.className = "pill down";
+  } else {
+    dom.replayStatus.textContent = `Live • ${formatTimestamp(frame.capturedAt)}`;
+    dom.replayStatus.className = "pill up";
+  }
+
+  dom.replayPlayButton.textContent = state.replayPlaying ? "Pause" : "Play";
+}
+
+function captureReplayFrame(frame) {
+  state.liveReplayFrame = frame;
+
+  const now = Date.now();
+  if (now - state.lastReplayCaptureAt >= REPLAY_CAPTURE_MS) {
+    state.replayFrames.push(frame);
+    if (state.replayFrames.length > MAX_REPLAY_FRAMES) state.replayFrames.shift();
+    state.lastReplayCaptureAt = now;
+  }
+
+  if (state.replayIndex === -1) renderReplaySurface();
+}
+
+function stepReplay(delta) {
+  if (!state.replayFrames.length) return;
+  clearReplayTimer();
+  state.replayPlaying = false;
+
+  const nextIndex =
+    state.replayIndex === -1
+      ? Math.max(0, state.replayFrames.length - 1 + delta)
+      : Math.max(0, Math.min(state.replayFrames.length - 1, state.replayIndex + delta));
+
+  state.replayIndex = nextIndex;
+  renderReplaySurface();
+}
+
+function playReplay() {
+  if (!state.replayFrames.length) return;
+
+  if (state.replayPlaying) {
+    clearReplayTimer();
+    state.replayPlaying = false;
+    renderReplaySurface();
+    return;
+  }
+
+  state.replayPlaying = true;
+  if (state.replayIndex === -1) state.replayIndex = 0;
+  renderReplaySurface();
+  state.replayTimer = window.setInterval(() => {
+    if (state.replayIndex >= state.replayFrames.length - 1) {
+      clearReplayTimer();
+      state.replayPlaying = false;
+      state.replayIndex = -1;
+      renderReplaySurface();
+      return;
+    }
+    state.replayIndex += 1;
+    renderReplaySurface();
+  }, REPLAY_PLAY_MS);
+}
+
+function setReplayLive() {
+  clearReplayTimer();
+  state.replayPlaying = false;
+  state.replayIndex = -1;
+  renderReplaySurface();
+}
+
+function persistAlerts() {
+  writeStoredJson(ALERT_STORAGE_KEY, state.alerts);
+  writeStoredJson(ALERT_EVENT_STORAGE_KEY, state.alertEvents);
+}
+
+function persistPaperState() {
+  writeStoredJson(PAPER_STORAGE_KEY, {
+    settings: state.paperSettings,
+    positions: state.paperPositions,
+  });
+}
+
+function defaultAlertLevel(type, derived) {
+  if (type === "breakout_up") {
+    return derived.supportResistance.resistanceLevels[0] || derived.currentPrice * 1.003;
+  }
+  if (type === "breakdown_down") {
+    return derived.supportResistance.supportLevels[0] || derived.currentPrice * 0.997;
+  }
+  if (type === "oi_spike_up") return Math.max(4, Math.abs(derived.oiChange1h) + 1);
+  if (type === "cvd_reversal_up" || type === "cvd_reversal_down") {
+    return Math.max(2, Math.abs(derived.tradeSummary.cvdSlope) + 1);
+  }
+  return null;
+}
+
+function describeAlertRule(rule, precisionHint) {
+  const label = ALERT_TYPE_LABELS[rule.type] || "Alert";
+
+  if (rule.type === "breakout_up" || rule.type === "breakdown_down") {
+    return `${label} ${formatPrice(rule.level, precisionHint)}`;
+  }
+
+  if (rule.type === "oi_spike_up") return `${label} ${rule.level.toFixed(1)}%`;
+  if (rule.type.startsWith("cvd_reversal")) return `${label} ${rule.level.toFixed(1)}% slope`;
+  return label;
+}
+
+function renderAlertRules(precisionHint = 2) {
+  dom.alertRules.innerHTML = "";
+
+  if (!state.alerts.length) {
+    const card = document.createElement("article");
+    card.className = "stack-card";
+    card.innerHTML = `
+      <span>No active alert rules.</span>
+      <small>Arm breakouts, funding flips, or tape reversals and the engine will log them as the live feed updates.</small>
+    `;
+    dom.alertRules.appendChild(card);
+    return;
+  }
+
+  state.alerts.forEach((rule) => {
+    const card = document.createElement("article");
+    card.className = "stack-card";
+    card.innerHTML = `
+      <div class="stack-card-head">
+        <strong>${describeAlertRule(rule, precisionHint)}</strong>
+        <button class="mini-button" data-alert-remove="${rule.id}" type="button">Remove</button>
+      </div>
+      <small>${rule.symbol} • ${rule.interval} • ${
+        rule.triggeredAt ? `Triggered ${new Date(rule.triggeredAt).toLocaleString()}` : "Armed"
+      }</small>
+    `;
+    dom.alertRules.appendChild(card);
+  });
+}
+
+function renderAlertEvents() {
+  renderTable(
+    dom.alertEvents,
+    state.alertEvents.slice(0, 8).map((event) => ({
+      label: event.symbol,
+      primary: event.message,
+      secondaryLabel: "Type",
+      secondary: ALERT_TYPE_LABELS[event.type] || event.type,
+      tertiaryLabel: "Time",
+      tertiary: new Date(event.time).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      }),
+      tone: event.tone || "neutral",
+    })),
+    "No alerts have fired yet"
+  );
+}
+
+function maybeTriggerBrowserNotification(title, body) {
+  if (!("Notification" in window)) return;
+  if (Notification.permission === "granted") {
+    new Notification(title, { body });
+  } else if (Notification.permission === "default") {
+    Notification.requestPermission().catch(() => {});
+  }
+}
+
+function evaluateAlerts(derived, precisionHint) {
+  if (!state.snapshot) return;
+
+  let changed = false;
+  state.alerts = state.alerts.map((rule) => {
+    if (rule.symbol !== state.snapshot.symbol || rule.interval !== state.activeInterval) return rule;
+    if (rule.triggeredAt) return rule;
+
+    let triggered = false;
+    let message = "";
+    let tone = "neutral";
+
+    if (rule.type === "breakout_up" && derived.currentPrice >= rule.level) {
+      triggered = true;
+      message = `Price broke above ${formatPrice(rule.level, precisionHint)}`;
+      tone = "up";
+    } else if (rule.type === "breakdown_down" && derived.currentPrice <= rule.level) {
+      triggered = true;
+      message = `Price lost ${formatPrice(rule.level, precisionHint)}`;
+      tone = "down";
+    } else if (rule.type === "funding_flip_positive" && derived.fundingRate > 0) {
+      triggered = true;
+      message = `Funding turned positive at ${formatSigned(derived.fundingRate, 4, "%")}`;
+      tone = "down";
+    } else if (rule.type === "funding_flip_negative" && derived.fundingRate < 0) {
+      triggered = true;
+      message = `Funding turned negative at ${formatSigned(derived.fundingRate, 4, "%")}`;
+      tone = "up";
+    } else if (rule.type === "oi_spike_up" && derived.oiChange1h >= rule.level) {
+      triggered = true;
+      message = `OI jumped ${formatSigned(derived.oiChange1h, 2, "%")} in 1H`;
+      tone = "up";
+    } else if (rule.type === "cvd_reversal_up" && derived.tradeSummary.cvdSlope >= rule.level) {
+      triggered = true;
+      message = `CVD slope reversed up to ${formatSigned(derived.tradeSummary.cvdSlope, 2, "%")}`;
+      tone = "up";
+    } else if (
+      rule.type === "cvd_reversal_down" &&
+      derived.tradeSummary.cvdSlope <= -Math.abs(rule.level)
+    ) {
+      triggered = true;
+      message = `CVD slope reversed down to ${formatSigned(derived.tradeSummary.cvdSlope, 2, "%")}`;
+      tone = "down";
+    }
+
+    if (!triggered) return rule;
+
+    changed = true;
+    const event = {
+      id: `${rule.id}-${Date.now()}`,
+      type: rule.type,
+      symbol: rule.symbol,
+      message,
+      tone,
+      time: Date.now(),
+    };
+    state.alertEvents.unshift(event);
+    state.alertEvents = state.alertEvents.slice(0, 24);
+    maybeTriggerBrowserNotification(`${rule.symbol} alert`, message);
+
+    return {
+      ...rule,
+      triggeredAt: Date.now(),
+    };
+  });
+
+  if (changed) persistAlerts();
+}
+
+function buildPaperRiskPlan(derived) {
+  const trade = derived?.potentialTrade;
+  if (!trade) return null;
+
+  const entry = Number(trade.entry);
+  const stop = Number(trade.stopLoss);
+  const tp1 = Number(trade.takeProfit1);
+  const tp2 = Number(trade.takeProfit2);
+  const accountSize = Math.max(0, Number(state.paperSettings.accountSize) || 0);
+  const riskPct = Math.max(0, Number(state.paperSettings.riskPct) || 0);
+  const leverage = Math.max(1, Number(state.paperSettings.leverage) || 1);
+  const riskCapital = accountSize * (riskPct / 100);
+  const stopDistance = Math.abs(entry - stop);
+  const quantity = stopDistance > 0 ? riskCapital / stopDistance : 0;
+  const notional = quantity * entry;
+  const marginRequired = leverage > 0 ? notional / leverage : notional;
+  const direction = trade.stance === "Short" ? -1 : 1;
+  const liquidationMovePct = Math.max(0.015, 1 / leverage - 0.005);
+  const liquidationPrice =
+    direction > 0 ? entry * (1 - liquidationMovePct) : entry * (1 + liquidationMovePct);
+  const rrTp1 = stopDistance > 0 ? Math.abs(tp1 - entry) / stopDistance : 0;
+  const rrTp2 = stopDistance > 0 ? Math.abs(tp2 - entry) / stopDistance : 0;
+
+  return {
+    stance: trade.stance,
+    entry,
+    stop,
+    tp1,
+    tp2,
+    accountSize,
+    riskPct,
+    leverage,
+    riskCapital,
+    stopDistance,
+    quantity,
+    notional,
+    marginRequired,
+    liquidationPrice,
+    rrTp1,
+    rrTp2,
+  };
+}
+
+function renderRiskGrid(plan, precisionHint = 2) {
+  if (!plan) {
+    renderAnalysisGrid(dom.riskGrid, [
+      {
+        label: "Risk engine",
+        value: "Waiting",
+        note: "A live potential trade is required before sizing can be estimated.",
+        tone: "neutral",
+      },
+    ]);
+    return;
+  }
+
+  renderAnalysisGrid(dom.riskGrid, [
+    {
+      label: "Risk Capital",
+      value: formatPrice(plan.riskCapital, 2),
+      note: `${plan.riskPct.toFixed(2)}% of ${formatPrice(plan.accountSize, 2)}`,
+      tone: "neutral",
+    },
+    {
+      label: "Position Size",
+      value: formatCompactNumber(plan.quantity, 2),
+      note: `${plan.stance} quantity from entry-to-stop distance`,
+      tone: plan.stance === "Long" ? "up" : "down",
+    },
+    {
+      label: "Notional",
+      value: formatCompactUsdAbs(plan.notional, 2),
+      note: `Margin ${formatCompactUsdAbs(plan.marginRequired, 2)} at ${plan.leverage}x`,
+      tone: plan.marginRequired <= plan.accountSize ? "up" : "down",
+    },
+    {
+      label: "Stop Distance",
+      value: formatPrice(plan.stopDistance, precisionHint),
+      note: `${pctChange(plan.entry, plan.stop).toFixed(2)}% from entry to stop`,
+      tone: "neutral",
+    },
+    {
+      label: "Est. Liquidation",
+      value: formatPrice(plan.liquidationPrice, precisionHint),
+      note: "Simplified educational estimate, not exchange exact",
+      tone: plan.stance === "Long" ? "down" : "up",
+    },
+    {
+      label: "R:R to TP1",
+      value: `${plan.rrTp1.toFixed(2)}R`,
+      note: `TP2 ${plan.rrTp2.toFixed(2)}R`,
+      tone: plan.rrTp2 >= 2 ? "up" : "neutral",
+    },
+  ]);
+}
+
+function renderPaperTable(precisionHint = 2) {
+  renderTable(
+    dom.paperTable,
+    state.paperPositions.slice(0, 8).map((position) => ({
+      label: `${position.symbol} • ${position.stance}`,
+      primary: `${formatPrice(position.entry, precisionHint)} / ${formatPrice(
+        position.stop,
+        precisionHint
+      )}`,
+      secondaryLabel: "Notional",
+      secondary: formatCompactUsdAbs(position.notional, 2),
+      tertiaryLabel: "Saved",
+      tertiary: new Date(position.createdAt).toLocaleString(),
+      tone: position.stance === "Long" ? "up" : "down",
+    })),
+    "No paper trades saved"
+  );
 }
 
 function resizeChart() {
@@ -1575,8 +2342,16 @@ function renderEmptyDashboard(message) {
   renderTable(dom.depthTable, [], "No order-book data");
   renderTable(dom.liquidationTable, [], "No liquidation tape");
   renderNews([]);
+  renderVenueGrid([]);
+  renderHeatmap(dom.depthHeatmap, { rows: [] }, "Waiting for depth replay data");
+  renderHeatmap(dom.liqHeatmap, { rows: [] }, "Waiting for liquidation replay data");
+  renderAlertRules();
+  renderAlertEvents();
+  renderRiskGrid(null);
+  renderPaperTable();
   renderTimeframeSummary();
   renderPotentialTrade(null);
+  renderReplaySurface();
 
   [
     dom.metricVolume,
@@ -1628,6 +2403,128 @@ async function fetchDirectJson(url, label) {
     throw new Error(`${label} failed (${response.status})`);
   }
   return response.json();
+}
+
+async function fetchFirstSuccessful(candidates, loader) {
+  for (const candidate of candidates) {
+    try {
+      const value = await loader(candidate);
+      if (value) return value;
+    } catch (error) {
+      // Try the next symbol variant.
+    }
+  }
+  return null;
+}
+
+function buildBinanceVenueSummary(resolved, ticker, premiumIndex, openInterest) {
+  const lastPrice = Number(ticker?.lastPrice);
+  const markPrice = Number(premiumIndex?.markPrice) || lastPrice;
+  const indexPrice = Number(premiumIndex?.indexPrice) || markPrice;
+  const openInterestContracts = Number(openInterest?.openInterest) || 0;
+
+  return {
+    venue: "Binance",
+    symbol: resolved.symbol,
+    lastPrice,
+    change24hPct: Number(ticker?.priceChangePercent) || 0,
+    fundingRatePct: (Number(premiumIndex?.lastFundingRate) || 0) * 100,
+    markPrice,
+    indexPrice,
+    basisPct: pctChange(indexPrice, markPrice),
+    openInterestUsd: openInterestContracts * markPrice,
+    volume24hUsd: Number(ticker?.quoteVolume) || 0,
+    spreadBps: computeSpreadBps(Number(ticker?.bidPrice), Number(ticker?.askPrice), lastPrice),
+  };
+}
+
+async function fetchBybitVenueDirect(resolved) {
+  const candidates = buildVenueSymbolCandidates(resolved).bybit;
+  return fetchFirstSuccessful(candidates, async (symbol) => {
+    const payload = await fetchDirectJson(
+      `https://api.bybit.com/v5/market/tickers?category=linear&symbol=${symbol}`,
+      "Bybit ticker"
+    );
+    const row = payload?.result?.list?.[0];
+    if (!row) throw new Error("No Bybit venue row");
+
+    const lastPrice = toNumber(row.lastPrice);
+    const markPrice = toNumber(row.markPrice) || lastPrice;
+    const indexPrice = toNumber(row.indexPrice) || markPrice;
+    return {
+      venue: "Bybit",
+      symbol,
+      lastPrice,
+      change24hPct: (toNumber(row.price24hPcnt) || 0) * 100,
+      fundingRatePct: (toNumber(row.fundingRate) || 0) * 100,
+      markPrice,
+      indexPrice,
+      basisPct: pctChange(indexPrice, markPrice),
+      openInterestUsd: toNumber(row.openInterestValue) || 0,
+      volume24hUsd: toNumber(row.turnover24h) || 0,
+      spreadBps: computeSpreadBps(toNumber(row.bid1Price), toNumber(row.ask1Price), lastPrice),
+    };
+  });
+}
+
+async function fetchOkxVenueDirect(resolved) {
+  const candidates = buildVenueSymbolCandidates(resolved).okx;
+  return fetchFirstSuccessful(candidates, async (instId) => {
+    const [tickerResult, markResult, oiResult, fundingResult] = await Promise.allSettled([
+      fetchDirectJson(`https://www.okx.com/api/v5/market/ticker?instId=${instId}`, "OKX ticker"),
+      fetchDirectJson(
+        `https://www.okx.com/api/v5/public/mark-price?instType=SWAP&instId=${instId}`,
+        "OKX mark price"
+      ),
+      fetchDirectJson(
+        `https://www.okx.com/api/v5/public/open-interest?instType=SWAP&instId=${instId}`,
+        "OKX open interest"
+      ),
+      fetchDirectJson(
+        `https://www.okx.com/api/v5/public/funding-rate-history?instId=${instId}&limit=1`,
+        "OKX funding history"
+      ),
+    ]);
+
+    const tickerRow = tickerResult.status === "fulfilled" ? tickerResult.value?.data?.[0] : null;
+    if (!tickerRow) throw new Error("No OKX venue row");
+
+    const markRow = markResult.status === "fulfilled" ? markResult.value?.data?.[0] : null;
+    const oiRow = oiResult.status === "fulfilled" ? oiResult.value?.data?.[0] : null;
+    const fundingRow =
+      fundingResult.status === "fulfilled" ? fundingResult.value?.data?.[0] : null;
+
+    const lastPrice = toNumber(tickerRow.last);
+    const markPrice = toNumber(markRow?.markPx) || lastPrice;
+    const open24h = toNumber(tickerRow.open24h) || lastPrice;
+
+    return {
+      venue: "OKX",
+      symbol: instId,
+      lastPrice,
+      change24hPct: pctChange(open24h, lastPrice),
+      fundingRatePct: (toNumber(fundingRow?.fundingRate) || 0) * 100,
+      markPrice,
+      indexPrice: markPrice,
+      basisPct: pctChange(lastPrice, markPrice),
+      openInterestUsd: toNumber(oiRow?.oiUsd) || 0,
+      volume24hUsd: toNumber(tickerRow.volCcy24h) || 0,
+      spreadBps: computeSpreadBps(toNumber(tickerRow.bidPx), toNumber(tickerRow.askPx), lastPrice),
+    };
+  });
+}
+
+async function buildVenueMatrixDirect(resolved, ticker, premiumIndex, openInterest) {
+  const venues = [buildBinanceVenueSummary(resolved, ticker, premiumIndex, openInterest)];
+
+  const [bybitResult, okxResult] = await Promise.allSettled([
+    fetchBybitVenueDirect(resolved),
+    fetchOkxVenueDirect(resolved),
+  ]);
+
+  if (bybitResult.status === "fulfilled" && bybitResult.value) venues.push(bybitResult.value);
+  if (okxResult.status === "fulfilled" && okxResult.value) venues.push(okxResult.value);
+  return venues;
 }
 
 async function fetchDirectSnapshot(token, interval) {
@@ -1723,6 +2620,13 @@ async function fetchDirectSnapshot(token, interval) {
     throw new Error(`Core perpetual market data is unavailable for ${resolved.symbol}.`);
   }
 
+  const venues = await buildVenueMatrixDirect(
+    resolved,
+    tickerResult.value,
+    premiumIndexResult.status === "fulfilled" ? premiumIndexResult.value : null,
+    openInterestResult.status === "fulfilled" ? openInterestResult.value : null
+  ).catch(() => []);
+
   return {
     token: resolved.cleanedToken,
     symbol: resolved.symbol,
@@ -1754,6 +2658,7 @@ async function fetchDirectSnapshot(token, interval) {
       btcTicker: btcContextResult.status === "fulfilled" ? btcContextResult.value : null,
       ethTicker: ethContextResult.status === "fulfilled" ? ethContextResult.value : null,
     },
+    venues,
     news:
       newsResult.status === "fulfilled" && Array.isArray(newsResult.value.Data)
         ? newsResult.value.Data.slice(0, 6)
@@ -2080,12 +2985,79 @@ function scheduleTradeAutoRefresh() {
   }, TRADE_AUTO_REFRESH_MS);
 }
 
+function syncPaperInputs() {
+  dom.paperAccount.value = `${state.paperSettings.accountSize}`;
+  dom.paperRisk.value = `${state.paperSettings.riskPct}`;
+  dom.paperLeverage.value = `${state.paperSettings.leverage}`;
+}
+
+function addAlertRuleFromForm() {
+  if (!state.snapshot || !state.lastDerived) return;
+
+  const type = dom.alertType.value;
+  const rawLevel = dom.alertLevel.value;
+  const derived = state.lastDerived;
+  const fallbackLevel = defaultAlertLevel(type, derived);
+  const parsedLevel = rawLevel === "" ? fallbackLevel : Number(rawLevel);
+  const level =
+    type === "funding_flip_positive" || type === "funding_flip_negative"
+      ? 0
+      : Number.isFinite(parsedLevel)
+        ? parsedLevel
+        : fallbackLevel;
+
+  state.alerts.unshift({
+    id: `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+    type,
+    level,
+    symbol: state.snapshot.symbol,
+    interval: state.activeInterval,
+    createdAt: Date.now(),
+    triggeredAt: null,
+  });
+  state.alerts = state.alerts.slice(0, 16);
+  persistAlerts();
+  renderAlertRules(state.snapshot.pricePrecision || 2);
+  dom.alertLevel.value = "";
+}
+
+function removeAlertRule(id) {
+  state.alerts = state.alerts.filter((rule) => rule.id !== id);
+  persistAlerts();
+  renderAlertRules(state.snapshot?.pricePrecision || 2);
+}
+
+function savePaperTrade() {
+  if (!state.lastDerived || !state.snapshot) return;
+  const plan = buildPaperRiskPlan(state.lastDerived);
+  if (!plan) return;
+
+  state.paperPositions.unshift({
+    id: `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+    symbol: state.snapshot.symbol,
+    interval: state.activeInterval,
+    stance: plan.stance,
+    entry: plan.entry,
+    stop: plan.stop,
+    tp1: plan.tp1,
+    tp2: plan.tp2,
+    notional: plan.notional,
+    marginRequired: plan.marginRequired,
+    quantity: plan.quantity,
+    createdAt: Date.now(),
+  });
+  state.paperPositions = state.paperPositions.slice(0, 20);
+  persistPaperState();
+  renderPaperTable(state.snapshot.pricePrecision || 2);
+}
+
 function renderDashboard() {
   if (!state.snapshot) return;
 
   const snapshot = state.snapshot;
   const derived = buildDerivedState();
   const precision = snapshot.pricePrecision || 2;
+  state.lastDerived = derived;
 
   removePriceLines();
   derived.supportResistance.supportLevels.forEach((level, index) => {
@@ -2131,6 +3103,19 @@ function renderDashboard() {
     precision
   );
   renderPotentialTrade(derived.potentialTrade, precision);
+  renderVenueGrid(snapshot.venues || []);
+  captureReplayFrame(
+    buildReplayFrame({
+      ...derived,
+      supportResistance: derived.supportResistance,
+      pricePrecision: precision,
+    })
+  );
+  evaluateAlerts(derived, precision);
+  renderAlertRules(precision);
+  renderAlertEvents();
+  renderRiskGrid(buildPaperRiskPlan(derived), precision);
+  renderPaperTable(precision);
 
   dom.metricVolume.textContent = formatCompactNumber(Number(snapshot.ticker?.quoteVolume) || 0);
   dom.metricVolume.className = toneFromNumber(derived.priceChange24h, 0.15);
@@ -2632,7 +3617,9 @@ async function loadDashboard(token, interval) {
   disconnectStreams();
   clearRenderTimer();
   clearTradeRefreshTimer();
+  resetReplayState();
   state.snapshot = null;
+  state.lastDerived = null;
   state.timeframeSummary = [];
   state.timeframeSummaryLoading = true;
   resetChart();
@@ -2681,5 +3668,66 @@ dom.tradeRefreshButton.addEventListener("click", () => {
   const interval = state.activeInterval || dom.intervalSelect.value || DEFAULT_INTERVAL;
   loadDashboard(token, interval);
 });
+
+dom.replayBackButton.addEventListener("click", () => {
+  stepReplay(-1);
+});
+
+dom.replayPlayButton.addEventListener("click", () => {
+  playReplay();
+});
+
+dom.replayLiveButton.addEventListener("click", () => {
+  setReplayLive();
+});
+
+dom.alertForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  addAlertRuleFromForm();
+});
+
+dom.paperForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+});
+
+dom.alertRules.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-alert-remove]");
+  if (!button) return;
+  removeAlertRule(button.dataset.alertRemove);
+});
+
+dom.paperAccount.addEventListener("input", () => {
+  state.paperSettings.accountSize = Math.max(0, Number(dom.paperAccount.value) || 0);
+  persistPaperState();
+  if (state.lastDerived) renderRiskGrid(buildPaperRiskPlan(state.lastDerived), state.snapshot?.pricePrecision || 2);
+});
+
+dom.paperRisk.addEventListener("input", () => {
+  state.paperSettings.riskPct = Math.max(0.1, Number(dom.paperRisk.value) || DEFAULT_PAPER_SETTINGS.riskPct);
+  persistPaperState();
+  if (state.lastDerived) renderRiskGrid(buildPaperRiskPlan(state.lastDerived), state.snapshot?.pricePrecision || 2);
+});
+
+dom.paperLeverage.addEventListener("input", () => {
+  state.paperSettings.leverage = Math.max(1, Number(dom.paperLeverage.value) || DEFAULT_PAPER_SETTINGS.leverage);
+  persistPaperState();
+  if (state.lastDerived) renderRiskGrid(buildPaperRiskPlan(state.lastDerived), state.snapshot?.pricePrecision || 2);
+});
+
+dom.paperSaveButton.addEventListener("click", () => {
+  savePaperTrade();
+});
+
+dom.paperClearButton.addEventListener("click", () => {
+  state.paperPositions = [];
+  persistPaperState();
+  renderPaperTable(state.snapshot?.pricePrecision || 2);
+});
+
+syncPaperInputs();
+renderAlertRules();
+renderAlertEvents();
+renderPaperTable();
+renderReplaySurface();
 
 loadDashboard(DEFAULT_TOKEN, DEFAULT_INTERVAL);

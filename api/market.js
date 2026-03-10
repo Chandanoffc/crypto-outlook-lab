@@ -145,6 +145,178 @@ function transformCandle(entry) {
   };
 }
 
+function uniqueValues(values) {
+  return Array.from(new Set(values.filter(Boolean)));
+}
+
+function strippedVenueToken(token) {
+  return String(token || "").replace(/^\d+/, "") || token || DEFAULT_TOKEN;
+}
+
+function toNumber(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function pctChange(start, end) {
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start === 0) return 0;
+  return ((end - start) / Math.abs(start)) * 100;
+}
+
+function computeSpreadBps(bid, ask, referencePrice) {
+  if (!Number.isFinite(bid) || !Number.isFinite(ask)) return 0;
+  const reference =
+    Number.isFinite(referencePrice) && referencePrice > 0 ? referencePrice : (bid + ask) / 2;
+  if (!reference) return 0;
+  return ((ask - bid) / reference) * 10000;
+}
+
+function buildVenueSymbolCandidates(resolved) {
+  const baseAsset = resolved?.baseAsset || resolved?.cleanedToken || DEFAULT_TOKEN;
+  const strippedBase = strippedVenueToken(baseAsset);
+  const strippedToken = strippedVenueToken(resolved?.cleanedToken || baseAsset);
+
+  return {
+    bybit: uniqueValues([
+      `${baseAsset}${QUOTE_ASSET}`,
+      `${resolved.cleanedToken}${QUOTE_ASSET}`,
+      `${strippedBase}${QUOTE_ASSET}`,
+      `${strippedToken}${QUOTE_ASSET}`,
+    ]),
+    okx: uniqueValues([
+      `${baseAsset}-USDT-SWAP`,
+      `${resolved.cleanedToken}-USDT-SWAP`,
+      `${strippedBase}-USDT-SWAP`,
+      `${strippedToken}-USDT-SWAP`,
+    ]),
+  };
+}
+
+async function fetchFirstSuccessful(candidates, loader) {
+  for (const candidate of candidates) {
+    try {
+      const value = await loader(candidate);
+      if (value) return value;
+    } catch (error) {
+      // Continue through venue symbol candidates.
+    }
+  }
+  return null;
+}
+
+function buildBinanceVenueSummary(resolved, ticker, premiumIndex, openInterest) {
+  const lastPrice = Number(ticker?.lastPrice);
+  const markPrice = Number(premiumIndex?.markPrice) || lastPrice;
+  const indexPrice = Number(premiumIndex?.indexPrice) || markPrice;
+  const openInterestContracts = Number(openInterest?.openInterest) || 0;
+
+  return {
+    venue: "Binance",
+    symbol: resolved.symbol,
+    lastPrice,
+    change24hPct: Number(ticker?.priceChangePercent) || 0,
+    fundingRatePct: (Number(premiumIndex?.lastFundingRate) || 0) * 100,
+    markPrice,
+    indexPrice,
+    basisPct: pctChange(indexPrice, markPrice),
+    openInterestUsd: openInterestContracts * markPrice,
+    volume24hUsd: Number(ticker?.quoteVolume) || 0,
+    spreadBps: computeSpreadBps(Number(ticker?.bidPrice), Number(ticker?.askPrice), lastPrice),
+  };
+}
+
+async function fetchBybitVenue(resolved) {
+  const candidates = buildVenueSymbolCandidates(resolved).bybit;
+
+  return fetchFirstSuccessful(candidates, async (symbol) => {
+    const payload = await fetchJson(
+      `https://api.bybit.com/v5/market/tickers?category=linear&symbol=${symbol}`,
+      "Bybit ticker"
+    );
+    const row = payload?.result?.list?.[0];
+    if (!row) throw new Error("No Bybit row");
+
+    const lastPrice = toNumber(row.lastPrice);
+    const markPrice = toNumber(row.markPrice) || lastPrice;
+    const indexPrice = toNumber(row.indexPrice) || markPrice;
+
+    return {
+      venue: "Bybit",
+      symbol,
+      lastPrice,
+      change24hPct: (toNumber(row.price24hPcnt) || 0) * 100,
+      fundingRatePct: (toNumber(row.fundingRate) || 0) * 100,
+      markPrice,
+      indexPrice,
+      basisPct: pctChange(indexPrice, markPrice),
+      openInterestUsd: toNumber(row.openInterestValue) || 0,
+      volume24hUsd: toNumber(row.turnover24h) || 0,
+      spreadBps: computeSpreadBps(toNumber(row.bid1Price), toNumber(row.ask1Price), lastPrice),
+    };
+  });
+}
+
+async function fetchOkxVenue(resolved) {
+  const candidates = buildVenueSymbolCandidates(resolved).okx;
+
+  return fetchFirstSuccessful(candidates, async (instId) => {
+    const [tickerResult, markResult, oiResult, fundingResult] = await Promise.allSettled([
+      fetchJson(`https://www.okx.com/api/v5/market/ticker?instId=${instId}`, "OKX ticker"),
+      fetchJson(
+        `https://www.okx.com/api/v5/public/mark-price?instType=SWAP&instId=${instId}`,
+        "OKX mark price"
+      ),
+      fetchJson(
+        `https://www.okx.com/api/v5/public/open-interest?instType=SWAP&instId=${instId}`,
+        "OKX open interest"
+      ),
+      fetchJson(
+        `https://www.okx.com/api/v5/public/funding-rate-history?instId=${instId}&limit=1`,
+        "OKX funding history"
+      ),
+    ]);
+
+    const tickerRow = tickerResult.status === "fulfilled" ? tickerResult.value?.data?.[0] : null;
+    if (!tickerRow) throw new Error("No OKX row");
+
+    const markRow = markResult.status === "fulfilled" ? markResult.value?.data?.[0] : null;
+    const oiRow = oiResult.status === "fulfilled" ? oiResult.value?.data?.[0] : null;
+    const fundingRow =
+      fundingResult.status === "fulfilled" ? fundingResult.value?.data?.[0] : null;
+
+    const lastPrice = toNumber(tickerRow.last);
+    const markPrice = toNumber(markRow?.markPx) || lastPrice;
+    const open24h = toNumber(tickerRow.open24h) || lastPrice;
+
+    return {
+      venue: "OKX",
+      symbol: instId,
+      lastPrice,
+      change24hPct: pctChange(open24h, lastPrice),
+      fundingRatePct: (toNumber(fundingRow?.fundingRate) || 0) * 100,
+      markPrice,
+      indexPrice: markPrice,
+      basisPct: pctChange(lastPrice, markPrice),
+      openInterestUsd: toNumber(oiRow?.oiUsd) || 0,
+      volume24hUsd: toNumber(tickerRow.volCcy24h) || 0,
+      spreadBps: computeSpreadBps(toNumber(tickerRow.bidPx), toNumber(tickerRow.askPx), lastPrice),
+    };
+  });
+}
+
+async function buildVenueMatrix(resolved, ticker, premiumIndex, openInterest) {
+  const venues = [buildBinanceVenueSummary(resolved, ticker, premiumIndex, openInterest)];
+
+  const [bybitResult, okxResult] = await Promise.allSettled([
+    fetchBybitVenue(resolved),
+    fetchOkxVenue(resolved),
+  ]);
+
+  if (bybitResult.status === "fulfilled" && bybitResult.value) venues.push(bybitResult.value);
+  if (okxResult.status === "fulfilled" && okxResult.value) venues.push(okxResult.value);
+  return venues;
+}
+
 module.exports = async function handler(req, res) {
   const token = firstQueryValue(req.query?.token) || DEFAULT_TOKEN;
   const interval = firstQueryValue(req.query?.interval) || DEFAULT_INTERVAL;
@@ -258,6 +430,13 @@ module.exports = async function handler(req, res) {
       return;
     }
 
+    const venues = await buildVenueMatrix(
+      resolved,
+      tickerResult.value,
+      premiumIndexResult.status === "fulfilled" ? premiumIndexResult.value : null,
+      openInterestResult.status === "fulfilled" ? openInterestResult.value : null
+    ).catch(() => []);
+
     buildJsonResponse(res, 200, {
       token: resolved.cleanedToken,
       symbol: resolved.symbol,
@@ -291,6 +470,7 @@ module.exports = async function handler(req, res) {
         btcTicker: btcContextResult.status === "fulfilled" ? btcContextResult.value : null,
         ethTicker: ethContextResult.status === "fulfilled" ? ethContextResult.value : null,
       },
+      venues,
       news:
         newsResult.status === "fulfilled" && Array.isArray(newsResult.value.Data)
           ? newsResult.value.Data.slice(0, NEWS_LIMIT)
