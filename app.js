@@ -510,21 +510,21 @@ function initChart() {
     width: dom.chart.clientWidth,
     height: dom.chart.clientHeight,
     layout: {
-      background: { color: "#040907" },
-      textColor: "#92a79d",
+      background: { color: "#040302" },
+      textColor: "#b7ab8e",
       fontFamily:
         '"Prima Sans Mono Std", "SFMono-Regular", Consolas, "Liberation Mono", monospace',
     },
     grid: {
-      vertLines: { color: "rgba(42, 103, 75, 0.08)" },
-      horzLines: { color: "rgba(42, 103, 75, 0.1)" },
+      vertLines: { color: "rgba(176, 135, 54, 0.08)" },
+      horzLines: { color: "rgba(176, 135, 54, 0.1)" },
     },
     timeScale: {
-      borderColor: "rgba(42, 103, 75, 0.16)",
+      borderColor: "rgba(176, 135, 54, 0.16)",
       timeVisible: true,
     },
     rightPriceScale: {
-      borderColor: "rgba(42, 103, 75, 0.16)",
+      borderColor: "rgba(176, 135, 54, 0.16)",
     },
   });
 
@@ -537,7 +537,7 @@ function initChart() {
   });
 
   ema20LineSeries = chart.addLineSeries({
-    color: "#87d9ba",
+    color: "#e1b457",
     lineWidth: 2,
     priceLineVisible: false,
     lastValueVisible: false,
@@ -545,7 +545,7 @@ function initChart() {
   });
 
   ema50LineSeries = chart.addLineSeries({
-    color: "#9dc66d",
+    color: "#f3dfb1",
     lineWidth: 2,
     priceLineVisible: false,
     lastValueVisible: false,
@@ -555,7 +555,7 @@ function initChart() {
   volumeSeries = chart.addHistogramSeries({
     priceFormat: { type: "volume" },
     priceScaleId: "",
-    color: "rgba(42, 103, 75, 0.24)",
+    color: "rgba(176, 135, 54, 0.24)",
   });
 
   volumeSeries.priceScale().applyOptions({

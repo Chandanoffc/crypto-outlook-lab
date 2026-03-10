@@ -8,18 +8,18 @@
 }
 
 :root {
-  --page-bg: #030605;
-  --page-bg-soft: #07110d;
-  --panel-bg: rgba(7, 11, 10, 0.92);
-  --panel-bg-strong: rgba(10, 16, 14, 0.96);
-  --panel-edge: rgba(42, 103, 75, 0.24);
-  --panel-edge-soft: rgba(42, 103, 75, 0.12);
-  --text-main: #f1fff8;
-  --text-soft: #92a79d;
-  --text-dim: #63766d;
-  --orange: #e88d33;
-  --orange-soft: rgba(232, 141, 51, 0.15);
-  --orange-glow: rgba(232, 141, 51, 0.18);
+  --page-bg: #020202;
+  --page-bg-soft: #0b0905;
+  --panel-bg: rgba(11, 9, 7, 0.92);
+  --panel-bg-strong: rgba(16, 13, 10, 0.96);
+  --panel-edge: rgba(176, 135, 54, 0.28);
+  --panel-edge-soft: rgba(176, 135, 54, 0.14);
+  --text-main: #f8f2e3;
+  --text-soft: #b7ab8e;
+  --text-dim: #7d735f;
+  --orange: #d5a13c;
+  --orange-soft: rgba(213, 161, 60, 0.16);
+  --orange-glow: rgba(213, 161, 60, 0.2);
   --green: #35c282;
   --green-soft: rgba(53, 194, 130, 0.12);
   --green-edge: rgba(53, 194, 130, 0.22);
@@ -53,10 +53,10 @@ body {
   font-family: var(--font-stack);
   color: var(--text-main);
   background:
-    radial-gradient(circle at top right, rgba(42, 103, 75, 0.12), transparent 22%),
-    radial-gradient(circle at 12% 16%, rgba(42, 103, 75, 0.08), transparent 24%),
-    radial-gradient(circle at bottom left, rgba(42, 103, 75, 0.05), transparent 28%),
-    linear-gradient(180deg, #010202 0%, #06100c 40%, #020403 100%);
+    radial-gradient(circle at top right, rgba(176, 135, 54, 0.12), transparent 22%),
+    radial-gradient(circle at 12% 16%, rgba(176, 135, 54, 0.08), transparent 24%),
+    radial-gradient(circle at bottom left, rgba(176, 135, 54, 0.05), transparent 28%),
+    linear-gradient(180deg, #010101 0%, #080604 40%, #020201 100%);
 }
 
 button,
@@ -86,7 +86,7 @@ select {
   text-transform: uppercase;
   font-size: 0.68rem;
   font-weight: 800;
-  color: #78b497;
+  color: #cfb56b;
 }
 
 .topbar h1,
@@ -107,7 +107,7 @@ select {
   font-size: clamp(1.85rem, 3.8vw, 2.85rem);
   line-height: 0.96;
   color: var(--orange);
-  text-shadow: 0 0 20px rgba(232, 141, 51, 0.12);
+  text-shadow: 0 0 20px rgba(213, 161, 60, 0.12);
 }
 
 .subtitle {
@@ -151,12 +151,12 @@ select {
 .token-form select {
   border: 1px solid var(--panel-edge);
   background:
-    linear-gradient(180deg, rgba(42, 103, 75, 0.08), transparent 70%),
-    rgba(7, 11, 10, 0.94);
+    linear-gradient(180deg, rgba(176, 135, 54, 0.08), transparent 70%),
+    rgba(9, 8, 6, 0.94);
   color: var(--text-main);
   box-shadow:
-    inset 0 0 0 1px rgba(42, 103, 75, 0.04),
-    0 0 16px rgba(42, 103, 75, 0.04);
+    inset 0 0 0 1px rgba(176, 135, 54, 0.04),
+    0 0 16px rgba(176, 135, 54, 0.04);
 }
 
 .token-form input:focus,
@@ -169,14 +169,14 @@ select {
 }
 
 .token-form button {
-  border: 1px solid rgba(42, 103, 75, 0.32);
+  border: 1px solid rgba(176, 135, 54, 0.34);
   font-weight: 800;
-  color: #ecfff6;
+  color: #201709;
   background:
-    linear-gradient(180deg, #2a7252 0%, #235c43 56%, #1a4734 100%);
+    linear-gradient(180deg, #e0b65c 0%, #c8942d 56%, #9e6d18 100%);
   box-shadow:
-    0 10px 20px rgba(8, 25, 18, 0.3),
-    0 0 16px rgba(42, 103, 75, 0.08);
+    0 10px 20px rgba(20, 14, 6, 0.3),
+    0 0 16px rgba(176, 135, 54, 0.08);
   cursor: pointer;
   transition:
     transform 150ms ease,
@@ -188,8 +188,8 @@ select {
   transform: translateY(-1px);
   filter: brightness(1.02);
   box-shadow:
-    0 14px 24px rgba(8, 25, 18, 0.34),
-    0 0 20px rgba(42, 103, 75, 0.1);
+    0 14px 24px rgba(20, 14, 6, 0.34),
+    0 0 20px rgba(176, 135, 54, 0.1);
 }
 
 .status-banner {
@@ -198,12 +198,12 @@ select {
   border-radius: 18px;
   border: 1px solid var(--panel-edge);
   background:
-    linear-gradient(90deg, rgba(42, 103, 75, 0.14), transparent 46%),
-    rgba(7, 11, 10, 0.86);
+    linear-gradient(90deg, rgba(176, 135, 54, 0.14), transparent 46%),
+    rgba(10, 8, 6, 0.86);
   color: var(--text-soft);
   box-shadow:
-    inset 0 0 0 1px rgba(42, 103, 75, 0.03),
-    0 0 22px rgba(42, 103, 75, 0.04);
+    inset 0 0 0 1px rgba(176, 135, 54, 0.03),
+    0 0 22px rgba(176, 135, 54, 0.04);
   backdrop-filter: blur(18px);
 }
 
@@ -212,7 +212,7 @@ select {
   border-color: var(--green-edge);
   background:
     linear-gradient(90deg, rgba(53, 194, 130, 0.1), transparent 50%),
-    rgba(7, 11, 10, 0.86);
+    rgba(10, 8, 6, 0.86);
 }
 
 .status-banner.down {
@@ -220,7 +220,7 @@ select {
   border-color: var(--red-edge);
   background:
     linear-gradient(90deg, rgba(224, 76, 76, 0.14), transparent 50%),
-    rgba(7, 11, 10, 0.86);
+    rgba(10, 8, 6, 0.86);
 }
 
 .status-banner.neutral {
@@ -241,13 +241,13 @@ select {
   border: 1px solid var(--panel-edge);
   border-radius: 24px;
   background:
-    linear-gradient(180deg, rgba(42, 103, 75, 0.05), transparent 42%),
-    linear-gradient(180deg, rgba(7, 11, 10, 0.97), rgba(3, 5, 4, 0.95));
+    linear-gradient(180deg, rgba(176, 135, 54, 0.05), transparent 42%),
+    linear-gradient(180deg, rgba(10, 8, 6, 0.97), rgba(3, 3, 2, 0.95));
   box-shadow:
-    inset 0 0 0 1px rgba(42, 103, 75, 0.04),
-    0 0 0 1px rgba(42, 103, 75, 0.02),
+    inset 0 0 0 1px rgba(176, 135, 54, 0.04),
+    0 0 0 1px rgba(176, 135, 54, 0.02),
     0 20px 52px rgba(0, 0, 0, 0.42),
-    0 0 24px rgba(42, 103, 75, 0.04);
+    0 0 24px rgba(176, 135, 54, 0.04);
   backdrop-filter: blur(18px);
 }
 
@@ -259,7 +259,7 @@ select {
   width: 240px;
   height: 240px;
   border-radius: 999px;
-  background: radial-gradient(circle, rgba(42, 103, 75, 0.12), transparent 70%);
+  background: radial-gradient(circle, rgba(176, 135, 54, 0.12), transparent 70%);
   pointer-events: none;
   opacity: 0.72;
 }
@@ -272,7 +272,7 @@ select {
   width: 260px;
   height: 260px;
   border-radius: 999px;
-  background: radial-gradient(circle, rgba(42, 103, 75, 0.05), transparent 72%);
+  background: radial-gradient(circle, rgba(176, 135, 54, 0.05), transparent 72%);
   pointer-events: none;
 }
 
@@ -322,11 +322,11 @@ select {
 .trade-idea-stat {
   border: 1px solid var(--panel-edge-soft);
   background:
-    linear-gradient(180deg, rgba(42, 103, 75, 0.05), transparent 50%),
-    rgba(8, 13, 11, 0.86);
+    linear-gradient(180deg, rgba(176, 135, 54, 0.05), transparent 50%),
+    rgba(9, 8, 6, 0.86);
   box-shadow:
-    inset 0 0 0 1px rgba(42, 103, 75, 0.02),
-    0 0 16px rgba(42, 103, 75, 0.03);
+    inset 0 0 0 1px rgba(176, 135, 54, 0.02),
+    0 0 16px rgba(176, 135, 54, 0.03);
 }
 
 .headline-chip {
@@ -392,13 +392,13 @@ select {
   height: 430px;
   border-radius: 20px;
   overflow: hidden;
-  border: 1px solid rgba(42, 103, 75, 0.14);
+  border: 1px solid rgba(176, 135, 54, 0.14);
   background:
-    linear-gradient(180deg, rgba(42, 103, 75, 0.04), transparent 45%),
-    #040907;
+    linear-gradient(180deg, rgba(176, 135, 54, 0.04), transparent 45%),
+    #040302;
   box-shadow:
-    inset 0 0 0 1px rgba(42, 103, 75, 0.02),
-    0 0 20px rgba(42, 103, 75, 0.04);
+    inset 0 0 0 1px rgba(176, 135, 54, 0.02),
+    0 0 20px rgba(176, 135, 54, 0.04);
 }
 
 .chart-hud {
@@ -439,13 +439,13 @@ select {
   margin-top: 14px;
   padding: 14px 16px;
   border-radius: 18px;
-  border-color: rgba(86, 255, 177, 0.34);
+  border-color: rgba(213, 161, 60, 0.42);
   background:
-    linear-gradient(180deg, rgba(86, 255, 177, 0.12), transparent 52%),
-    rgba(8, 13, 11, 0.92);
+    linear-gradient(180deg, rgba(213, 161, 60, 0.16), transparent 52%),
+    rgba(12, 9, 6, 0.92);
   box-shadow:
-    inset 0 0 0 1px rgba(86, 255, 177, 0.08),
-    0 0 26px rgba(86, 255, 177, 0.12);
+    inset 0 0 0 1px rgba(213, 161, 60, 0.08),
+    0 0 26px rgba(213, 161, 60, 0.12);
 }
 
 .trade-idea-head {
@@ -456,7 +456,7 @@ select {
 }
 
 .trade-idea-card .stack-label {
-  color: #86ffb1;
+  color: #f0cd74;
 }
 
 .trade-actions {
@@ -469,24 +469,24 @@ select {
   display: block;
   margin-top: 6px;
   font-size: 0.74rem;
-  color: #7ed8af;
+  color: #d6bc7a;
 }
 
 .trade-refresh-button {
   min-height: 34px;
   padding: 0 12px;
   border-radius: 999px;
-  border: 1px solid rgba(86, 255, 177, 0.36);
+  border: 1px solid rgba(213, 161, 60, 0.4);
   background:
-    linear-gradient(180deg, rgba(86, 255, 177, 0.18), rgba(14, 42, 31, 0.92));
-  color: #dffff1;
-  box-shadow: 0 0 18px rgba(86, 255, 177, 0.12);
+    linear-gradient(180deg, rgba(232, 191, 96, 0.2), rgba(47, 31, 9, 0.92));
+  color: #fbf2d8;
+  box-shadow: 0 0 18px rgba(213, 161, 60, 0.12);
   cursor: pointer;
 }
 
 .trade-refresh-button:hover {
   filter: brightness(1.03);
-  box-shadow: 0 0 22px rgba(86, 255, 177, 0.18);
+  box-shadow: 0 0 22px rgba(213, 161, 60, 0.18);
 }
 
 .trade-idea-grid {
@@ -529,8 +529,8 @@ select {
   border-radius: 18px;
   border: 1px solid var(--panel-edge-soft);
   background:
-    linear-gradient(180deg, rgba(42, 103, 75, 0.05), transparent 50%),
-    rgba(8, 13, 11, 0.8);
+    linear-gradient(180deg, rgba(176, 135, 54, 0.05), transparent 50%),
+    rgba(9, 8, 6, 0.8);
 }
 
 .stack-label {
@@ -609,7 +609,7 @@ select {
   place-items: center;
   font-weight: 800;
   font-size: 0.98rem;
-  box-shadow: 0 0 14px rgba(42, 103, 75, 0.05);
+  box-shadow: 0 0 14px rgba(176, 135, 54, 0.05);
 }
 
 .stream-status {
