@@ -1,4 +1,4 @@
-# Signal Vault
+# Apex Signals
 
 Educational crypto dashboard built for perpetual futures analysis on Vercel.
 
