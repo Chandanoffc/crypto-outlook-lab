@@ -52,6 +52,12 @@ const dom = {
   chartRsi: document.getElementById("chart-rsi"),
   chartVolume: document.getElementById("chart-volume"),
   timeframeSummaryCopy: document.getElementById("timeframe-summary-copy"),
+  tradeStance: document.getElementById("trade-stance"),
+  tradeEntry: document.getElementById("trade-entry"),
+  tradeTp1: document.getElementById("trade-tp1"),
+  tradeTp2: document.getElementById("trade-tp2"),
+  tradeSl: document.getElementById("trade-sl"),
+  tradeSummary: document.getElementById("trade-summary"),
   tokenForm: document.getElementById("token-form"),
   tokenInput: document.getElementById("token-input"),
   intervalSelect: document.getElementById("interval-select"),
@@ -494,21 +500,21 @@ function initChart() {
     width: dom.chart.clientWidth,
     height: dom.chart.clientHeight,
     layout: {
-      background: { color: "#12161d" },
-      textColor: "#a0a9b6",
+      background: { color: "#040907" },
+      textColor: "#8ea79c",
       fontFamily:
         '"Prima Sans Mono Std", "SFMono-Regular", Consolas, "Liberation Mono", monospace',
     },
     grid: {
-      vertLines: { color: "rgba(77, 114, 214, 0.08)" },
-      horzLines: { color: "rgba(77, 114, 214, 0.1)" },
+      vertLines: { color: "rgba(0, 239, 163, 0.06)" },
+      horzLines: { color: "rgba(0, 239, 163, 0.08)" },
     },
     timeScale: {
-      borderColor: "rgba(77, 114, 214, 0.18)",
+      borderColor: "rgba(0, 239, 163, 0.14)",
       timeVisible: true,
     },
     rightPriceScale: {
-      borderColor: "rgba(77, 114, 214, 0.18)",
+      borderColor: "rgba(0, 239, 163, 0.14)",
     },
   });
 
@@ -521,7 +527,7 @@ function initChart() {
   });
 
   ema20LineSeries = chart.addLineSeries({
-    color: "#7de2ff",
+    color: "#7effd3",
     lineWidth: 2,
     priceLineVisible: false,
     lastValueVisible: false,
@@ -529,7 +535,7 @@ function initChart() {
   });
 
   ema50LineSeries = chart.addLineSeries({
-    color: "#f5c46a",
+    color: "#9eff6b",
     lineWidth: 2,
     priceLineVisible: false,
     lastValueVisible: false,
@@ -539,7 +545,7 @@ function initChart() {
   volumeSeries = chart.addHistogramSeries({
     priceFormat: { type: "volume" },
     priceScaleId: "",
-    color: "rgba(77, 114, 214, 0.3)",
+    color: "rgba(0, 239, 163, 0.22)",
   });
 
   volumeSeries.priceScale().applyOptions({
@@ -1434,6 +1440,95 @@ function buildOutlook(context) {
   return `${structureText} ${leverageText} ${tapeText} ${liquidationText}`;
 }
 
+function buildPotentialTrade(context) {
+  const supportLevels = [...context.supportLevels].filter(Boolean).sort((left, right) => right - left);
+  const resistanceLevels = [...context.resistanceLevels]
+    .filter(Boolean)
+    .sort((left, right) => left - right);
+  const directionalSetup =
+    context.setups.find((setup) => setup.tone === "up" || setup.tone === "down") ||
+    context.setups[0] ||
+    null;
+  const tone =
+    directionalSetup?.tone === "down" || context.bias.label.includes("Bearish") ? "down" : "up";
+  const stance = tone === "down" ? "Short" : "Long";
+  const entry = context.currentPrice;
+  const riskUnit = Math.max(context.latestAtr * 0.9, context.currentPrice * 0.006);
+  const bandBuffer = Math.max(context.bandWidth || 0, riskUnit * 0.18);
+
+  let stopLoss;
+  let takeProfit1;
+  let takeProfit2;
+
+  if (tone === "up") {
+    const nearestSupport = supportLevels.find((level) => level < entry) ?? entry - riskUnit;
+    const nearestResistance =
+      resistanceLevels.find((level) => level > entry) ?? entry + riskUnit * 1.15;
+    const secondResistance =
+      resistanceLevels.find((level) => level > nearestResistance + bandBuffer) ??
+      Math.max(nearestResistance + riskUnit, entry + riskUnit * 2);
+
+    stopLoss = Math.min(nearestSupport - bandBuffer, entry - riskUnit * 0.9);
+    takeProfit1 = Math.max(nearestResistance, entry + riskUnit * 0.9);
+    takeProfit2 = Math.max(secondResistance, takeProfit1 + riskUnit * 0.8);
+  } else {
+    const nearestResistance =
+      resistanceLevels.find((level) => level > entry) ?? entry + riskUnit;
+    const nearestSupport = supportLevels.find((level) => level < entry) ?? entry - riskUnit * 1.15;
+    const secondSupport =
+      supportLevels.find((level) => level < nearestSupport - bandBuffer) ??
+      Math.min(nearestSupport - riskUnit, entry - riskUnit * 2);
+
+    stopLoss = Math.max(nearestResistance + bandBuffer, entry + riskUnit * 0.9);
+    takeProfit1 = Math.min(nearestSupport, entry - riskUnit * 0.9);
+    takeProfit2 = Math.min(secondSupport, takeProfit1 - riskUnit * 0.8);
+  }
+
+  const summary =
+    tone === "up"
+      ? `${directionalSetup?.label || "Momentum continuation"} favors a long while price holds above local support. Scale partials into TP1 and let TP2 ride only if order flow stays constructive.`
+      : `${directionalSetup?.label || "Trend pressure"} favors a short while price stays capped under resistance. Pay yourself at TP1 and only press for TP2 if sellers keep control of tape and leverage.`;
+
+  return {
+    stance,
+    tone,
+    entry,
+    takeProfit1,
+    takeProfit2,
+    stopLoss,
+    summary,
+  };
+}
+
+function renderPotentialTrade(trade, precisionHint = 2) {
+  if (!trade) {
+    dom.tradeStance.textContent = "Waiting";
+    dom.tradeStance.className = "pill neutral";
+    dom.tradeEntry.textContent = "-";
+    dom.tradeEntry.className = "";
+    dom.tradeTp1.textContent = "-";
+    dom.tradeTp1.className = "";
+    dom.tradeTp2.textContent = "-";
+    dom.tradeTp2.className = "";
+    dom.tradeSl.textContent = "-";
+    dom.tradeSl.className = "";
+    dom.tradeSummary.textContent = "AI trade setup will appear here once the token is loaded.";
+    return;
+  }
+
+  dom.tradeStance.textContent = trade.stance;
+  dom.tradeStance.className = `pill ${trade.tone}`;
+  dom.tradeEntry.textContent = formatPrice(trade.entry, precisionHint);
+  dom.tradeEntry.className = trade.tone === "up" ? "up" : "down";
+  dom.tradeTp1.textContent = formatPrice(trade.takeProfit1, precisionHint);
+  dom.tradeTp1.className = trade.tone === "up" ? "up" : "down";
+  dom.tradeTp2.textContent = formatPrice(trade.takeProfit2, precisionHint);
+  dom.tradeTp2.className = trade.tone === "up" ? "up" : "down";
+  dom.tradeSl.textContent = formatPrice(trade.stopLoss, precisionHint);
+  dom.tradeSl.className = trade.tone === "up" ? "down" : "up";
+  dom.tradeSummary.textContent = trade.summary;
+}
+
 function renderEmptyDashboard(message) {
   removePriceLines();
   candleSeries.setData([]);
@@ -1470,6 +1565,7 @@ function renderEmptyDashboard(message) {
   renderTable(dom.liquidationTable, [], "No liquidation tape");
   renderNews([]);
   renderTimeframeSummary();
+  renderPotentialTrade(null);
 
   [
     dom.metricVolume,
@@ -1860,6 +1956,33 @@ function buildDerivedState() {
     ethChange,
   });
   const bias = biasDescriptor(biasScore);
+  const setups = buildTradeSetups({
+    currentPrice,
+    ema20: latestEma20,
+    ema50: latestEma50,
+    latestRsi,
+    latestVwap,
+    fundingRate,
+    tradeSummary,
+    depthSummary,
+    takerSummary,
+    oiChange1h,
+    topLongShortRatio,
+    supportLevels: supportResistance.supportLevels,
+    resistanceLevels: supportResistance.resistanceLevels,
+    forceSummary,
+    bias,
+    pricePrecision: snapshot.pricePrecision,
+  });
+  const potentialTrade = buildPotentialTrade({
+    currentPrice,
+    latestAtr,
+    bandWidth: supportResistance.bandWidth,
+    supportLevels: supportResistance.supportLevels,
+    resistanceLevels: supportResistance.resistanceLevels,
+    bias,
+    setups,
+  });
 
   return {
     currentPrice,
@@ -1897,24 +2020,8 @@ function buildDerivedState() {
     biasScore,
     bias,
     forceSummary,
-    setups: buildTradeSetups({
-      currentPrice,
-      ema20: latestEma20,
-      ema50: latestEma50,
-      latestRsi,
-      latestVwap,
-      fundingRate,
-      tradeSummary,
-      depthSummary,
-      takerSummary,
-      oiChange1h,
-      topLongShortRatio,
-      supportLevels: supportResistance.supportLevels,
-      resistanceLevels: supportResistance.resistanceLevels,
-      forceSummary,
-      bias,
-      pricePrecision: snapshot.pricePrecision,
-    }),
+    setups,
+    potentialTrade,
     nextFundingTime: Number.isFinite(state.liveNextFundingTime)
       ? state.liveNextFundingTime
       : Number(snapshot.premiumIndex?.nextFundingTime) || 0,
@@ -1997,6 +2104,7 @@ function renderDashboard() {
     "down",
     precision
   );
+  renderPotentialTrade(derived.potentialTrade, precision);
 
   dom.metricVolume.textContent = formatCompactNumber(Number(snapshot.ticker?.quoteVolume) || 0);
   dom.metricVolume.className = toneFromNumber(derived.priceChange24h, 0.15);
