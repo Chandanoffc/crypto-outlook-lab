@@ -47,8 +47,11 @@ const dom = {
   depthTable: document.getElementById("depth-table"),
   liquidationTable: document.getElementById("liquidation-table"),
   newsFeed: document.getElementById("news-feed"),
+  chartEma20: document.getElementById("chart-ema20"),
+  chartEma50: document.getElementById("chart-ema50"),
+  chartRsi: document.getElementById("chart-rsi"),
+  chartVolume: document.getElementById("chart-volume"),
   timeframeSummaryCopy: document.getElementById("timeframe-summary-copy"),
-  timeframeGrid: document.getElementById("timeframe-grid"),
   tokenForm: document.getElementById("token-form"),
   tokenInput: document.getElementById("token-input"),
   intervalSelect: document.getElementById("interval-select"),
@@ -76,7 +79,10 @@ const state = {
 let chart;
 let candleSeries;
 let volumeSeries;
+let ema20LineSeries;
+let ema50LineSeries;
 let priceLines = [];
+let chartResizeBound = false;
 
 function setStatus(message, tone = "neutral") {
   dom.statusBanner.textContent = message;
@@ -475,6 +481,14 @@ function renderNews(items) {
   });
 }
 
+function resizeChart() {
+  if (!chart) return;
+  chart.applyOptions({
+    width: dom.chart.clientWidth,
+    height: dom.chart.clientHeight,
+  });
+}
+
 function initChart() {
   chart = LightweightCharts.createChart(dom.chart, {
     width: dom.chart.clientWidth,
@@ -506,6 +520,22 @@ function initChart() {
     borderVisible: false,
   });
 
+  ema20LineSeries = chart.addLineSeries({
+    color: "#7de2ff",
+    lineWidth: 2,
+    priceLineVisible: false,
+    lastValueVisible: false,
+    crosshairMarkerVisible: false,
+  });
+
+  ema50LineSeries = chart.addLineSeries({
+    color: "#f5c46a",
+    lineWidth: 2,
+    priceLineVisible: false,
+    lastValueVisible: false,
+    crosshairMarkerVisible: false,
+  });
+
   volumeSeries = chart.addHistogramSeries({
     priceFormat: { type: "volume" },
     priceScaleId: "",
@@ -519,15 +549,77 @@ function initChart() {
     },
   });
 
-  window.addEventListener("resize", () => {
-    chart.applyOptions({
-      width: dom.chart.clientWidth,
-      height: dom.chart.clientHeight,
-    });
+  if (!chartResizeBound) {
+    window.addEventListener("resize", resizeChart);
+    chartResizeBound = true;
+  }
+}
+
+function resetChart() {
+  if (chart) {
+    try {
+      chart.remove();
+    } catch (error) {
+      console.error("chart reset error", error);
+    }
+  }
+
+  dom.chart.innerHTML = "";
+  chart = null;
+  candleSeries = null;
+  volumeSeries = null;
+  ema20LineSeries = null;
+  ema50LineSeries = null;
+  priceLines = [];
+  initChart();
+}
+
+function renderChartTaHud({
+  ema20Value = null,
+  ema50Value = null,
+  rsiValue = null,
+  volumeValue = null,
+  precision = 2,
+} = {}) {
+  dom.chartEma20.textContent = ema20Value == null ? "-" : formatPrice(ema20Value, precision);
+  dom.chartEma50.textContent = ema50Value == null ? "-" : formatPrice(ema50Value, precision);
+  dom.chartRsi.textContent = rsiValue == null ? "-" : rsiValue.toFixed(1);
+  dom.chartVolume.textContent = volumeValue == null ? "-" : formatCompactNumber(volumeValue, 2);
+
+  dom.chartEma20.className = toneFromNumber(
+    ema20Value == null ? 0 : (state.liveLastPrice || state.liveMarkPrice || 0) - ema20Value,
+    0.02
+  );
+  dom.chartEma50.className = toneFromNumber(
+    ema50Value == null ? 0 : (state.liveLastPrice || state.liveMarkPrice || 0) - ema50Value,
+    0.02
+  );
+  dom.chartRsi.className =
+    rsiValue == null
+      ? "neutral"
+      : rsiValue >= 50 && rsiValue <= 70
+        ? "up"
+        : rsiValue < 45
+          ? "down"
+          : "neutral";
+  dom.chartVolume.className = volumeValue == null ? "neutral" : "up";
+}
+
+function syncChartTaSeries(derived) {
+  if (!ema20LineSeries || !ema50LineSeries) return;
+  ema20LineSeries.setData(derived.ema20LineData);
+  ema50LineSeries.setData(derived.ema50LineData);
+  renderChartTaHud({
+    ema20Value: derived.latestEma20,
+    ema50Value: derived.latestEma50,
+    rsiValue: derived.latestRsi,
+    volumeValue: derived.latestVolume,
+    precision: state.snapshot?.pricePrecision || 2,
   });
 }
 
 function removePriceLines() {
+  if (!candleSeries) return;
   priceLines.forEach((line) => candleSeries.removePriceLine(line));
   priceLines = [];
 }
@@ -831,57 +923,27 @@ function buildTimeframeSummaryCopy(entries) {
   return `${bullish}/${entries.length} timeframes lean bullish, ${bearish}/${entries.length} lean bearish, and ${balanced}/${entries.length} are balanced. Use agreement across 10m, 30m, and 1H for timing, then confirm with 4H and 1D before sizing up.`;
 }
 
-function renderTimeframeSummary() {
-  dom.timeframeGrid.innerHTML = "";
+function buildTimeframeNarrative(entries) {
+  const breakdown = entries
+    .map((entry) => `${entry.label} ${entry.opinion.toLowerCase()}`)
+    .join(", ");
+  return `${breakdown}. ${buildTimeframeSummaryCopy(entries)}`;
+}
 
+function renderTimeframeSummary() {
   if (state.timeframeSummaryLoading && !state.timeframeSummary.length) {
     dom.timeframeSummaryCopy.textContent =
-      "Scanning 10m, 30m, 1H, 4H, and 1D futures structure...";
+      "Scanning 10m, 30m, 1H, 4H, and 1D structure for a concise multi-timeframe read...";
     return;
   }
 
   if (!state.timeframeSummary.length) {
     dom.timeframeSummaryCopy.textContent =
-      "Multi-timeframe summary will appear here after the contract loads.";
-    const card = document.createElement("article");
-    card.className = "timeframe-card neutral";
-    card.innerHTML = `
-      <div class="timeframe-top">
-        <span class="timeframe-label">Status</span>
-        <span class="pill neutral">Idle</span>
-      </div>
-      <strong>Waiting for data</strong>
-      <p>No multi-timeframe scan is active yet.</p>
-      <div class="timeframe-meta">
-        <span>-</span>
-        <span>-</span>
-      </div>
-    `;
-    dom.timeframeGrid.appendChild(card);
+      "AI multi-timeframe summary will appear here after the contract loads.";
     return;
   }
 
-  dom.timeframeSummaryCopy.textContent = buildTimeframeSummaryCopy(state.timeframeSummary);
-
-  state.timeframeSummary.forEach((entry) => {
-    const card = document.createElement("article");
-    card.className = `timeframe-card ${entry.tone}`;
-    card.innerHTML = `
-      <div class="timeframe-top">
-        <span class="timeframe-label">${entry.label}</span>
-        <span class="pill ${entry.tone}">${entry.opinion}</span>
-      </div>
-      <strong class="${entry.tone}">${entry.conviction ? `${entry.conviction}% conviction` : entry.opinion}</strong>
-      <p>${entry.summary}</p>
-      <div class="timeframe-meta">
-        <span>${entry.latestClose == null ? "-" : formatPrice(entry.latestClose, entry.pricePrecision)}</span>
-        <span>${Number.isFinite(entry.changePct) ? formatPercent(entry.changePct) : "-"}</span>
-        <span>${entry.latestRsi == null ? "RSI -" : `RSI ${entry.latestRsi.toFixed(1)}`}</span>
-        <span>${entry.note}</span>
-      </div>
-    `;
-    dom.timeframeGrid.appendChild(card);
-  });
+  dom.timeframeSummaryCopy.textContent = buildTimeframeNarrative(state.timeframeSummary);
 }
 
 function computeSupportResistance(candles, currentPrice, latestAtr) {
@@ -1376,6 +1438,9 @@ function renderEmptyDashboard(message) {
   removePriceLines();
   candleSeries.setData([]);
   volumeSeries.setData([]);
+  ema20LineSeries.setData([]);
+  ema50LineSeries.setData([]);
+  renderChartTaHud();
   dom.assetTitle.textContent = "Perpetual contract";
   dom.assetSubtitle.textContent = message;
   dom.headlinePrice.textContent = "-";
@@ -1683,7 +1748,11 @@ function primeState(snapshot) {
       color: volumeColor(candle),
     }))
   );
+  chart.priceScale("right").applyOptions({
+    autoScale: true,
+  });
   chart.timeScale().fitContent();
+  resizeChart();
 }
 
 function buildDerivedState() {
@@ -1708,6 +1777,17 @@ function buildDerivedState() {
   const latestAtr = latestDefinedValue(atrSeries) ?? currentPrice * 0.01;
   const latestVwap = latestDefinedValue(vwapSeries) ?? currentPrice;
   const obvSlope = slopePercentage(obvSeries, 12);
+  const latestVolume = candles[candles.length - 1]?.volume ?? 0;
+  const ema20LineData = candles
+    .map((candle, index) =>
+      ema20Series[index] == null ? null : { time: candle.time, value: ema20Series[index] }
+    )
+    .filter(Boolean);
+  const ema50LineData = candles
+    .map((candle, index) =>
+      ema50Series[index] == null ? null : { time: candle.time, value: ema50Series[index] }
+    )
+    .filter(Boolean);
 
   const tradeSummary = analyzeTradeTape(state.tradeHistory);
   const depthSummary = analyzeOrderbook(state.liveDepth, currentPrice);
@@ -1790,7 +1870,10 @@ function buildDerivedState() {
     latestMacdHistogram,
     latestAtr,
     latestVwap,
+    latestVolume,
     obvSlope,
+    ema20LineData,
+    ema50LineData,
     tradeSummary,
     depthSummary,
     supportResistance,
@@ -1858,6 +1941,12 @@ function scheduleRender() {
   }, RENDER_THROTTLE_MS);
 }
 
+function clearRenderTimer() {
+  if (!state.renderTimer) return;
+  window.clearTimeout(state.renderTimer);
+  state.renderTimer = null;
+}
+
 function renderDashboard() {
   if (!state.snapshot) return;
 
@@ -1872,6 +1961,7 @@ function renderDashboard() {
   derived.supportResistance.resistanceLevels.forEach((level, index) => {
     addLevelLine(level, `R${index + 1}`, "#c23a3a");
   });
+  syncChartTaSeries(derived);
 
   dom.assetTitle.textContent = `${snapshot.symbol} Perpetual`;
   dom.assetSubtitle.textContent = snapshot.aliasUsed
@@ -2404,8 +2494,11 @@ function connectStreams(symbol, interval) {
 async function loadDashboard(token, interval) {
   const requestId = ++state.requestId;
   disconnectStreams();
+  clearRenderTimer();
+  state.snapshot = null;
   state.timeframeSummary = [];
   state.timeframeSummaryLoading = true;
+  resetChart();
   renderEmptyDashboard(`Loading ${normalizeToken(token)} perpetual market snapshot...`);
   setStatus(`Loading ${normalizeToken(token)} perpetual market structure...`);
 
@@ -2436,6 +2529,4 @@ dom.tokenForm.addEventListener("submit", (event) => {
   loadDashboard(token, interval);
 });
 
-initChart();
-renderEmptyDashboard("Enter a perpetual symbol such as BTC, ETH, SOL, PEPE, or 1000PEPE.");
 loadDashboard(DEFAULT_TOKEN, DEFAULT_INTERVAL);

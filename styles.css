@@ -285,10 +285,6 @@ select {
   flex-direction: column;
 }
 
-.panel-timeframe {
-  grid-column: 1 / -1;
-}
-
 .panel-head {
   display: flex;
   justify-content: space-between;
@@ -310,7 +306,8 @@ select {
 .news-item,
 .signal-item,
 .table-row,
-.timeframe-card {
+.chart-hud-item,
+.timeframe-inline {
   border: 1px solid var(--panel-edge-soft);
   background:
     linear-gradient(180deg, rgba(77, 114, 214, 0.06), transparent 50%),
@@ -332,7 +329,7 @@ select {
 .setup-card span,
 .signal-item span,
 .table-row span,
-.timeframe-label {
+.chart-hud-item span {
   display: block;
   font-size: 0.82rem;
   color: var(--text-soft);
@@ -343,7 +340,7 @@ select {
 .analysis-card strong,
 .setup-card strong,
 .signal-item strong,
-.timeframe-card strong {
+.chart-hud-item strong {
   display: block;
   margin-top: 6px;
   font-size: 1.05rem;
@@ -359,23 +356,22 @@ select {
 }
 
 .setup-card p,
-.timeframe-card p {
+.timeframe-copy {
   margin: 10px 0 12px;
   color: var(--text-main);
   line-height: 1.55;
   font-size: 0.92rem;
 }
 
-.setup-meta,
-.timeframe-meta {
+.setup-meta {
   display: grid;
   gap: 6px;
   color: var(--text-soft);
   font-size: 0.82rem;
 }
 
-.timeframe-meta {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.chart-shell {
+  position: relative;
 }
 
 .chart-frame {
@@ -392,11 +388,42 @@ select {
     0 0 38px rgba(77, 114, 214, 0.08);
 }
 
+.chart-hud {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(110px, 1fr));
+  gap: 10px;
+  width: min(300px, calc(100% - 32px));
+  pointer-events: none;
+}
+
+.chart-hud-item {
+  padding: 10px 12px;
+  border-radius: 16px;
+  backdrop-filter: blur(14px);
+}
+
+.chart-hud-item strong {
+  font-size: 0.92rem;
+}
+
 .level-badges {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
   margin-top: 14px;
+}
+
+.timeframe-inline {
+  margin-top: 14px;
+  padding: 14px 16px;
+  border-radius: 18px;
+}
+
+.timeframe-copy {
+  margin: 8px 0 0;
 }
 
 .level-stack {
@@ -498,8 +525,7 @@ select {
   font-weight: 800;
 }
 
-.outlook-copy,
-.timeframe-copy {
+.outlook-copy {
   line-height: 1.7;
   color: var(--text-main);
 }
@@ -536,8 +562,7 @@ select {
 }
 
 .analysis-grid,
-.setup-grid,
-.timeframe-grid {
+.setup-grid {
   display: grid;
   gap: 12px;
 }
@@ -550,34 +575,10 @@ select {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
-.timeframe-grid {
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-}
-
 .analysis-card,
-.setup-card,
-.timeframe-card {
+.setup-card {
   padding: 14px;
   border-radius: 18px;
-}
-
-.timeframe-card.up {
-  border-color: rgba(17, 187, 109, 0.2);
-}
-
-.timeframe-card.down {
-  border-color: rgba(224, 76, 76, 0.2);
-}
-
-.timeframe-card.neutral {
-  border-color: rgba(77, 114, 214, 0.18);
-}
-
-.timeframe-top {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  align-items: center;
 }
 
 .split-grid {
@@ -665,12 +666,18 @@ select {
   .level-badges,
   .split-grid,
   .metric-strip,
-  .timeframe-meta {
+  .chart-hud {
     grid-template-columns: 1fr;
   }
 
   .metric-strip {
     display: grid;
+  }
+
+  .chart-hud {
+    position: static;
+    width: 100%;
+    margin-top: 12px;
   }
 
   .table-row {

@@ -79,7 +79,27 @@
             </div>
           </div>
 
-          <div id="chart" class="chart-frame"></div>
+          <div class="chart-shell">
+            <div id="chart" class="chart-frame"></div>
+            <div class="chart-hud">
+              <div class="chart-hud-item">
+                <span>EMA20</span>
+                <strong id="chart-ema20">-</strong>
+              </div>
+              <div class="chart-hud-item">
+                <span>EMA50</span>
+                <strong id="chart-ema50">-</strong>
+              </div>
+              <div class="chart-hud-item">
+                <span>RSI</span>
+                <strong id="chart-rsi">-</strong>
+              </div>
+              <div class="chart-hud-item">
+                <span>Volume</span>
+                <strong id="chart-volume">-</strong>
+              </div>
+            </div>
+          </div>
 
           <div class="level-badges">
             <div class="level-stack">
@@ -91,13 +111,20 @@
               <div id="resistance-fields" class="stack-values"></div>
             </div>
           </div>
+
+          <div class="timeframe-inline">
+            <span class="stack-label">AI Multi-Timeframe Outlook</span>
+            <p id="timeframe-summary-copy" class="timeframe-copy">
+              Loading multi-timeframe summary...
+            </p>
+          </div>
         </section>
 
         <aside class="panel panel-outlook">
           <div class="panel-head">
             <div>
               <p class="panel-label">Tactical Outlook</p>
-              <h2>Next 5H to 24H</h2>
+              <h2>Live Analysis</h2>
             </div>
             <div id="bias-score" class="score-badge neutral">0</div>
           </div>
@@ -235,21 +262,6 @@
           </div>
 
           <div id="news-feed" class="news-feed"></div>
-        </section>
-
-        <section class="panel panel-timeframe">
-          <div class="panel-head">
-            <div>
-              <p class="panel-label">Timeframe Summary</p>
-              <h2>10m to 1D directional map</h2>
-            </div>
-          </div>
-
-          <p id="timeframe-summary-copy" class="timeframe-copy">
-            Loading multi-timeframe summary...
-          </p>
-
-          <div id="timeframe-grid" class="timeframe-grid"></div>
         </section>
       </main>
     </div>
