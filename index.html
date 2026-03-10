@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Crypto Outlook Lab</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+    <script src="./app.js" defer></script>
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Educational Dashboard</p>
+          <h1>Crypto Outlook Lab</h1>
+          <p class="subtitle">
+            Live token dashboard for short-horizon structure, flow, funding, and
+            news context.
+          </p>
+        </div>
+
+        <form id="token-form" class="token-form">
+          <label>
+            Token
+            <input
+              id="token-input"
+              name="token"
+              type="text"
+              placeholder="BTC"
+              value="BTC"
+              autocomplete="off"
+              spellcheck="false"
+            />
+          </label>
+
+          <label>
+            Chart Interval
+            <select id="interval-select" name="interval">
+              <option value="5m">5m</option>
+              <option value="15m" selected>15m</option>
+              <option value="1h">1h</option>
+              <option value="4h">4h</option>
+            </select>
+          </label>
+
+          <button type="submit">Load Dashboard</button>
+        </form>
+      </header>
+
+      <div id="status-banner" class="status-banner">
+        Preparing dashboard...
+      </div>
+
+      <main class="dashboard-grid">
+        <section class="panel panel-hero">
+          <div class="panel-head">
+            <div>
+              <p class="panel-label">Price Structure</p>
+              <h2 id="asset-title">BTC / USDT</h2>
+            </div>
+
+            <div class="headline-metrics">
+              <div class="headline-chip">
+                <span>Last Price</span>
+                <strong id="headline-price">-</strong>
+              </div>
+              <div class="headline-chip">
+                <span>24H Change</span>
+                <strong id="headline-change">-</strong>
+              </div>
+              <div class="headline-chip">
+                <span>Bias</span>
+                <strong id="headline-bias">-</strong>
+              </div>
+            </div>
+          </div>
+
+          <div id="chart" class="chart-frame"></div>
+
+          <div class="level-badges">
+            <div class="level-stack">
+              <span class="stack-label">Support Fields</span>
+              <div id="support-fields" class="stack-values"></div>
+            </div>
+            <div class="level-stack">
+              <span class="stack-label">Resistance Fields</span>
+              <div id="resistance-fields" class="stack-values"></div>
+            </div>
+          </div>
+        </section>
+
+        <aside class="panel panel-outlook">
+          <div class="panel-head">
+            <div>
+              <p class="panel-label">Tactical Outlook</p>
+              <h2>Next 5H to 24H</h2>
+            </div>
+            <div id="bias-score" class="score-badge neutral">0</div>
+          </div>
+
+          <div id="outlook-summary" class="outlook-copy">
+            Loading directional summary...
+          </div>
+
+          <div class="signal-list" id="signal-list"></div>
+
+          <div class="disclaimer">
+            Educational use only. Signals are rule-based summaries, not financial
+            advice.
+          </div>
+        </aside>
+
+        <section class="metric-strip">
+          <article class="metric-card">
+            <span class="metric-label">Spot Volume</span>
+            <strong id="metric-volume">-</strong>
+            <small id="metric-volume-note">Quote volume</small>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">Orderbook Imbalance</span>
+            <strong id="metric-imbalance">-</strong>
+            <small id="metric-imbalance-note">Bid vs ask depth</small>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">Smart Money Tape</span>
+            <strong id="metric-flow">-</strong>
+            <small id="metric-flow-note">Large trade aggression</small>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">Funding</span>
+            <strong id="metric-funding">-</strong>
+            <small id="metric-funding-note">Perpetual futures</small>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">Open Interest</span>
+            <strong id="metric-oi">-</strong>
+            <small id="metric-oi-note">Recent trend</small>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">Market Regime</span>
+            <strong id="metric-regime">-</strong>
+            <small id="metric-regime-note">BTC / ETH context</small>
+          </article>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="panel-label">Technical Analysis</p>
+              <h2>Momentum, trend, volatility</h2>
+            </div>
+          </div>
+
+          <div id="ta-grid" class="analysis-grid"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="panel-label">Smart Money & Orderbook</p>
+              <h2>Large flow and whale walls</h2>
+            </div>
+          </div>
+
+          <div class="split-grid">
+            <div>
+              <h3>Large Aggressive Trades</h3>
+              <div id="flow-table" class="table-card"></div>
+            </div>
+            <div>
+              <h3>Whale Watch</h3>
+              <div id="depth-table" class="table-card"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="panel-label">Funding Map</p>
+              <h2>Leverage positioning</h2>
+            </div>
+          </div>
+
+          <div id="funding-grid" class="analysis-grid"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="panel-label">Major News</p>
+              <h2>Worldwide crypto catalysts</h2>
+            </div>
+          </div>
+
+          <div id="news-feed" class="news-feed"></div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>
