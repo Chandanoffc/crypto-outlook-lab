@@ -69,6 +69,34 @@ body.paper-trader-page {
   --body-font: var(--font-stack);
 }
 
+body.paper-trader-page .dashboard-grid {
+  grid-template-columns: minmax(0, 2.3fr) minmax(280px, 0.78fr);
+}
+
+body.paper-trader-page .panel-monitor-large {
+  min-width: 0;
+}
+
+body.paper-trader-page .panel-engine-compact {
+  min-width: 0;
+}
+
+body.paper-trader-page .panel-engine-compact .analysis-grid {
+  grid-template-columns: 1fr;
+}
+
+body.paper-trader-page .panel-engine-compact .analysis-card {
+  padding: 12px 13px;
+}
+
+body.paper-trader-page .panel-engine-compact .analysis-card strong {
+  font-size: 0.88rem;
+}
+
+body.paper-trader-page .panel-engine-compact .analysis-card small {
+  font-size: 0.76rem;
+}
+
 button,
 input,
 select {
@@ -791,7 +819,7 @@ body.dashboard-home .mini-button {
 }
 
 .monitor-table-shell {
-  max-height: 620px;
+  max-height: 760px;
   overflow: auto;
   border: 1px solid var(--panel-edge-soft);
   border-radius: 18px;
@@ -804,6 +832,23 @@ body.dashboard-home .mini-button {
   width: 100%;
   border-collapse: collapse;
   min-width: 860px;
+}
+
+body.paper-trader-page .panel-monitor-large .monitor-table table {
+  min-width: 980px;
+}
+
+body.paper-trader-page .panel-monitor-large .monitor-table th,
+body.paper-trader-page .panel-monitor-large .monitor-table td {
+  padding: 13px 15px;
+}
+
+body.paper-trader-page .panel-monitor-large .monitor-table td:nth-child(5) {
+  min-width: 320px;
+}
+
+body.paper-trader-page .panel-monitor-large .monitor-symbol {
+  font-size: 0.88rem;
 }
 
 .monitor-table thead {
