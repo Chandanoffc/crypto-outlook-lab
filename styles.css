@@ -69,6 +69,10 @@ body.paper-trader-page {
   --body-font: var(--font-stack);
 }
 
+body.arena-page {
+  --body-font: var(--font-stack);
+}
+
 body.paper-trader-page .dashboard-grid {
   grid-template-columns: minmax(0, 2.3fr) minmax(280px, 0.78fr);
 }
@@ -189,6 +193,16 @@ select {
 
 .nav-links .mini-button:hover {
   transform: translateY(-2px);
+}
+
+.nav-links .mini-button.is-current {
+  border-color: rgba(213, 161, 60, 0.5);
+  background:
+    linear-gradient(180deg, rgba(213, 161, 60, 0.22), rgba(52, 35, 12, 0.96));
+  box-shadow:
+    inset 0 0 0 1px rgba(213, 161, 60, 0.08),
+    0 14px 26px rgba(0, 0, 0, 0.26),
+    0 0 20px rgba(213, 161, 60, 0.12);
 }
 
 body.dashboard-home .topbar h1 {
@@ -811,6 +825,56 @@ body.dashboard-home .mini-button {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 18px;
+}
+
+.arena-layout {
+  display: grid;
+  gap: 18px;
+}
+
+.arena-section-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.conviction-columns {
+  align-items: start;
+}
+
+.conviction-columns > div {
+  display: grid;
+  gap: 12px;
+}
+
+.arena-table table {
+  min-width: 1420px;
+}
+
+.arena-table td,
+.arena-table th {
+  padding: 13px 15px;
+}
+
+.arena-table td:nth-child(5),
+.arena-table td:nth-child(6) {
+  min-width: 220px;
+}
+
+.arena-table td:nth-child(9) {
+  min-width: 220px;
+}
+
+.arena-framework-grid {
+  margin-bottom: 14px;
+}
+
+.arena-summary {
+  margin: 0 0 14px;
+  color: var(--text-soft);
+  line-height: 1.6;
 }
 
 .table-card {

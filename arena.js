@@ -1,79 +1,80 @@
-const START_BALANCE = 200;
-const DEFAULT_INTERVAL = "15m";
 const DEFAULT_QUALITY_THRESHOLD = 68;
+const BASE_INTERVAL = "15m";
 const QUOTE_ASSET = "USDT";
-const AUTO_SCAN_MS = 90 * 1000;
-const PRIORITY_SCAN_COUNT = 8;
-const ROTATION_SCAN_COUNT = 20;
+const AUTO_SCAN_MS = 5 * 60 * 1000;
+const PRIORITY_SCAN_COUNT = 10;
+const ROTATION_SCAN_COUNT = 24;
 const ANALYSIS_CONCURRENCY = 5;
-const STORAGE_KEY = "apex-signals-auto-paper";
+const TIMEFRAME_CONCURRENCY = 4;
+const TIMEFRAME_CACHE_MS = 4.5 * 60 * 1000;
+const STORAGE_KEY = "apex-signals-arena-state";
+const TIMEFRAME_CONFIG = [
+  { key: "30m", label: "30m", interval: "30m" },
+  { key: "1h", label: "1H", interval: "1h" },
+  { key: "4h", label: "4H", interval: "4h" },
+  { key: "1d", label: "1D", interval: "1d" },
+];
 
 const dom = {
-  autoForm: document.getElementById("auto-form"),
-  universeInput: document.getElementById("universe-input"),
-  scanInterval: document.getElementById("scan-interval"),
-  qualityThreshold: document.getElementById("quality-threshold"),
-  universeCount: document.getElementById("universe-count"),
-  scanButton: document.getElementById("scan-button"),
-  autoToggleButton: document.getElementById("auto-toggle-button"),
-  resetSimButton: document.getElementById("reset-sim-button"),
-  autoRunNote: document.getElementById("auto-run-note"),
-  statusBanner: document.getElementById("paper-status-banner"),
-  metricStartBalance: document.getElementById("metric-start-balance"),
-  metricCurrentEquity: document.getElementById("metric-current-equity"),
-  metricCurrentNote: document.getElementById("metric-current-note"),
-  metricRealizedPnl: document.getElementById("metric-realized-pnl"),
-  metricRealizedNote: document.getElementById("metric-realized-note"),
-  metricWinRate: document.getElementById("metric-win-rate"),
-  metricWinRateNote: document.getElementById("metric-win-rate-note"),
-  metricOpenTrade: document.getElementById("metric-open-trade"),
-  metricOpenNote: document.getElementById("metric-open-note"),
-  metricLastScan: document.getElementById("metric-last-scan"),
-  metricLastScanNote: document.getElementById("metric-last-scan-note"),
-  engineSummary: document.getElementById("engine-summary"),
-  candidateGrid: document.getElementById("candidate-grid"),
-  marketTable: document.getElementById("market-table"),
-  openPositionGrid: document.getElementById("open-position-grid"),
-  tradeLogTable: document.getElementById("trade-log-table"),
-  activityTable: document.getElementById("activity-table"),
+  arenaForm: document.getElementById("arena-form"),
+  universeInput: document.getElementById("arena-universe"),
+  cycleInput: document.getElementById("arena-cycle"),
+  qualityThreshold: document.getElementById("arena-quality-threshold"),
+  refreshSubmit: document.getElementById("arena-refresh-submit"),
+  statusBanner: document.getElementById("arena-status-banner"),
+  metricUniverse: document.getElementById("arena-metric-universe"),
+  metricUniverseNote: document.getElementById("arena-metric-universe-note"),
+  metricHighVolume: document.getElementById("arena-metric-high-volume"),
+  metricHighVolumeNote: document.getElementById("arena-metric-high-volume-note"),
+  metricMidVolume: document.getElementById("arena-metric-mid-volume"),
+  metricMidVolumeNote: document.getElementById("arena-metric-mid-volume-note"),
+  metricLowVolume: document.getElementById("arena-metric-low-volume"),
+  metricLowVolumeNote: document.getElementById("arena-metric-low-volume-note"),
+  metricQualified: document.getElementById("arena-metric-qualified"),
+  metricQualifiedNote: document.getElementById("arena-metric-qualified-note"),
+  metricLastScan: document.getElementById("arena-metric-last-scan"),
+  metricLastScanNote: document.getElementById("arena-metric-last-scan-note"),
+  shortTermGrid: document.getElementById("arena-short-term-grid"),
+  longTermGrid: document.getElementById("arena-long-term-grid"),
+  engineSummary: document.getElementById("arena-engine-summary"),
+  candidateGrid: document.getElementById("arena-candidate-grid"),
+  tabQuality: document.getElementById("arena-tab-quality"),
+  tabTrending: document.getElementById("arena-tab-trending"),
+  tabNote: document.getElementById("arena-tab-note"),
+  qualityPanel: document.getElementById("arena-quality-panel"),
+  trendingPanel: document.getElementById("arena-trending-panel"),
+  qualityFramework: document.getElementById("arena-quality-framework"),
+  qualityTable: document.getElementById("arena-quality-table"),
+  trendingTable: document.getElementById("arena-trending-table"),
+  refreshButton: document.getElementById("arena-refresh-button"),
+  refreshNote: document.getElementById("arena-refresh-note"),
 };
 
 const state = loadState();
-let autoTimer = null;
 let exchangeInfoCache = null;
 let perpUniverseCache = null;
-let scanning = false;
 let universeTickerMap = new Map();
 let analysisCache = new Map();
+let timeframeCache = new Map();
 let scanCursor = 0;
+let scanTimer = null;
+let scanning = false;
 
 function loadState() {
   try {
     const stored = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || "{}");
     return {
-      startingBalance: START_BALANCE,
-      balance: Number(stored.balance) || START_BALANCE,
-      autoEnabled: stored.autoEnabled !== false,
-      interval: stored.interval || DEFAULT_INTERVAL,
       qualityThreshold: Number(stored.qualityThreshold) || DEFAULT_QUALITY_THRESHOLD,
-      openTrade: stored.openTrade || null,
-      closedTrades: Array.isArray(stored.closedTrades) ? stored.closedTrades : [],
-      activity: Array.isArray(stored.activity) ? stored.activity : [],
-      lastCandidates: Array.isArray(stored.lastCandidates) ? stored.lastCandidates : [],
+      activeTab: stored.activeTab || "quality",
       lastScanAt: Number(stored.lastScanAt) || 0,
+      lastCandidates: Array.isArray(stored.lastCandidates) ? stored.lastCandidates : [],
     };
   } catch (error) {
     return {
-      startingBalance: START_BALANCE,
-      balance: START_BALANCE,
-      autoEnabled: true,
-      interval: DEFAULT_INTERVAL,
       qualityThreshold: DEFAULT_QUALITY_THRESHOLD,
-      openTrade: null,
-      closedTrades: [],
-      activity: [],
-      lastCandidates: [],
+      activeTab: "quality",
       lastScanAt: 0,
+      lastCandidates: [],
     };
   }
 }
@@ -82,15 +83,10 @@ function persistState() {
   window.localStorage.setItem(
     STORAGE_KEY,
     JSON.stringify({
-      balance: state.balance,
-      autoEnabled: state.autoEnabled,
-      interval: state.interval,
       qualityThreshold: state.qualityThreshold,
-      openTrade: state.openTrade,
-      closedTrades: state.closedTrades,
-      activity: state.activity,
-      lastCandidates: state.lastCandidates,
+      activeTab: state.activeTab,
       lastScanAt: state.lastScanAt,
+      lastCandidates: state.lastCandidates,
     })
   );
 }
@@ -583,7 +579,6 @@ function analyzeSnapshot(snapshot) {
     globalLongShortRatio,
     venueConsensus,
     trade: potentialTrade,
-    summary: `${bias.label} bias • Q${qualityScore} • RR ${rr.toFixed(2)} • funding ${fundingRate.toFixed(4)}%`,
   };
 }
 
@@ -612,14 +607,6 @@ function formatPercent(value, digits = 2) {
   return `${value >= 0 ? "+" : ""}${value.toFixed(digits)}%`;
 }
 
-function formatCompactUsd(value, digits = 2) {
-  if (!Number.isFinite(value)) return "-";
-  return `${value >= 0 ? "+" : "-"}$${new Intl.NumberFormat("en-US", {
-    notation: "compact",
-    maximumFractionDigits: digits,
-  }).format(Math.abs(value))}`;
-}
-
 function formatCompactNumber(value, digits = 2) {
   if (!Number.isFinite(value)) return "-";
   return new Intl.NumberFormat("en-US", {
@@ -635,6 +622,14 @@ function toneFromNumber(value, flatBand = 0.02) {
   return "neutral";
 }
 
+function formatClock(timestamp) {
+  if (!timestamp) return "-";
+  return new Date(timestamp).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function renderAnalysisGrid(container, items) {
   if (!container) return;
   container.innerHTML = "";
@@ -647,42 +642,6 @@ function renderAnalysisGrid(container, items) {
       <small>${item.note}</small>
     `;
     container.appendChild(card);
-  });
-}
-
-function renderTable(container, rows, emptyText) {
-  if (!container) return;
-  container.innerHTML = "";
-  if (!rows.length) {
-    const row = document.createElement("div");
-    row.className = "table-row";
-    row.innerHTML = `
-      <div><span>Status</span><strong>${emptyText}</strong></div>
-      <div><span>-</span><strong>-</strong></div>
-      <div><span>-</span><strong>-</strong></div>
-    `;
-    container.appendChild(row);
-    return;
-  }
-
-  rows.forEach((row) => {
-    const element = document.createElement("div");
-    element.className = "table-row";
-    element.innerHTML = `
-      <div>
-        <span>${row.label}</span>
-        <strong class="${row.tone || "neutral"}">${row.primary}</strong>
-      </div>
-      <div>
-        <span>${row.secondaryLabel}</span>
-        <strong>${row.secondary}</strong>
-      </div>
-      <div>
-        <span>${row.tertiaryLabel}</span>
-        <strong>${row.tertiary}</strong>
-      </div>
-    `;
-    container.appendChild(element);
   });
 }
 
@@ -737,14 +696,26 @@ async function fetchDirectSnapshot(token, interval) {
   const resolved = resolvePerpSymbol(token, exchangeInfo);
 
   const requests = await Promise.allSettled([
-    fetchJson(`https://fapi.binance.com/fapi/v1/klines?symbol=${resolved.symbol}&interval=${interval}&limit=240`, "Klines"),
+    fetchJson(
+      `https://fapi.binance.com/fapi/v1/klines?symbol=${resolved.symbol}&interval=${interval}&limit=240`,
+      "Klines"
+    ),
     fetchJson(`https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=${resolved.symbol}`, "Ticker"),
     fetchJson(`https://fapi.binance.com/fapi/v1/depth?symbol=${resolved.symbol}&limit=100`, "Depth"),
     fetchJson(`https://fapi.binance.com/fapi/v1/aggTrades?symbol=${resolved.symbol}&limit=400`, "Trades"),
     fetchJson(`https://fapi.binance.com/fapi/v1/premiumIndex?symbol=${resolved.symbol}`, "Premium"),
-    fetchJson(`https://fapi.binance.com/futures/data/openInterestHist?symbol=${resolved.symbol}&period=5m&limit=60`, "OI history"),
-    fetchJson(`https://fapi.binance.com/futures/data/globalLongShortAccountRatio?symbol=${resolved.symbol}&period=1h&limit=24`, "Global L/S"),
-    fetchJson(`https://fapi.binance.com/futures/data/takerlongshortRatio?symbol=${resolved.symbol}&period=5m&limit=24`, "Taker ratio"),
+    fetchJson(
+      `https://fapi.binance.com/futures/data/openInterestHist?symbol=${resolved.symbol}&period=5m&limit=60`,
+      "OI history"
+    ),
+    fetchJson(
+      `https://fapi.binance.com/futures/data/globalLongShortAccountRatio?symbol=${resolved.symbol}&period=1h&limit=24`,
+      "Global L/S"
+    ),
+    fetchJson(
+      `https://fapi.binance.com/futures/data/takerlongshortRatio?symbol=${resolved.symbol}&period=5m&limit=24`,
+      "Taker ratio"
+    ),
   ]);
 
   const [
@@ -772,20 +743,11 @@ async function fetchDirectSnapshot(token, interval) {
     depth: depthResult.status === "fulfilled" ? depthResult.value : { bids: [], asks: [] },
     trades: tradesResult.status === "fulfilled" ? tradesResult.value : [],
     premiumIndex: premiumResult.status === "fulfilled" ? premiumResult.value : null,
-    openInterest: null,
     openInterestHistory: oiHistoryResult.status === "fulfilled" ? oiHistoryResult.value : [],
     globalLongShort: globalResult.status === "fulfilled" ? globalResult.value : [],
     takerLongShort: takerResult.status === "fulfilled" ? takerResult.value : [],
     venues: [],
   };
-}
-
-async function fetchSnapshotWithFallback(token, interval) {
-  try {
-    return await fetchServerSnapshot(token, interval);
-  } catch (error) {
-    return fetchDirectSnapshot(token, interval);
-  }
 }
 
 async function fetchEngineSnapshot(token, interval) {
@@ -836,34 +798,121 @@ function selectUniverseBatch(universe) {
     scanCursor = (start + ROTATION_SCAN_COUNT) % rotationPool.length;
   }
 
-  const openTradeSymbol = state.openTrade?.symbol;
-  const combined = [...priority, ...rotationBatch];
-  if (openTradeSymbol) {
-    const openTradeInfo = universe.find((item) => item.symbol === openTradeSymbol);
-    if (openTradeInfo) combined.unshift(openTradeInfo);
-  }
-
-  return Array.from(new Map(combined.map((item) => [item.symbol, item])).values());
+  return Array.from(new Map([...priority, ...rotationBatch].map((item) => [item.symbol, item])).values());
 }
 
-function formatParameterLine(candidate, ticker) {
-  if (!candidate) {
-    const volumeNote = ticker?.quoteVolume
-      ? `24H vol ${new Intl.NumberFormat("en-US", {
-          notation: "compact",
-          maximumFractionDigits: 2,
-        }).format(ticker.quoteVolume)}`
-      : "Awaiting deep scan";
-    return `${volumeNote} • queueing trend, flow, and leverage checks`;
+function volumeTier(quoteVolume) {
+  if (quoteVolume >= 750_000_000) return { label: "High Volume", tone: "up" };
+  if (quoteVolume >= 100_000_000) return { label: "Mid Cap Volume", tone: "neutral" };
+  return { label: "Low Cap Volume", tone: "down" };
+}
+
+function hasGoodTradingVolume(quoteVolume) {
+  return quoteVolume >= 50_000_000;
+}
+
+function buildBullBearSignals(candidate, ticker, timeframeSummary) {
+  const bullishSignals = [];
+  const bearishSignals = [];
+  const quoteVolume = ticker?.quoteVolume || 0;
+  const tfEntries = Object.values(timeframeSummary || {});
+  const bullishTf = tfEntries.filter((entry) => entry.tone === "up").length;
+  const bearishTf = tfEntries.filter((entry) => entry.tone === "down").length;
+
+  if (hasGoodTradingVolume(quoteVolume)) bullishSignals.push("Good trading volume");
+  else bearishSignals.push("Thin trading volume");
+
+  if (candidate.ema20 > candidate.ema50) bullishSignals.push("EMA stack bullish");
+  else bearishSignals.push("EMA stack bearish");
+
+  if (candidate.rsi >= 52 && candidate.rsi <= 68) bullishSignals.push("RSI supportive");
+  else if (candidate.rsi < 45) bearishSignals.push("RSI weak");
+
+  if (candidate.cvdSlope > 0) bullishSignals.push("CVD rising");
+  else bearishSignals.push("CVD fading");
+
+  if (candidate.takerRatio > 1.02) bullishSignals.push("Taker buyers active");
+  else if (candidate.takerRatio < 0.98) bearishSignals.push("Taker sellers active");
+
+  if (candidate.oiChange1h > 0 && candidate.bias.tone === "up") bullishSignals.push("OI supports move");
+  if (candidate.oiChange1h > 0 && candidate.bias.tone === "down") bearishSignals.push("OI builds on weakness");
+
+  if (bullishTf > bearishTf) bullishSignals.push(`${bullishTf}/4 timeframes aligned`);
+  if (bearishTf > bullishTf) bearishSignals.push(`${bearishTf}/4 timeframes aligned`);
+
+  return {
+    bullishSignals: bullishSignals.slice(0, 4),
+    bearishSignals: bearishSignals.slice(0, 4),
+  };
+}
+
+function summarizeTimeframe(candles) {
+  const closes = candles.map((candle) => candle.close);
+  const current = closes[closes.length - 1] || 0;
+  const ema20Series = ema(closes, 20);
+  const ema50Series = ema(closes, 50);
+  const rsiSeries = rsi(closes, 14);
+  const ema20Value = latestDefinedValue(ema20Series) ?? current;
+  const ema50Value = latestDefinedValue(ema50Series) ?? current;
+  const rsiValue = latestDefinedValue(rsiSeries) ?? 50;
+  const lookback = Math.min(12, Math.max(1, closes.length - 1));
+  const changePct = lookback > 0 ? pctChange(closes[closes.length - 1 - lookback], current) : 0;
+  let score = 0;
+  score += current > ema20Value ? 10 : -10;
+  score += ema20Value > ema50Value ? 12 : -12;
+  score += rsiValue >= 52 && rsiValue <= 68 ? 8 : rsiValue < 45 ? -8 : 0;
+  score += changePct > 1 ? 8 : changePct < -1 ? -8 : 0;
+
+  if (score >= 16) return { label: "Bullish", tone: "up", score, rsi: rsiValue, changePct };
+  if (score <= -16) return { label: "Bearish", tone: "down", score, rsi: rsiValue, changePct };
+  return { label: "Balanced", tone: "neutral", score, rsi: rsiValue, changePct };
+}
+
+async function fetchTimeframeMatrix(symbol) {
+  const cached = timeframeCache.get(symbol);
+  if (cached && Date.now() - cached.fetchedAt < TIMEFRAME_CACHE_MS) {
+    return cached.summary;
   }
 
-  return [
-    candidate.ema20 >= candidate.ema50 ? "EMA bull" : "EMA bear",
-    `RSI ${candidate.rsi.toFixed(0)}`,
-    `CVD ${formatPercent(candidate.cvdSlope)}`,
-    `OI ${formatPercent(candidate.oiChange1h)}`,
-    `RR ${candidate.rr.toFixed(2)}`,
-  ].join(" • ");
+  const results = await Promise.allSettled(
+    TIMEFRAME_CONFIG.map((config) =>
+      fetchJson(
+        `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${config.interval}&limit=180`,
+        `${config.interval} timeframe`
+      ).then((entries) => summarizeTimeframe(entries.map(mapKlineEntry)))
+    )
+  );
+
+  const summary = TIMEFRAME_CONFIG.reduce((accumulator, config, index) => {
+    const result = results[index];
+    accumulator[config.key] =
+      result.status === "fulfilled"
+        ? result.value
+        : { label: "Unavailable", tone: "neutral", score: 0, rsi: 50, changePct: 0 };
+    return accumulator;
+  }, {});
+
+  timeframeCache.set(symbol, {
+    fetchedAt: Date.now(),
+    summary,
+  });
+
+  return summary;
+}
+
+function tradeTargets(candidate) {
+  const entry = candidate.trade.entry;
+  const stop = candidate.trade.stopLoss;
+  const risk = Math.max(Math.abs(entry - stop), entry * 0.0035);
+  const direction = candidate.trade.stance === "Short" ? -1 : 1;
+  const tp1 = candidate.trade.takeProfit;
+  const tp2 = entry + direction * risk * 2.2;
+  return {
+    entry,
+    stop,
+    tp1,
+    tp2,
+  };
 }
 
 function buildMarketRows(universe) {
@@ -871,76 +920,98 @@ function buildMarketRows(universe) {
     .map((symbolInfo) => {
       const ticker = universeTickerMap.get(symbolInfo.symbol) || null;
       const analysis = analysisCache.get(symbolInfo.symbol) || null;
-      const qualityScore = analysis?.qualityScore ?? -1;
       return {
         symbol: symbolInfo.symbol,
-        baseAsset: symbolInfo.baseAsset,
+        ticker,
+        analysis,
         price: analysis?.currentPrice ?? ticker?.lastPrice ?? 0,
         changePct: ticker?.changePct ?? 0,
-        biasLabel: analysis?.bias.label ?? "Monitoring",
-        biasTone: analysis?.bias.tone ?? "neutral",
-        parameters: formatParameterLine(analysis, ticker),
-        qualityScore,
-        updatedAt: analysis?.analyzedAt ?? 0,
-        volumeRank: ticker?.quoteVolume ?? 0,
+        quoteVolume: ticker?.quoteVolume ?? 0,
       };
     })
-    .sort((left, right) => {
-      const rightQuality = right.qualityScore >= 0 ? right.qualityScore : -999;
-      const leftQuality = left.qualityScore >= 0 ? left.qualityScore : -999;
-      if (rightQuality !== leftQuality) return rightQuality - leftQuality;
-      return right.volumeRank - left.volumeRank;
-    });
+    .sort((left, right) => (right.quoteVolume || 0) - (left.quoteVolume || 0));
 }
 
-function renderMarketTable(universe) {
-  if (!dom.marketTable) return;
-  const rows = buildMarketRows(universe);
+function buildQualityRows(candidates) {
+  return candidates.slice(0, 18).map((candidate) => {
+    const ticker = universeTickerMap.get(candidate.symbol) || {};
+    const timeframeSummary = timeframeCache.get(candidate.symbol)?.summary || {};
+    const tier = volumeTier(ticker.quoteVolume || 0);
+    const signals = buildBullBearSignals(candidate, ticker, timeframeSummary);
 
-  if (!rows.length) {
-    dom.marketTable.innerHTML = `
+    return {
+      symbol: candidate.symbol,
+      price: formatPrice(candidate.currentPrice, candidate.pricePrecision),
+      volumeTier: tier,
+      goodVolume: hasGoodTradingVolume(ticker.quoteVolume || 0) ? "Yes" : "Watch",
+      tf30m: timeframeSummary["30m"] || { label: "Queue", tone: "neutral" },
+      tf1h: timeframeSummary["1h"] || { label: "Queue", tone: "neutral" },
+      tf4h: timeframeSummary["4h"] || { label: "Queue", tone: "neutral" },
+      tf1d: timeframeSummary["1d"] || { label: "Queue", tone: "neutral" },
+      bullishSignals: signals.bullishSignals.join(" • ") || "-",
+      bearishSignals: signals.bearishSignals.join(" • ") || "-",
+      qualityScore: candidate.qualityScore,
+      qualityTone: candidate.qualityScore >= state.qualityThreshold ? "up" : candidate.bias.tone,
+    };
+  });
+}
+
+function buildTrendingRows(universeRows) {
+  return universeRows
+    .map((row) => {
+      const candidate = row.analysis;
+      const timeframeSummary = candidate ? timeframeCache.get(candidate.symbol)?.summary || {} : {};
+      const tier = volumeTier(row.quoteVolume || 0);
+      const genericSignals = candidate
+        ? buildBullBearSignals(candidate, row.ticker, timeframeSummary)
+        : {
+            bullishSignals:
+              row.changePct > 0 ? [`24H change ${formatPercent(row.changePct)}`, "Momentum active"] : [],
+            bearishSignals:
+              row.changePct < 0 ? [`24H change ${formatPercent(row.changePct)}`, "Sellers active"] : [],
+          };
+      const qualityScore = candidate?.qualityScore ?? Math.round(Math.abs(row.changePct) * 2);
+      const hotScore = Math.round(
+        Math.abs(row.changePct) * 3 +
+          (tier.label === "High Volume" ? 12 : tier.label === "Mid Cap Volume" ? 6 : 2) +
+          (hasGoodTradingVolume(row.quoteVolume || 0) ? 8 : 0) +
+          (candidate ? candidate.qualityScore / 2 : 0)
+      );
+
+      return {
+        symbol: row.symbol,
+        price: formatPrice(row.price, candidate?.pricePrecision || 4),
+        changePct: row.changePct,
+        tier,
+        bullishSignals: genericSignals.bullishSignals.join(" • ") || "-",
+        bearishSignals: genericSignals.bearishSignals.join(" • ") || "-",
+        qualityScore,
+        hotScore,
+      };
+    })
+    .sort((left, right) => right.hotScore - left.hotScore)
+    .slice(0, 16);
+}
+
+function renderMonitorTable(container, headers, bodyRows) {
+  if (!container) return;
+  if (!bodyRows.length) {
+    container.innerHTML = `
       <div class="monitor-empty">
-        Loading Binance perpetual universe...
+        Waiting for arena scan results...
       </div>
     `;
     return;
   }
 
-  const body = rows
-    .map((row) => {
-      const price = Number.isFinite(row.price) && row.price > 0 ? formatPrice(row.price, row.price >= 1 ? 4 : 6) : "-";
-      const updatedLabel = row.updatedAt
-        ? new Date(row.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-        : "Queue";
-      const qualityLabel = row.qualityScore >= 0 ? `Q${row.qualityScore}` : "--";
-      return `
-        <tr>
-          <td>
-            <div class="monitor-symbol">${row.symbol}</div>
-            <div class="monitor-subtle">${updatedLabel}</div>
-          </td>
-          <td>${price}</td>
-          <td class="${toneFromNumber(row.changePct, 0.15)}">${formatPercent(row.changePct)}</td>
-          <td class="${row.biasTone}">${row.biasLabel}</td>
-          <td>${row.parameters}</td>
-          <td class="monitor-quality ${row.qualityScore >= state.qualityThreshold ? "qualified" : ""}">${qualityLabel}</td>
-        </tr>
-      `;
-    })
-    .join("");
+  const head = headers.map((header) => `<th>${header}</th>`).join("");
+  const body = bodyRows.join("");
 
-  dom.marketTable.innerHTML = `
+  container.innerHTML = `
     <div class="monitor-table-shell">
       <table>
         <thead>
-          <tr>
-            <th>Pair</th>
-            <th>Price</th>
-            <th>24H</th>
-            <th>Bias</th>
-            <th>Parameters</th>
-            <th>Quality</th>
-          </tr>
+          <tr>${head}</tr>
         </thead>
         <tbody>${body}</tbody>
       </table>
@@ -948,253 +1019,292 @@ function renderMarketTable(universe) {
   `;
 }
 
-function logActivity(message, tone = "neutral") {
-  state.activity.unshift({
-    time: Date.now(),
-    message,
-    tone,
-  });
-  state.activity = state.activity.slice(0, 24);
+function renderQualityTable(candidates) {
+  const rows = buildQualityRows(candidates).map((row) => `
+    <tr>
+      <td><div class="monitor-symbol">${row.symbol}</div></td>
+      <td>${row.price}</td>
+      <td class="${row.volumeTier.tone}">${row.volumeTier.label}</td>
+      <td class="${row.goodVolume === "Yes" ? "up" : "neutral"}">${row.goodVolume}</td>
+      <td class="${row.tf30m.tone}">${row.tf30m.label}</td>
+      <td class="${row.tf1h.tone}">${row.tf1h.label}</td>
+      <td class="${row.tf4h.tone}">${row.tf4h.label}</td>
+      <td class="${row.tf1d.tone}">${row.tf1d.label}</td>
+      <td>${row.bullishSignals}</td>
+      <td>${row.bearishSignals}</td>
+      <td class="${row.qualityTone}">Q${row.qualityScore}</td>
+    </tr>
+  `);
+
+  renderMonitorTable(
+    dom.qualityTable,
+    [
+      "Pair",
+      "Price",
+      "Volume Tier",
+      "Good Volume",
+      "30m",
+      "1H",
+      "4H",
+      "1D",
+      "Bullish Signals",
+      "Bearish Signals",
+      "Final Quality",
+    ],
+    rows
+  );
 }
 
-function openTradeFromCandidate(candidate) {
-  const balanceBefore = state.balance;
-  const riskCapital = Math.max(balanceBefore * 0.02, 2);
-  const maxMargin = balanceBefore * 0.35;
-  const leverage = 2.5;
-  const stopDistance = Math.abs(candidate.trade.entry - candidate.trade.stopLoss);
-  const quantityByRisk = stopDistance > 0 ? riskCapital / stopDistance : 0;
-  const quantityByCapital = (maxMargin * leverage) / candidate.trade.entry;
-  const quantity = Math.max(0, Math.min(quantityByRisk, quantityByCapital));
+function renderTrendingTable(universeRows) {
+  const rows = buildTrendingRows(universeRows).map((row) => `
+    <tr>
+      <td><div class="monitor-symbol">${row.symbol}</div></td>
+      <td>${row.price}</td>
+      <td class="${toneFromNumber(row.changePct, 0.15)}">${formatPercent(row.changePct)}</td>
+      <td class="${row.tier.tone}">${row.tier.label}</td>
+      <td>${row.bullishSignals}</td>
+      <td>${row.bearishSignals}</td>
+      <td class="${row.qualityScore >= state.qualityThreshold ? "up" : "neutral"}">Q${row.qualityScore}</td>
+      <td class="${row.hotScore >= 80 ? "up" : row.hotScore >= 55 ? "neutral" : "down"}">${row.hotScore}</td>
+    </tr>
+  `);
 
-  if (!Number.isFinite(quantity) || quantity <= 0) return;
+  renderMonitorTable(
+    dom.trendingTable,
+    [
+      "Pair",
+      "Price",
+      "24H",
+      "Volume Tier",
+      "Bullish Signals",
+      "Bearish Signals",
+      "Quality",
+      "Hot Score",
+    ],
+    rows
+  );
+}
 
-  state.openTrade = {
-    id: `${Date.now()}-${candidate.symbol}`,
-    symbol: candidate.symbol,
-    token: candidate.token,
-    interval: state.interval,
-    side: candidate.trade.stance,
-    entryPrice: candidate.trade.entry,
-    stopLoss: candidate.trade.stopLoss,
-    takeProfit: candidate.trade.takeProfit,
-    quantity,
-    leverage,
-    marginUsed: maxMargin,
-    qualityScore: candidate.qualityScore,
-    biasScore: candidate.biasScore,
-    openedAt: Date.now(),
-    balanceBefore,
-    lastPrice: candidate.currentPrice,
+function renderQualityFramework(universeRows) {
+  const goodLiquidityCount = universeRows.filter((row) => hasGoodTradingVolume(row.quoteVolume)).length;
+  renderAnalysisGrid(dom.qualityFramework, [
+    {
+      label: "Good Trading Volume",
+      value: `${goodLiquidityCount}`,
+      note: "Pairs above the liquidity floor are allowed to compete for top quality slots.",
+      tone: "up",
+    },
+    {
+      label: "Volume Categories",
+      value: "High / Mid / Low",
+      note: "Every pair is bucketed by 24H quote volume before conviction is assigned.",
+      tone: "neutral",
+    },
+    {
+      label: "Trend Structure",
+      value: "EMA + RSI",
+      note: "Fast-vs-slow trend plus momentum condition score each setup.",
+      tone: "up",
+    },
+    {
+      label: "Order Flow",
+      value: "CVD + Taker",
+      note: "Aggressive buy/sell flow confirms whether price is attracting real pressure.",
+      tone: "neutral",
+    },
+    {
+      label: "Leverage Posture",
+      value: "OI + Funding",
+      note: "Open-interest expansion and funding crowding raise or cut conviction.",
+      tone: "neutral",
+    },
+    {
+      label: "Multi-Timeframe",
+      value: "30m • 1H • 4H • 1D",
+      note: "Short-term and long-term plays require alignment across these windows.",
+      tone: "up",
+    },
+  ]);
+}
+
+function renderTabs() {
+  const isQuality = state.activeTab === "quality";
+  dom.tabQuality.classList.toggle("is-active", isQuality);
+  dom.tabTrending.classList.toggle("is-active", !isQuality);
+  dom.qualityPanel.hidden = !isQuality;
+  dom.trendingPanel.hidden = isQuality;
+  dom.tabNote.textContent = isQuality
+    ? "Quality scoring explains why a pair earns priority: liquidity, trend, flow, leverage, and timeframe agreement."
+    : "Hot trending pairs are refreshed every 5 minutes, with manual refresh available at any time.";
+}
+
+function buildConvictionCollections(candidates) {
+  const shortTerm = [];
+  const longTerm = [];
+
+  candidates.forEach((candidate) => {
+    const summary = timeframeCache.get(candidate.symbol)?.summary;
+    if (!summary) return;
+
+    const shortAligned =
+      summary["30m"]?.tone === candidate.bias.tone && summary["1h"]?.tone === candidate.bias.tone;
+    const longAligned =
+      summary["4h"]?.tone === candidate.bias.tone && summary["1d"]?.tone === candidate.bias.tone;
+
+    const entry = {
+      candidate,
+      summary,
+      score:
+        candidate.qualityScore +
+        (summary["30m"]?.score || 0) / 3 +
+        (summary["1h"]?.score || 0) / 3 +
+        (summary["4h"]?.score || 0) / 3 +
+        (summary["1d"]?.score || 0) / 3,
+    };
+
+    if (shortAligned) shortTerm.push(entry);
+    if (longAligned) longTerm.push(entry);
+  });
+
+  shortTerm.sort((left, right) => right.score - left.score);
+  longTerm.sort((left, right) => right.score - left.score);
+  return {
+    shortTerm: shortTerm.slice(0, 3),
+    longTerm: longTerm.slice(0, 3),
   };
-
-  logActivity(
-    `Opened ${candidate.trade.stance} ${candidate.symbol} at ${formatPrice(candidate.trade.entry, candidate.pricePrecision)} with quality ${candidate.qualityScore}.`,
-    candidate.trade.tone
-  );
 }
 
-function closeOpenTrade(reason, exitPrice, precisionHint) {
-  if (!state.openTrade) return;
-  const direction = state.openTrade.side === "Short" ? -1 : 1;
-  const pnlUsd = (exitPrice - state.openTrade.entryPrice) * state.openTrade.quantity * direction;
-  const pnlPct = pctChange(state.openTrade.entryPrice, exitPrice) * direction;
-  const balanceAfter = state.balance + pnlUsd;
+function convictionCard(entry, horizon) {
+  const candidate = entry.candidate;
+  const summary = entry.summary;
+  const targets = tradeTargets(candidate);
+  const timeframeLine =
+    horizon === "short"
+      ? `30m ${summary["30m"].label} • 1H ${summary["1h"].label}`
+      : `4H ${summary["4h"].label} • 1D ${summary["1d"].label}`;
+  const volumeLine = volumeTier((universeTickerMap.get(candidate.symbol)?.quoteVolume) || 0).label;
 
-  state.closedTrades.unshift({
-    id: state.openTrade.id,
-    symbol: state.openTrade.symbol,
-    side: state.openTrade.side,
-    entryPrice: state.openTrade.entryPrice,
-    exitPrice,
-    stopLoss: state.openTrade.stopLoss,
-    takeProfit: state.openTrade.takeProfit,
-    openedAt: state.openTrade.openedAt,
-    closedAt: Date.now(),
-    reason,
-    pnlUsd,
-    pnlPct,
-    balanceBefore: state.openTrade.balanceBefore,
-    balanceAfter,
-    quantity: state.openTrade.quantity,
-  });
-  state.closedTrades = state.closedTrades.slice(0, 60);
-  state.balance = balanceAfter;
-  logActivity(
-    `${reason} closed ${state.openTrade.side} ${state.openTrade.symbol} at ${formatPrice(
-      exitPrice,
-      precisionHint
-    )} for ${formatPercent(pnlPct)} and ${formatCompactUsd(pnlUsd, 2)}.`,
-    reason === "TP" ? "up" : "down"
-  );
-  state.openTrade = null;
+  return {
+    label: `${candidate.symbol} • ${candidate.trade.stance}`,
+    value: `TP ${formatPrice(targets.tp1, candidate.pricePrecision)} • SL ${formatPrice(
+      targets.stop,
+      candidate.pricePrecision
+    )}`,
+    note: `${timeframeLine} • ${volumeLine} • ${candidate.bias.label}. ${candidate.trade.stance} idea from flow, trend, and RR ${candidate.rr.toFixed(2)}.`,
+    tone: candidate.bias.tone,
+  };
 }
 
-function refreshOpenTrade(candidate) {
-  if (!state.openTrade || !candidate) return;
-  state.openTrade.lastPrice = candidate.currentPrice;
-  const hitTarget =
-    state.openTrade.side === "Long"
-      ? candidate.currentPrice >= state.openTrade.takeProfit
-      : candidate.currentPrice <= state.openTrade.takeProfit;
-  const hitStop =
-    state.openTrade.side === "Long"
-      ? candidate.currentPrice <= state.openTrade.stopLoss
-      : candidate.currentPrice >= state.openTrade.stopLoss;
-
-  if (hitTarget) closeOpenTrade("TP", state.openTrade.takeProfit, candidate.pricePrecision);
-  else if (hitStop) closeOpenTrade("SL", state.openTrade.stopLoss, candidate.pricePrecision);
-}
-
-function summarizeEngine(candidates, threshold) {
-  const qualified = highQualityCandidates(candidates, threshold);
-  if (state.openTrade) {
-    return `${state.openTrade.symbol} is currently open, so the engine is only monitoring exits. ${qualified.length} fresh candidates still meet the quality filter while the full perp universe continues rotating in the background.`;
-  }
+function summarizeEngine(candidates) {
+  const qualified = highQualityCandidates(candidates, state.qualityThreshold);
   if (!qualified.length) {
-    return `No perp currently meets the quality threshold of ${threshold}. The engine is continuously checking the full Binance USDT perp universe for stronger alignment across trend, order flow, leverage, and risk/reward.`;
+    return `No pair currently clears the arena quality threshold of ${state.qualityThreshold}. The engine is still rotating the full perp universe every 5 minutes.`;
   }
   const best = qualified[0];
-  return `${qualified.length} high-quality setups are live across the perp universe. ${best.symbol} is leading with quality ${best.qualityScore}, ${best.bias.label.toLowerCase()} bias, and ${best.rr.toFixed(2)}R projected reward to TP.`;
+  return `${qualified.length} pairs currently clear the arena quality bar. ${best.symbol} leads with quality ${best.qualityScore}, ${best.bias.label.toLowerCase()} bias, and ${best.rr.toFixed(2)}R reward-to-risk.`;
 }
 
-function renderDashboard(universe = []) {
-  const realizedPnl = state.balance - state.startingBalance;
-  const winCount = state.closedTrades.filter((trade) => trade.reason === "TP").length;
-  const totalClosed = state.closedTrades.length;
-  const winRate = totalClosed ? (winCount / totalClosed) * 100 : 0;
-  const openTrade = state.openTrade;
-  const unrealizedPct =
-    openTrade && Number.isFinite(openTrade.lastPrice)
-      ? pctChange(openTrade.entryPrice, openTrade.lastPrice) * (openTrade.side === "Short" ? -1 : 1)
-      : 0;
+function renderArena(universe) {
+  const universeRows = buildMarketRows(universe);
+  const qualified = highQualityCandidates(state.lastCandidates, state.qualityThreshold);
+  const highVolumeCount = universeRows.filter((row) => volumeTier(row.quoteVolume).label === "High Volume").length;
+  const midVolumeCount = universeRows.filter((row) => volumeTier(row.quoteVolume).label === "Mid Cap Volume").length;
+  const lowVolumeCount = universeRows.length - highVolumeCount - midVolumeCount;
+  const conviction = buildConvictionCollections(state.lastCandidates.slice(0, 18));
 
-  dom.metricStartBalance.textContent = formatPrice(state.startingBalance, 2);
-  dom.metricCurrentEquity.textContent = formatPrice(state.balance, 2);
-  dom.metricCurrentEquity.className = toneFromNumber(realizedPnl, 0.01);
-  dom.metricCurrentNote.textContent = openTrade
-    ? `Open ${openTrade.side} ${openTrade.symbol} • unrealized ${formatPercent(unrealizedPct)}`
-    : "No open position";
-  dom.metricRealizedPnl.textContent = formatCompactUsd(realizedPnl, 2);
-  dom.metricRealizedPnl.className = toneFromNumber(realizedPnl, 0.01);
-  dom.metricRealizedNote.textContent = `${formatPercent(pctChange(state.startingBalance, state.balance))} vs start`;
-  dom.metricWinRate.textContent = `${winRate.toFixed(0)}%`;
-  dom.metricWinRate.className = toneFromNumber(winRate - 50, 2);
-  dom.metricWinRateNote.textContent = `${winCount} winners / ${totalClosed} closed trades`;
-  dom.metricOpenTrade.textContent = openTrade ? `${openTrade.side} ${openTrade.symbol}` : "None";
-  dom.metricOpenTrade.className = openTrade ? (openTrade.side === "Long" ? "up" : "down") : "neutral";
-  dom.metricOpenNote.textContent = openTrade
-    ? `Entry ${formatPrice(openTrade.entryPrice, 2)} • TP ${formatPrice(openTrade.takeProfit, 2)} • SL ${formatPrice(openTrade.stopLoss, 2)}`
-    : "Waiting for a high-quality setup";
-  dom.metricLastScan.textContent = state.lastScanAt
-    ? new Date(state.lastScanAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-    : "-";
-  dom.metricLastScanNote.textContent = state.autoEnabled
-    ? "Auto engine armed across full perp universe"
-    : "Auto engine paused";
+  dom.universeInput.value = "All Binance USDT Perps";
+  dom.cycleInput.value = "Every 5 minutes";
+  dom.metricUniverse.textContent = `${universe.length}`;
+  dom.metricUniverseNote.textContent = "Tradable Binance perpetuals";
+  dom.metricHighVolume.textContent = `${highVolumeCount}`;
+  dom.metricHighVolume.className = "up";
+  dom.metricHighVolumeNote.textContent = "Best liquidity bucket";
+  dom.metricMidVolume.textContent = `${midVolumeCount}`;
+  dom.metricMidVolume.className = "neutral";
+  dom.metricMidVolumeNote.textContent = "Secondary flow bucket";
+  dom.metricLowVolume.textContent = `${lowVolumeCount}`;
+  dom.metricLowVolume.className = "down";
+  dom.metricLowVolumeNote.textContent = "Thin but still monitored";
+  dom.metricQualified.textContent = `${qualified.length}`;
+  dom.metricQualified.className = qualified.length ? "up" : "neutral";
+  dom.metricQualifiedNote.textContent = `Quality >= ${state.qualityThreshold} and RR >= 1.2`;
+  dom.metricLastScan.textContent = state.lastScanAt ? formatClock(state.lastScanAt) : "-";
+  dom.metricLastScanNote.textContent = "Auto scan every 5m";
+  dom.engineSummary.textContent = summarizeEngine(state.lastCandidates);
+  dom.refreshNote.textContent = state.lastScanAt
+    ? `Last refresh ${formatClock(state.lastScanAt)} • auto 5m`
+    : "First scan pending";
 
-  if (dom.engineSummary) {
-    dom.engineSummary.textContent = summarizeEngine(state.lastCandidates, state.qualityThreshold);
-  }
-  if (dom.universeInput) dom.universeInput.value = "All Binance USDT Perps";
-  if (dom.universeCount) dom.universeCount.value = universe.length ? `${universe.length} contracts` : "Loading...";
-
-  const candidateCards = state.lastCandidates.slice(0, 6).map((candidate) => ({
-    label: candidate.symbol,
-    value: `${candidate.bias.label} • Q${candidate.qualityScore}`,
-    note: `${formatPrice(candidate.currentPrice, candidate.pricePrecision)} • RR ${candidate.rr.toFixed(2)} • CVD ${formatPercent(candidate.cvdSlope)} • OI ${formatPercent(candidate.oiChange1h)}`,
-    tone: candidate.bias.tone,
-  }));
   renderAnalysisGrid(
     dom.candidateGrid,
-    candidateCards.length
-      ? candidateCards
-      : [
-          {
-            label: "Scanner",
-            value: "Waiting",
-            note: "No candidate snapshot is available yet.",
-            tone: "neutral",
-          },
-        ]
+    state.lastCandidates.slice(0, 6).map((candidate) => {
+      const ticker = universeTickerMap.get(candidate.symbol) || {};
+      const tier = volumeTier(ticker.quoteVolume || 0);
+      return {
+        label: candidate.symbol,
+        value: `${candidate.bias.label} • Q${candidate.qualityScore}`,
+        note: `${formatPrice(candidate.currentPrice, candidate.pricePrecision)} • ${tier.label} • RR ${candidate.rr.toFixed(2)} • CVD ${formatPercent(candidate.cvdSlope)} • OI ${formatPercent(candidate.oiChange1h)}`,
+        tone: candidate.bias.tone,
+      };
+    })
   );
-
-  renderMarketTable(universe);
 
   renderAnalysisGrid(
-    dom.openPositionGrid,
-    openTrade
-      ? [
-          {
-            label: `${openTrade.symbol} ${openTrade.side}`,
-            value: formatPrice(openTrade.lastPrice || openTrade.entryPrice, 2),
-            note: `Entry ${formatPrice(openTrade.entryPrice, 2)} • TP ${formatPrice(openTrade.takeProfit, 2)} • SL ${formatPrice(openTrade.stopLoss, 2)}`,
-            tone: openTrade.side === "Long" ? "up" : "down",
-          },
-          {
-            label: "Unrealized %",
-            value: formatPercent(unrealizedPct),
-            note: `Qty ${formatCompactNumber(openTrade.quantity, 3)} • leverage ${openTrade.leverage}x`,
-            tone: toneFromNumber(unrealizedPct, 0.02),
-          },
-          {
-            label: "Margin Used",
-            value: formatPrice(openTrade.marginUsed, 2),
-            note: `Quality ${openTrade.qualityScore} • bias ${openTrade.biasScore}`,
-            tone: "neutral",
-          },
-        ]
+    dom.shortTermGrid,
+    conviction.shortTerm.length
+      ? conviction.shortTerm.map((entry) => convictionCard(entry, "short"))
       : [
           {
-            label: "Engine waiting",
-            value: "No open trade",
-            note: "The simulator will open the next high-quality setup automatically.",
+            label: "Short term",
+            value: "Waiting",
+            note: "No pair has clean 30m and 1H alignment yet.",
             tone: "neutral",
           },
         ]
   );
 
-  renderTable(
-    dom.tradeLogTable,
-    state.closedTrades.slice(0, 12).map((trade) => ({
-      label: `${trade.symbol} • ${trade.reason}`,
-      primary: `${formatPrice(trade.entryPrice, 2)} -> ${formatPrice(trade.exitPrice, 2)}`,
-      secondaryLabel: "Outcome",
-      secondary: `${formatPercent(trade.pnlPct)} • ${formatCompactUsd(trade.pnlUsd, 2)}`,
-      tertiaryLabel: "Balance",
-      tertiary: formatPrice(trade.balanceAfter, 2),
-      tone: trade.reason === "TP" ? "up" : "down",
-    })),
-    "No closed trades yet"
+  renderAnalysisGrid(
+    dom.longTermGrid,
+    conviction.longTerm.length
+      ? conviction.longTerm.map((entry) => convictionCard(entry, "long"))
+      : [
+          {
+            label: "Long term",
+            value: "Waiting",
+            note: "No pair has clean 4H and 1D alignment yet.",
+            tone: "neutral",
+          },
+        ]
   );
 
-  renderTable(
-    dom.activityTable,
-    state.activity.slice(0, 12).map((item) => ({
-      label: new Date(item.time).toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-      }),
-      primary: item.message,
-      secondaryLabel: "Mode",
-      secondary: state.autoEnabled ? "Auto" : "Manual",
-      tertiaryLabel: "Status",
-      tertiary: item.tone === "up" ? "Constructive" : item.tone === "down" ? "Defensive" : "Watching",
-      tone: item.tone,
-    })),
-    "No engine activity yet"
-  );
-
-  dom.autoToggleButton.textContent = state.autoEnabled ? "Pause Auto" : "Resume Auto";
-  dom.autoRunNote.textContent = state.autoEnabled
-    ? "Auto-scans the perp universe every 90 seconds. Liquid pairs stay hot; the rest rotate."
-    : "Auto engine paused. Manual scans still work.";
+  renderQualityFramework(universeRows);
+  renderQualityTable(state.lastCandidates);
+  renderTrendingTable(universeRows);
+  renderTabs();
 }
 
-async function scanUniverse({ manual = false } = {}) {
+async function refreshTimeframes(candidates, universeRows) {
+  const trendingSymbols = universeRows
+    .sort((left, right) => Math.abs(right.changePct) - Math.abs(left.changePct))
+    .slice(0, 10)
+    .map((row) => row.symbol);
+  const symbols = Array.from(
+    new Set([...candidates.slice(0, 18).map((candidate) => candidate.symbol), ...trendingSymbols])
+  );
+
+  await mapWithConcurrency(symbols, TIMEFRAME_CONCURRENCY, async (symbol) => {
+    try {
+      await fetchTimeframeMatrix(symbol);
+    } catch (error) {
+      console.error("timeframe fetch failed", symbol, error);
+    }
+  });
+}
+
+async function scanArena({ manual = false } = {}) {
   if (scanning) return;
   scanning = true;
+  setStatus("Scanning full perp universe for conviction and hot rotations...", "neutral");
 
   try {
     const universe = await getPerpUniverse();
@@ -1202,24 +1312,15 @@ async function scanUniverse({ manual = false } = {}) {
     universeTickerMap = buildTickerLookup(tickers);
     const batch = selectUniverseBatch(universe);
 
-    setStatus(
-      `Monitoring ${universe.length} perps. Deep-scanning ${batch.length} contracts for quality setups...`,
-      "neutral"
-    );
-
     const results = await mapWithConcurrency(batch, ANALYSIS_CONCURRENCY, async (symbolInfo) => {
       try {
-        return analyzeSnapshot(await fetchEngineSnapshot(symbolInfo.symbol, state.interval));
+        return analyzeSnapshot(await fetchEngineSnapshot(symbolInfo.symbol, BASE_INTERVAL));
       } catch (error) {
         return null;
       }
     });
 
-    const candidates = results
-      .filter(Boolean)
-      .sort((left, right) => right.qualityScore - left.qualityScore);
-
-    candidates.forEach((candidate) => {
+    results.filter(Boolean).forEach((candidate) => {
       analysisCache.set(candidate.symbol, {
         ...candidate,
         analyzedAt: Date.now(),
@@ -1231,93 +1332,67 @@ async function scanUniverse({ manual = false } = {}) {
       .slice(0, 48);
     state.lastScanAt = Date.now();
 
-    if (state.openTrade) {
-      const matching = candidates.find((candidate) => candidate.symbol === state.openTrade.symbol);
-      if (matching) refreshOpenTrade(matching);
-    }
+    const universeRows = buildMarketRows(universe);
+    await refreshTimeframes(state.lastCandidates, universeRows);
 
-    if (!state.openTrade) {
-      const qualified = highQualityCandidates(candidates, state.qualityThreshold);
-      if (qualified.length) {
-        openTradeFromCandidate(qualified[0]);
-        setStatus(`${qualified[0].symbol} qualified and was opened automatically.`, qualified[0].bias.tone);
-      } else {
-        if (manual) {
-          logActivity(
-            `Manual universe scan found no setup above quality ${state.qualityThreshold}.`,
-            "neutral"
-          );
-        }
-        setStatus(`No trade opened. Waiting for quality >= ${state.qualityThreshold}.`, "neutral");
-      }
-    } else {
-      setStatus(
-        `Monitoring open ${state.openTrade.side} ${state.openTrade.symbol} for TP or SL while the universe scan continues.`,
-        state.openTrade.side === "Long" ? "up" : "down"
-      );
-    }
-
+    renderArena(universe);
     persistState();
-    renderDashboard(universe);
+
+    const qualified = highQualityCandidates(state.lastCandidates, state.qualityThreshold);
+    setStatus(
+      qualified.length
+        ? `${qualified.length} arena setups currently qualify. ${qualified[0].symbol} is leading the board.`
+        : manual
+          ? "Manual arena refresh complete. No pair currently clears the active quality bar."
+          : "Arena scan complete. Waiting for a stronger setup cluster.",
+      qualified.length ? qualified[0].bias.tone : "neutral"
+    );
   } catch (error) {
-    setStatus(error.message || "Auto trader scan failed.", "down");
-    logActivity(error.message || "Auto trader scan failed.", "down");
-    persistState();
-    renderDashboard(perpUniverseCache || []);
+    console.error(error);
+    setStatus(error.message || "Trading Arena scan failed.", "down");
   } finally {
     scanning = false;
   }
 }
 
-function scheduleAutoScan() {
-  if (autoTimer) window.clearInterval(autoTimer);
-  autoTimer = null;
-  if (!state.autoEnabled) return;
-  autoTimer = window.setInterval(() => {
-    scanUniverse();
+function scheduleArenaScan() {
+  if (scanTimer) window.clearInterval(scanTimer);
+  scanTimer = window.setInterval(() => {
+    scanArena();
   }, AUTO_SCAN_MS);
 }
 
 function syncControls() {
-  if (dom.universeInput) dom.universeInput.value = "All Binance USDT Perps";
-  if (dom.universeCount) dom.universeCount.value = perpUniverseCache ? `${perpUniverseCache.length} contracts` : "Loading...";
-  dom.scanInterval.value = state.interval;
   dom.qualityThreshold.value = `${state.qualityThreshold}`;
 }
 
-dom.autoForm.addEventListener("submit", (event) => {
+dom.arenaForm.addEventListener("submit", (event) => {
   event.preventDefault();
-  state.interval = dom.scanInterval.value || DEFAULT_INTERVAL;
   state.qualityThreshold = Math.max(50, Number(dom.qualityThreshold.value) || DEFAULT_QUALITY_THRESHOLD);
   persistState();
-  scanUniverse({ manual: true });
+  scanArena({ manual: true });
 });
 
-dom.autoToggleButton.addEventListener("click", () => {
-  state.autoEnabled = !state.autoEnabled;
-  persistState();
-  scheduleAutoScan();
-  renderDashboard();
-  setStatus(state.autoEnabled ? "Auto paper trader resumed." : "Auto paper trader paused.", state.autoEnabled ? "up" : "neutral");
+dom.refreshButton.addEventListener("click", () => {
+  scanArena({ manual: true });
 });
 
-dom.resetSimButton.addEventListener("click", () => {
-  state.balance = START_BALANCE;
-  state.openTrade = null;
-  state.closedTrades = [];
-  state.activity = [];
-  state.lastCandidates = [];
-  state.lastScanAt = 0;
-  analysisCache = new Map();
-  universeTickerMap = new Map();
-  scanCursor = 0;
-  logActivity("Simulation reset to $200.", "neutral");
+dom.tabQuality.addEventListener("click", () => {
+  state.activeTab = "quality";
   persistState();
-  renderDashboard(perpUniverseCache || []);
-  setStatus("Simulation reset to $200.", "neutral");
+  renderTabs();
+});
+
+dom.tabTrending.addEventListener("click", () => {
+  state.activeTab = "trending";
+  persistState();
+  renderTabs();
 });
 
 syncControls();
-renderDashboard();
-scheduleAutoScan();
-scanUniverse();
+renderTabs();
+renderAnalysisGrid(dom.shortTermGrid, []);
+renderAnalysisGrid(dom.longTermGrid, []);
+renderAnalysisGrid(dom.candidateGrid, []);
+scheduleArenaScan();
+scanArena();

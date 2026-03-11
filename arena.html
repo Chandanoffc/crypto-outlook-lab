@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Apex Signals Trading Arena</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=Space+Grotesk:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="./arena.js" defer></script>
+  </head>
+  <body class="arena-page">
+    <div class="page-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Trading Arena</p>
+          <h1>Apex Signals</h1>
+          <p class="subtitle">
+            Dedicated signal board for conviction pairs, quality scoring, and continuously scanned
+            hot perp rotations.
+          </p>
+          <div class="nav-links">
+            <a class="mini-button nav-link" href="./index.html">Main Dashboard</a>
+            <a class="mini-button nav-link" href="./paper.html">Auto Paper Trader</a>
+            <a class="mini-button nav-link is-current" href="./arena.html">Trading Arena</a>
+          </div>
+        </div>
+
+        <form id="arena-form" class="token-form token-form-wide">
+          <label>
+            Perp Universe
+            <input id="arena-universe" type="text" value="All Binance USDT Perps" readonly />
+          </label>
+
+          <label>
+            Scan Cycle
+            <input id="arena-cycle" type="text" value="Every 5 minutes" readonly />
+          </label>
+
+          <label>
+            Min Quality
+            <input id="arena-quality-threshold" type="number" min="50" max="95" step="1" value="68" />
+          </label>
+
+          <button id="arena-refresh-submit" type="submit">Refresh Arena</button>
+        </form>
+      </header>
+
+      <div id="arena-status-banner" class="status-banner">
+        Initializing Trading Arena...
+      </div>
+
+      <main class="arena-layout">
+        <section class="metric-strip">
+          <article class="metric-card">
+            <span class="metric-label">Universe</span>
+            <strong id="arena-metric-universe">-</strong>
+            <small id="arena-metric-universe-note">Loading contracts</small>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">High Volume</span>
+            <strong id="arena-metric-high-volume">-</strong>
+            <small id="arena-metric-high-volume-note">Deep liquidity perps</small>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">Mid Cap Volume</span>
+            <strong id="arena-metric-mid-volume">-</strong>
+            <small id="arena-metric-mid-volume-note">Tradable secondary names</small>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">Low Cap Volume</span>
+            <strong id="arena-metric-low-volume">-</strong>
+            <small id="arena-metric-low-volume-note">Thin but monitored</small>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">Qualified Now</span>
+            <strong id="arena-metric-qualified">-</strong>
+            <small id="arena-metric-qualified-note">Above active quality bar</small>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">Last Scan</span>
+            <strong id="arena-metric-last-scan">-</strong>
+            <small id="arena-metric-last-scan-note">Auto refresh armed</small>
+          </article>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="panel-label">Conviction Board</p>
+              <h2>Priority long-term and short-term pairs</h2>
+            </div>
+          </div>
+
+          <div class="split-grid conviction-columns">
+            <div>
+              <h3>Short Term</h3>
+              <div id="arena-short-term-grid" class="analysis-grid"></div>
+            </div>
+            <div>
+              <h3>Long Term</h3>
+              <div id="arena-long-term-grid" class="analysis-grid"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="panel-label">Engine</p>
+              <h2>High-quality signal selection</h2>
+            </div>
+          </div>
+
+          <div id="arena-engine-summary" class="outlook-copy">
+            Waiting for the first arena scan.
+          </div>
+
+          <div id="arena-candidate-grid" class="analysis-grid"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="panel-label">Arena Tabs</p>
+              <h2>Quality scoring and hot pair rotations</h2>
+            </div>
+          </div>
+
+          <div class="feed-tabs">
+            <button id="arena-tab-quality" class="mini-button feed-tab is-active" type="button">
+              Quality Scoring
+            </button>
+            <button id="arena-tab-trending" class="mini-button feed-tab" type="button">
+              New Hot Trending Pair
+            </button>
+          </div>
+
+          <div id="arena-tab-note" class="subsection-meta">
+            Arena scoring blends liquidity, trend, order flow, leverage posture, and multi-timeframe
+            agreement.
+          </div>
+
+          <div id="arena-quality-panel">
+            <div id="arena-quality-framework" class="analysis-grid arena-framework-grid"></div>
+            <div id="arena-quality-table" class="monitor-table arena-table"></div>
+          </div>
+
+          <div id="arena-trending-panel" hidden>
+            <div class="arena-section-head">
+              <div class="subsection-meta">
+                Hot pairs are re-ranked every 5 minutes from the rotating perp scan.
+              </div>
+              <div class="replay-controls">
+                <button id="arena-refresh-button" class="mini-button" type="button">
+                  Refresh Now
+                </button>
+                <span id="arena-refresh-note" class="subsection-meta">
+                  First scan pending
+                </span>
+              </div>
+            </div>
+
+            <div id="arena-trending-table" class="monitor-table arena-table"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>
