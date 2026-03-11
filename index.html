@@ -229,250 +229,287 @@
           </article>
         </section>
 
-        <section class="panel">
+        <section class="panel workspace-panel">
           <div class="panel-head">
             <div>
-              <p class="panel-label">Venue Matrix</p>
-              <h2>Cross-exchange derivatives consensus</h2>
+              <p class="panel-label">Market Workspace</p>
+              <h2>Grouped intelligence, execution, and catalyst desks</h2>
+            </div>
+
+            <div class="feed-tabs">
+              <button
+                id="workspace-tab-overview"
+                class="mini-button feed-tab is-active"
+                type="button"
+              >
+                Overview Desk
+              </button>
+              <button id="workspace-tab-execution" class="mini-button feed-tab" type="button">
+                Execution Desk
+              </button>
+              <button id="workspace-tab-alerts" class="mini-button feed-tab" type="button">
+                Alerts & Feeds
+              </button>
             </div>
           </div>
 
-          <div id="exchange-grid" class="analysis-grid"></div>
-        </section>
+          <div id="workspace-note" class="subsection-meta">
+            Overview keeps the core structure visible. Execution groups setup planning and live flow.
+            Alerts combines delivery rules with catalyst feeds.
+          </div>
 
-        <section class="panel">
-          <div class="panel-head">
-            <div>
-              <p class="panel-label">Heatmaps & Replay</p>
-              <h2>Depth pressure and liquidation zones</h2>
-            </div>
+          <div id="workspace-panel-overview">
+            <div class="workspace-grid workspace-grid-overview">
+              <article class="subpanel workspace-span-2">
+                <div class="panel-head-inline">
+                  <div>
+                    <p class="panel-label">Venue Matrix</p>
+                    <h3>Cross-exchange derivatives consensus</h3>
+                  </div>
+                </div>
+                <div id="exchange-grid" class="analysis-grid"></div>
+              </article>
 
-            <div class="replay-controls">
-              <button id="replay-back-button" class="mini-button" type="button">Back</button>
-              <button id="replay-play-button" class="mini-button" type="button">Play</button>
-              <button id="replay-live-button" class="mini-button" type="button">Live</button>
+              <article class="subpanel">
+                <div class="panel-head-inline">
+                  <div>
+                    <p class="panel-label">Technical Analysis</p>
+                    <h3>Momentum, trend, volatility</h3>
+                  </div>
+                </div>
+                <div id="ta-grid" class="analysis-grid"></div>
+              </article>
+
+              <article class="subpanel">
+                <div class="panel-head-inline">
+                  <div>
+                    <p class="panel-label">Perps Engine</p>
+                    <h3>CVD, leverage, basis flow</h3>
+                  </div>
+                </div>
+                <div id="flow-grid" class="analysis-grid"></div>
+              </article>
+
+              <article class="subpanel">
+                <div class="panel-head-inline">
+                  <div>
+                    <p class="panel-label">Funding Map</p>
+                    <h3>Leverage positioning</h3>
+                  </div>
+                </div>
+                <div id="funding-grid" class="analysis-grid"></div>
+              </article>
             </div>
           </div>
 
-          <div class="replay-meta">
-            <span id="replay-status" class="pill neutral">Live replay idle</span>
-          </div>
+          <div id="workspace-panel-execution" hidden>
+            <div class="workspace-grid">
+              <article class="subpanel workspace-span-full">
+                <div class="panel-head">
+                  <div>
+                    <p class="panel-label">Heatmaps & Replay</p>
+                    <h3>Depth pressure and liquidation zones</h3>
+                  </div>
 
-          <div class="split-grid">
-            <div>
-              <h3>Depth Heatmap</h3>
-              <div id="depth-heatmap" class="heatmap-card"></div>
-            </div>
-            <div>
-              <h3>Liquidation Map</h3>
-              <div id="liq-heatmap" class="heatmap-card"></div>
-            </div>
-          </div>
-        </section>
+                  <div class="replay-controls">
+                    <button id="replay-back-button" class="mini-button" type="button">Back</button>
+                    <button id="replay-play-button" class="mini-button" type="button">Play</button>
+                    <button id="replay-live-button" class="mini-button" type="button">Live</button>
+                  </div>
+                </div>
 
-        <section class="panel">
-          <div class="panel-head">
-            <div>
-              <p class="panel-label">Alert Center</p>
-              <h2>Breakout, funding, and squeeze triggers</h2>
-            </div>
-          </div>
+                <div class="replay-meta">
+                  <span id="replay-status" class="pill neutral">Live replay idle</span>
+                </div>
 
-          <div class="split-grid">
-            <div>
-              <form id="alert-form" class="mini-form">
-                <label>
-                  Alert Type
-                  <select id="alert-type">
-                    <option value="breakout_up">Breakout Above</option>
-                    <option value="breakdown_down">Breakdown Below</option>
-                    <option value="funding_flip_positive">Funding Turns Positive</option>
-                    <option value="funding_flip_negative">Funding Turns Negative</option>
-                    <option value="oi_spike_up">OI Spike %</option>
-                    <option value="cvd_reversal_up">CVD Reversal Up</option>
-                    <option value="cvd_reversal_down">CVD Reversal Down</option>
-                  </select>
-                </label>
+                <div class="split-grid">
+                  <div>
+                    <h3>Depth Heatmap</h3>
+                    <div id="depth-heatmap" class="heatmap-card"></div>
+                  </div>
+                  <div>
+                    <h3>Liquidation Map</h3>
+                    <div id="liq-heatmap" class="heatmap-card"></div>
+                  </div>
+                </div>
+              </article>
 
-                <label>
-                  Trigger Level
-                  <input id="alert-level" type="number" step="any" placeholder="Optional" />
-                </label>
+              <article class="subpanel workspace-span-full">
+                <div class="panel-head-inline">
+                  <div>
+                    <p class="panel-label">Trade Setups</p>
+                    <h3>Actionable perps scenarios</h3>
+                  </div>
+                </div>
+                <div id="setup-grid" class="setup-grid"></div>
+              </article>
 
-                <button id="alert-add-button" type="submit">Add Alert</button>
-              </form>
+              <article class="subpanel">
+                <div class="panel-head-inline">
+                  <div>
+                    <p class="panel-label">Large Aggressive Futures Trades</p>
+                    <h3>Smart money flow</h3>
+                  </div>
+                </div>
+                <div id="flow-table" class="table-card"></div>
+              </article>
 
-              <div class="subsection-meta">
-                Alerts are stored in your browser for this device and checked against the live feed.
-                New Upbit market-support notices can also auto-trigger here.
-              </div>
+              <article class="subpanel">
+                <div class="panel-head-inline">
+                  <div>
+                    <p class="panel-label">Whale Watch</p>
+                    <h3>Orderbook walls</h3>
+                  </div>
+                </div>
+                <div id="depth-table" class="table-card"></div>
+              </article>
 
-              <form id="alert-channel-form" class="mini-form delivery-form">
-                <label class="checkbox-card">
-                  Browser Alerts
-                  <span class="checkbox-inline">
-                    <input id="alert-browser-enabled" type="checkbox" checked />
-                    <span>Enable pop-up notifications</span>
-                  </span>
-                </label>
-
-                <label>
-                  Discord Webhook
-                  <input
-                    id="alert-discord-webhook"
-                    type="url"
-                    placeholder="https://discord.com/api/webhooks/..."
-                  />
-                </label>
-
-                <label>
-                  Telegram Bot Token
-                  <input
-                    id="alert-telegram-token"
-                    type="text"
-                    placeholder="123456:ABC..."
-                    autocomplete="off"
-                    spellcheck="false"
-                  />
-                </label>
-
-                <label>
-                  Telegram Chat ID
-                  <input
-                    id="alert-telegram-chat-id"
-                    type="text"
-                    placeholder="Numeric chat id"
-                    autocomplete="off"
-                    spellcheck="false"
-                  />
-                </label>
-
-                <label>
-                  Email
-                  <input
-                    id="alert-email-to"
-                    type="email"
-                    placeholder="alerts@example.com"
-                    autocomplete="off"
-                    spellcheck="false"
-                  />
-                </label>
-
-                <button id="alert-destination-save" type="submit">Save Destinations</button>
-              </form>
-
-              <div id="alert-delivery-note" class="subsection-meta">
-                Discord and Telegram work from this page immediately. Email delivery requires Vercel
-                email env setup.
-              </div>
-
-              <div id="alert-rules" class="stack-list"></div>
-            </div>
-
-            <div>
-              <h3>Triggered Events</h3>
-              <div id="alert-events" class="table-card"></div>
-            </div>
-          </div>
-        </section>
-
-        <section class="panel">
-          <div class="panel-head">
-            <div>
-              <p class="panel-label">Technical Analysis</p>
-              <h2>Momentum, trend, volatility</h2>
+              <article class="subpanel workspace-span-full">
+                <div class="panel-head-inline">
+                  <div>
+                    <p class="panel-label">Liquidation Tape</p>
+                    <h3>Recent forced orders and squeeze fuel</h3>
+                  </div>
+                </div>
+                <div id="liquidation-table" class="table-card"></div>
+              </article>
             </div>
           </div>
 
-          <div id="ta-grid" class="analysis-grid"></div>
-        </section>
+          <div id="workspace-panel-alerts" hidden>
+            <div class="workspace-grid">
+              <article class="subpanel workspace-span-2">
+                <div class="panel-head-inline">
+                  <div>
+                    <p class="panel-label">Alert Center</p>
+                    <h3>Breakout, funding, and squeeze triggers</h3>
+                  </div>
+                </div>
 
-        <section class="panel">
-          <div class="panel-head">
-            <div>
-              <p class="panel-label">Perps Engine</p>
-              <h2>CVD, leverage, and basis flow</h2>
+                <form id="alert-form" class="mini-form">
+                  <label>
+                    Alert Type
+                    <select id="alert-type">
+                      <option value="breakout_up">Breakout Above</option>
+                      <option value="breakdown_down">Breakdown Below</option>
+                      <option value="funding_flip_positive">Funding Turns Positive</option>
+                      <option value="funding_flip_negative">Funding Turns Negative</option>
+                      <option value="oi_spike_up">OI Spike %</option>
+                      <option value="cvd_reversal_up">CVD Reversal Up</option>
+                      <option value="cvd_reversal_down">CVD Reversal Down</option>
+                    </select>
+                  </label>
+
+                  <label>
+                    Trigger Level
+                    <input id="alert-level" type="number" step="any" placeholder="Optional" />
+                  </label>
+
+                  <button id="alert-add-button" type="submit">Add Alert</button>
+                </form>
+
+                <div class="subsection-meta">
+                  Alerts are stored in your browser for this device and checked against the live feed.
+                  New Upbit market-support notices can also auto-trigger here.
+                </div>
+
+                <form id="alert-channel-form" class="mini-form delivery-form">
+                  <label class="checkbox-card">
+                    Browser Alerts
+                    <span class="checkbox-inline">
+                      <input id="alert-browser-enabled" type="checkbox" checked />
+                      <span>Enable pop-up notifications</span>
+                    </span>
+                  </label>
+
+                  <label>
+                    Discord Webhook
+                    <input
+                      id="alert-discord-webhook"
+                      type="url"
+                      placeholder="https://discord.com/api/webhooks/..."
+                    />
+                  </label>
+
+                  <label>
+                    Telegram Bot Token
+                    <input
+                      id="alert-telegram-token"
+                      type="text"
+                      placeholder="123456:ABC..."
+                      autocomplete="off"
+                      spellcheck="false"
+                    />
+                  </label>
+
+                  <label>
+                    Telegram Chat ID
+                    <input
+                      id="alert-telegram-chat-id"
+                      type="text"
+                      placeholder="Numeric chat id"
+                      autocomplete="off"
+                      spellcheck="false"
+                    />
+                  </label>
+
+                  <label>
+                    Email
+                    <input
+                      id="alert-email-to"
+                      type="email"
+                      placeholder="alerts@example.com"
+                      autocomplete="off"
+                      spellcheck="false"
+                    />
+                  </label>
+
+                  <button id="alert-destination-save" type="submit">Save Destinations</button>
+                </form>
+
+                <div id="alert-delivery-note" class="subsection-meta">
+                  Discord and Telegram work from this page immediately. Email delivery requires
+                  Vercel email env setup.
+                </div>
+
+                <div id="alert-rules" class="stack-list"></div>
+              </article>
+
+              <article class="subpanel">
+                <div class="panel-head-inline">
+                  <div>
+                    <p class="panel-label">Triggered Events</p>
+                    <h3>Recent alert history</h3>
+                  </div>
+                </div>
+                <div id="alert-events" class="table-card"></div>
+              </article>
+
+              <article class="subpanel workspace-span-full">
+                <div class="panel-head-inline">
+                  <div>
+                    <p class="panel-label">Trend Feeds</p>
+                    <h3>Worldwide catalysts and Upbit notices</h3>
+                  </div>
+                </div>
+
+                <div class="feed-tabs">
+                  <button id="feed-tab-global" class="mini-button feed-tab is-active" type="button">
+                    Global News
+                  </button>
+                  <button id="feed-tab-upbit" class="mini-button feed-tab" type="button">
+                    Upbit Notices
+                  </button>
+                </div>
+
+                <div id="feed-note" class="subsection-meta">
+                  Global catalysts are blended with exchange-specific notice monitoring.
+                </div>
+
+                <div id="news-feed" class="news-feed"></div>
+              </article>
             </div>
           </div>
-
-          <div id="flow-grid" class="analysis-grid"></div>
-        </section>
-
-        <section class="panel">
-          <div class="panel-head">
-            <div>
-              <p class="panel-label">Trade Setups</p>
-              <h2>Actionable perps scenarios</h2>
-            </div>
-          </div>
-
-          <div id="setup-grid" class="setup-grid"></div>
-        </section>
-
-        <section class="panel">
-          <div class="panel-head">
-            <div>
-              <p class="panel-label">Smart Money & Orderbook</p>
-              <h2>Large flow and whale walls</h2>
-            </div>
-          </div>
-
-          <div class="split-grid">
-            <div>
-              <h3>Large Aggressive Futures Trades</h3>
-              <div id="flow-table" class="table-card"></div>
-            </div>
-            <div>
-              <h3>Whale Watch</h3>
-              <div id="depth-table" class="table-card"></div>
-            </div>
-          </div>
-        </section>
-
-        <section class="panel">
-          <div class="panel-head">
-            <div>
-              <p class="panel-label">Liquidation Tape</p>
-              <h2>Recent forced orders and squeeze fuel</h2>
-            </div>
-          </div>
-
-          <div id="liquidation-table" class="table-card"></div>
-        </section>
-
-        <section class="panel">
-          <div class="panel-head">
-            <div>
-              <p class="panel-label">Funding Map</p>
-              <h2>Leverage positioning</h2>
-            </div>
-          </div>
-
-          <div id="funding-grid" class="analysis-grid"></div>
-        </section>
-
-        <section class="panel">
-          <div class="panel-head">
-            <div>
-              <p class="panel-label">Trend Feeds</p>
-              <h2>Worldwide catalysts and Upbit notices</h2>
-            </div>
-          </div>
-
-          <div class="feed-tabs">
-            <button id="feed-tab-global" class="mini-button feed-tab is-active" type="button">
-              Global News
-            </button>
-            <button id="feed-tab-upbit" class="mini-button feed-tab" type="button">
-              Upbit Notices
-            </button>
-          </div>
-
-          <div id="feed-note" class="subsection-meta">
-            Global catalysts are blended with exchange-specific notice monitoring.
-          </div>
-
-          <div id="news-feed" class="news-feed"></div>
         </section>
       </main>
     </div>

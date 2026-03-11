@@ -134,37 +134,41 @@
           </div>
         </section>
 
-        <section class="panel">
+        <section class="panel workspace-panel">
           <div class="panel-head">
             <div>
-              <p class="panel-label">Open Position</p>
-              <h2>Live paper trade state</h2>
+              <p class="panel-label">Execution Center</p>
+              <h2>Open positions, trade journal, and engine actions</h2>
+            </div>
+
+            <div class="feed-tabs">
+              <button id="paper-tab-positions" class="mini-button feed-tab is-active" type="button">
+                Open Positions
+              </button>
+              <button id="paper-tab-trades" class="mini-button feed-tab" type="button">
+                Trade Journal
+              </button>
+              <button id="paper-tab-activity" class="mini-button feed-tab" type="button">
+                Activity Feed
+              </button>
             </div>
           </div>
 
-          <div id="open-position-grid" class="analysis-grid"></div>
-        </section>
-
-        <section class="panel">
-          <div class="panel-head">
-            <div>
-              <p class="panel-label">Trade Log</p>
-              <h2>Every TP and SL outcome</h2>
-            </div>
+          <div id="paper-tab-note" class="subsection-meta">
+            Open positions stay primary while the journal and engine actions remain one click away.
           </div>
 
-          <div id="trade-log-table" class="table-card"></div>
-        </section>
-
-        <section class="panel">
-          <div class="panel-head">
-            <div>
-              <p class="panel-label">Activity Feed</p>
-              <h2>Scan decisions and engine actions</h2>
-            </div>
+          <div id="paper-panel-positions">
+            <div id="open-position-grid" class="analysis-grid"></div>
           </div>
 
-          <div id="activity-table" class="table-card"></div>
+          <div id="paper-panel-trades" hidden>
+            <div id="trade-log-table" class="table-card"></div>
+          </div>
+
+          <div id="paper-panel-activity" hidden>
+            <div id="activity-table" class="table-card"></div>
+          </div>
         </section>
       </main>
     </div>

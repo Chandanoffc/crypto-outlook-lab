@@ -83,6 +83,13 @@ const dom = {
   alertLevel: document.getElementById("alert-level"),
   alertRules: document.getElementById("alert-rules"),
   alertEvents: document.getElementById("alert-events"),
+  workspaceTabOverview: document.getElementById("workspace-tab-overview"),
+  workspaceTabExecution: document.getElementById("workspace-tab-execution"),
+  workspaceTabAlerts: document.getElementById("workspace-tab-alerts"),
+  workspacePanelOverview: document.getElementById("workspace-panel-overview"),
+  workspacePanelExecution: document.getElementById("workspace-panel-execution"),
+  workspacePanelAlerts: document.getElementById("workspace-panel-alerts"),
+  workspaceNote: document.getElementById("workspace-note"),
   alertChannelForm: document.getElementById("alert-channel-form"),
   alertBrowserEnabled: document.getElementById("alert-browser-enabled"),
   alertDiscordWebhook: document.getElementById("alert-discord-webhook"),
@@ -163,6 +170,7 @@ const state = {
   paperPositions: loadPaperState().positions,
   activeToken: DEFAULT_TOKEN,
   activeInterval: DEFAULT_INTERVAL,
+  activeWorkspaceTab: "overview",
 };
 
 let chart;
@@ -622,6 +630,35 @@ function renderFeedTabs() {
   if (!dom.feedTabGlobal || !dom.feedTabUpbit) return;
   dom.feedTabGlobal.classList.toggle("is-active", state.activeFeedTab === "global");
   dom.feedTabUpbit.classList.toggle("is-active", state.activeFeedTab === "upbit");
+}
+
+function renderWorkspaceTabs() {
+  if (
+    !dom.workspaceTabOverview ||
+    !dom.workspaceTabExecution ||
+    !dom.workspaceTabAlerts ||
+    !dom.workspacePanelOverview ||
+    !dom.workspacePanelExecution ||
+    !dom.workspacePanelAlerts
+  ) {
+    return;
+  }
+
+  dom.workspaceTabOverview.classList.toggle("is-active", state.activeWorkspaceTab === "overview");
+  dom.workspaceTabExecution.classList.toggle("is-active", state.activeWorkspaceTab === "execution");
+  dom.workspaceTabAlerts.classList.toggle("is-active", state.activeWorkspaceTab === "alerts");
+  dom.workspacePanelOverview.hidden = state.activeWorkspaceTab !== "overview";
+  dom.workspacePanelExecution.hidden = state.activeWorkspaceTab !== "execution";
+  dom.workspacePanelAlerts.hidden = state.activeWorkspaceTab !== "alerts";
+
+  if (dom.workspaceNote) {
+    dom.workspaceNote.textContent =
+      state.activeWorkspaceTab === "overview"
+        ? "Overview keeps structure, trend, venue consensus, and funding posture in one compact desk."
+        : state.activeWorkspaceTab === "execution"
+          ? "Execution collects setup ideas, heatmaps, order-flow tables, and liquidation pressure into one workspace."
+          : "Alerts combines trigger rules, delivery settings, recent alert events, and live catalyst feeds.";
+  }
 }
 
 function renderNews(items, upbitNotices = []) {
@@ -3997,6 +4034,27 @@ if (dom.feedTabUpbit) {
   });
 }
 
+if (dom.workspaceTabOverview) {
+  dom.workspaceTabOverview.addEventListener("click", () => {
+    state.activeWorkspaceTab = "overview";
+    renderWorkspaceTabs();
+  });
+}
+
+if (dom.workspaceTabExecution) {
+  dom.workspaceTabExecution.addEventListener("click", () => {
+    state.activeWorkspaceTab = "execution";
+    renderWorkspaceTabs();
+  });
+}
+
+if (dom.workspaceTabAlerts) {
+  dom.workspaceTabAlerts.addEventListener("click", () => {
+    state.activeWorkspaceTab = "alerts";
+    renderWorkspaceTabs();
+  });
+}
+
 if (dom.paperForm) {
   dom.paperForm.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -4073,6 +4131,7 @@ renderAlertRules();
 renderAlertEvents();
 renderPaperTable();
 renderReplaySurface();
+renderWorkspaceTabs();
 scheduleUpbitNoticePolling();
 refreshUpbitNotices();
 

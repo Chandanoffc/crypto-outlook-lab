@@ -39,6 +39,13 @@ const dom = {
   engineSummary: document.getElementById("engine-summary"),
   candidateGrid: document.getElementById("candidate-grid"),
   marketTable: document.getElementById("market-table"),
+  paperTabPositions: document.getElementById("paper-tab-positions"),
+  paperTabTrades: document.getElementById("paper-tab-trades"),
+  paperTabActivity: document.getElementById("paper-tab-activity"),
+  paperTabNote: document.getElementById("paper-tab-note"),
+  paperPanelPositions: document.getElementById("paper-panel-positions"),
+  paperPanelTrades: document.getElementById("paper-panel-trades"),
+  paperPanelActivity: document.getElementById("paper-panel-activity"),
   openPositionGrid: document.getElementById("open-position-grid"),
   tradeLogTable: document.getElementById("trade-log-table"),
   activityTable: document.getElementById("activity-table"),
@@ -67,6 +74,7 @@ function loadState() {
         : stored.openTrade
           ? [stored.openTrade]
           : [],
+      activeTab: stored.activeTab || "positions",
       closedTrades: Array.isArray(stored.closedTrades) ? stored.closedTrades : [],
       activity: Array.isArray(stored.activity) ? stored.activity : [],
       lastCandidates: Array.isArray(stored.lastCandidates) ? stored.lastCandidates : [],
@@ -80,6 +88,7 @@ function loadState() {
       interval: DEFAULT_INTERVAL,
       qualityThreshold: DEFAULT_QUALITY_THRESHOLD,
       openTrades: [],
+      activeTab: "positions",
       closedTrades: [],
       activity: [],
       lastCandidates: [],
@@ -97,6 +106,7 @@ function persistState() {
       interval: state.interval,
       qualityThreshold: state.qualityThreshold,
       openTrades: state.openTrades,
+      activeTab: state.activeTab,
       closedTrades: state.closedTrades,
       activity: state.activity,
       lastCandidates: state.lastCandidates,
@@ -108,6 +118,35 @@ function persistState() {
 function setStatus(message, tone = "neutral") {
   dom.statusBanner.textContent = message;
   dom.statusBanner.className = `status-banner ${tone}`;
+}
+
+function renderPaperTabs() {
+  if (
+    !dom.paperTabPositions ||
+    !dom.paperTabTrades ||
+    !dom.paperTabActivity ||
+    !dom.paperPanelPositions ||
+    !dom.paperPanelTrades ||
+    !dom.paperPanelActivity
+  ) {
+    return;
+  }
+
+  dom.paperTabPositions.classList.toggle("is-active", state.activeTab === "positions");
+  dom.paperTabTrades.classList.toggle("is-active", state.activeTab === "trades");
+  dom.paperTabActivity.classList.toggle("is-active", state.activeTab === "activity");
+  dom.paperPanelPositions.hidden = state.activeTab !== "positions";
+  dom.paperPanelTrades.hidden = state.activeTab !== "trades";
+  dom.paperPanelActivity.hidden = state.activeTab !== "activity";
+
+  if (dom.paperTabNote) {
+    dom.paperTabNote.textContent =
+      state.activeTab === "positions"
+        ? "This view keeps live paper positions visible with entry, TP, SL, and live return."
+        : state.activeTab === "trades"
+          ? "The journal records every closed trade with the planned levels and realized result."
+          : "Engine actions show scan outcomes, openings, exits, and network retries in sequence.";
+  }
 }
 
 function friendlyErrorMessage(error) {
@@ -1341,6 +1380,7 @@ function renderDashboard(universe = []) {
   dom.autoRunNote.textContent = state.autoEnabled
     ? `Auto-scans every 90 seconds and can hold up to ${MAX_CONCURRENT_TRADES} quality positions.`
     : "Auto engine paused. Manual scans still work.";
+  renderPaperTabs();
 }
 
 async function scanUniverse({ manual = false } = {}) {
@@ -1473,6 +1513,30 @@ dom.resetSimButton.addEventListener("click", () => {
   renderDashboard(perpUniverseCache || []);
   setStatus("Simulation reset to $200.", "neutral");
 });
+
+if (dom.paperTabPositions) {
+  dom.paperTabPositions.addEventListener("click", () => {
+    state.activeTab = "positions";
+    persistState();
+    renderPaperTabs();
+  });
+}
+
+if (dom.paperTabTrades) {
+  dom.paperTabTrades.addEventListener("click", () => {
+    state.activeTab = "trades";
+    persistState();
+    renderPaperTabs();
+  });
+}
+
+if (dom.paperTabActivity) {
+  dom.paperTabActivity.addEventListener("click", () => {
+    state.activeTab = "activity";
+    persistState();
+    renderPaperTabs();
+  });
+}
 
 syncControls();
 renderDashboard();

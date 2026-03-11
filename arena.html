@@ -111,27 +111,15 @@
         <section class="panel">
           <div class="panel-head">
             <div>
-              <p class="panel-label">Engine</p>
-              <h2>High-quality signal selection</h2>
-            </div>
-          </div>
-
-          <div id="arena-engine-summary" class="outlook-copy">
-            Waiting for the first arena scan.
-          </div>
-
-          <div id="arena-candidate-grid" class="analysis-grid"></div>
-        </section>
-
-        <section class="panel">
-          <div class="panel-head">
-            <div>
               <p class="panel-label">Arena Tabs</p>
-              <h2>Quality scoring and hot pair rotations</h2>
+              <h2>Selection board, quality scoring, and hot pair rotations</h2>
             </div>
           </div>
 
           <div class="feed-tabs">
+            <button id="arena-tab-selection" class="mini-button feed-tab" type="button">
+              Signal Board
+            </button>
             <button id="arena-tab-quality" class="mini-button feed-tab is-active" type="button">
               Quality Scoring
             </button>
@@ -143,6 +131,13 @@
           <div id="arena-tab-note" class="subsection-meta">
             Arena scoring blends liquidity, trend, order flow, leverage posture, and multi-timeframe
             agreement.
+          </div>
+
+          <div id="arena-selection-panel" hidden>
+            <p id="arena-engine-summary" class="arena-summary">
+              Waiting for the first arena scan.
+            </p>
+            <div id="arena-candidate-grid" class="analysis-grid"></div>
           </div>
 
           <div id="arena-quality-panel">

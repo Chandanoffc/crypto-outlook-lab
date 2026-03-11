@@ -38,9 +38,11 @@ const dom = {
   longTermGrid: document.getElementById("arena-long-term-grid"),
   engineSummary: document.getElementById("arena-engine-summary"),
   candidateGrid: document.getElementById("arena-candidate-grid"),
+  tabSelection: document.getElementById("arena-tab-selection"),
   tabQuality: document.getElementById("arena-tab-quality"),
   tabTrending: document.getElementById("arena-tab-trending"),
   tabNote: document.getElementById("arena-tab-note"),
+  selectionPanel: document.getElementById("arena-selection-panel"),
   qualityPanel: document.getElementById("arena-quality-panel"),
   trendingPanel: document.getElementById("arena-trending-panel"),
   qualityFramework: document.getElementById("arena-quality-framework"),
@@ -65,14 +67,14 @@ function loadState() {
     const stored = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || "{}");
     return {
       qualityThreshold: Number(stored.qualityThreshold) || DEFAULT_QUALITY_THRESHOLD,
-      activeTab: stored.activeTab || "quality",
+      activeTab: stored.activeTab || "selection",
       lastScanAt: Number(stored.lastScanAt) || 0,
       lastCandidates: Array.isArray(stored.lastCandidates) ? stored.lastCandidates : [],
     };
   } catch (error) {
     return {
       qualityThreshold: DEFAULT_QUALITY_THRESHOLD,
-      activeTab: "quality",
+      activeTab: "selection",
       lastScanAt: 0,
       lastCandidates: [],
     };
@@ -1128,14 +1130,21 @@ function renderQualityFramework(universeRows) {
 }
 
 function renderTabs() {
+  const isSelection = state.activeTab === "selection";
   const isQuality = state.activeTab === "quality";
+  const isTrending = state.activeTab === "trending";
+
+  if (dom.tabSelection) dom.tabSelection.classList.toggle("is-active", isSelection);
   dom.tabQuality.classList.toggle("is-active", isQuality);
-  dom.tabTrending.classList.toggle("is-active", !isQuality);
+  dom.tabTrending.classList.toggle("is-active", isTrending);
+  if (dom.selectionPanel) dom.selectionPanel.hidden = !isSelection;
   dom.qualityPanel.hidden = !isQuality;
-  dom.trendingPanel.hidden = isQuality;
-  dom.tabNote.textContent = isQuality
-    ? "Quality scoring explains why a pair earns priority: liquidity, trend, flow, leverage, and timeframe agreement."
-    : "Hot trending pairs are refreshed every 5 minutes, with manual refresh available at any time.";
+  dom.trendingPanel.hidden = !isTrending;
+  dom.tabNote.textContent = isSelection
+    ? "Signal board keeps the highest-ranked arena candidates visible with cleaner priority ordering."
+    : isQuality
+      ? "Quality scoring explains why a pair earns priority: liquidity, trend, flow, leverage, and timeframe agreement."
+      : "Hot trending pairs are refreshed every 5 minutes, with manual refresh available at any time.";
 }
 
 function buildConvictionCollections(candidates) {
@@ -1376,6 +1385,14 @@ dom.arenaForm.addEventListener("submit", (event) => {
 dom.refreshButton.addEventListener("click", () => {
   scanArena({ manual: true });
 });
+
+if (dom.tabSelection) {
+  dom.tabSelection.addEventListener("click", () => {
+    state.activeTab = "selection";
+    persistState();
+    renderTabs();
+  });
+}
 
 dom.tabQuality.addEventListener("click", () => {
   state.activeTab = "quality";
