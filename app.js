@@ -1281,8 +1281,7 @@ function initChart() {
     layout: {
       background: { color: "#040302" },
       textColor: "#b7ab8e",
-      fontFamily:
-        '"Prima Sans Mono Std", "SFMono-Regular", Consolas, "Liberation Mono", monospace',
+      fontFamily: '"Space Grotesk", "Helvetica Neue", "Segoe UI", sans-serif',
     },
     grid: {
       vertLines: { color: "rgba(176, 135, 54, 0.08)" },

@@ -35,6 +35,7 @@
     Consolas,
     "Liberation Mono",
     monospace;
+  --ui-font: "Space Grotesk", "Helvetica Neue", "Segoe UI", sans-serif;
   --display-font: "Silkscreen", "Prima Sans Mono Std", "SFMono-Regular", monospace;
   --shadow: 0 22px 60px rgba(0, 0, 0, 0.45);
 }
@@ -51,13 +52,21 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
-  font-family: var(--font-stack);
+  font-family: var(--body-font, var(--font-stack));
   color: var(--text-main);
   background:
     radial-gradient(circle at top right, rgba(176, 135, 54, 0.12), transparent 22%),
     radial-gradient(circle at 12% 16%, rgba(176, 135, 54, 0.08), transparent 24%),
     radial-gradient(circle at bottom left, rgba(176, 135, 54, 0.05), transparent 28%),
     linear-gradient(180deg, #010101 0%, #080604 40%, #020201 100%);
+}
+
+body.dashboard-home {
+  --body-font: var(--ui-font);
+}
+
+body.paper-trader-page {
+  --body-font: var(--font-stack);
 }
 
 button,
@@ -135,6 +144,72 @@ select {
 
 .nav-link {
   text-decoration: none;
+}
+
+.nav-links .mini-button {
+  min-height: 40px;
+  padding: 0 18px;
+  border-radius: 18px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 0 0 1px rgba(213, 161, 60, 0.06),
+    0 12px 24px rgba(0, 0, 0, 0.24),
+    0 0 18px rgba(213, 161, 60, 0.08);
+}
+
+.nav-links .mini-button:hover {
+  transform: translateY(-2px);
+}
+
+body.dashboard-home .topbar h1 {
+  font-size: clamp(1.72rem, 3.4vw, 2.55rem);
+}
+
+body.dashboard-home .subtitle,
+body.dashboard-home .subtitle-inline,
+body.dashboard-home .token-form label,
+body.dashboard-home .headline-chip span,
+body.dashboard-home .metric-label,
+body.dashboard-home .analysis-card span,
+body.dashboard-home .signal-item span,
+body.dashboard-home .table-row span,
+body.dashboard-home .chart-hud-item span,
+body.dashboard-home .stack-label,
+body.dashboard-home .outlook-copy,
+body.dashboard-home .trade-copy,
+body.dashboard-home .timeframe-copy,
+body.dashboard-home .status-banner {
+  font-family: var(--ui-font);
+}
+
+body.dashboard-home .panel-head h2 {
+  font-size: 1.32rem;
+  letter-spacing: -0.01em;
+}
+
+body.dashboard-home .subtitle {
+  font-size: 0.9rem;
+  line-height: 1.7;
+}
+
+body.dashboard-home .headline-chip strong,
+body.dashboard-home .metric-card strong,
+body.dashboard-home .analysis-card strong,
+body.dashboard-home .signal-item strong,
+body.dashboard-home .trade-idea-stat strong,
+body.dashboard-home .chart-hud-item strong,
+body.dashboard-home .score-badge {
+  font-size: 0.92rem;
+}
+
+body.dashboard-home .token-form label,
+body.dashboard-home .token-form input,
+body.dashboard-home .token-form select,
+body.dashboard-home .token-form button,
+body.dashboard-home .mini-button {
+  font-family: var(--ui-font);
 }
 
 .token-form {
@@ -715,6 +790,83 @@ select {
   gap: 10px;
 }
 
+.monitor-table-shell {
+  max-height: 620px;
+  overflow: auto;
+  border: 1px solid var(--panel-edge-soft);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(176, 135, 54, 0.05), transparent 55%),
+    rgba(9, 8, 6, 0.82);
+}
+
+.monitor-table table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 860px;
+}
+
+.monitor-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: rgba(14, 11, 8, 0.96);
+}
+
+.monitor-table th,
+.monitor-table td {
+  padding: 12px 14px;
+  text-align: left;
+  border-bottom: 1px solid rgba(176, 135, 54, 0.08);
+  vertical-align: top;
+}
+
+.monitor-table th {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #cfb56b;
+}
+
+.monitor-table td {
+  font-size: 0.82rem;
+  color: var(--text-main);
+}
+
+.monitor-table tbody tr:hover {
+  background: rgba(213, 161, 60, 0.05);
+}
+
+.monitor-symbol {
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.monitor-subtle {
+  margin-top: 4px;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+
+.monitor-quality {
+  font-weight: 800;
+  color: var(--text-soft);
+}
+
+.monitor-quality.qualified {
+  color: #f3d487;
+}
+
+.monitor-empty {
+  display: grid;
+  place-items: center;
+  min-height: 160px;
+  border: 1px dashed var(--panel-edge-soft);
+  border-radius: 18px;
+  color: var(--text-soft);
+  background: rgba(9, 8, 6, 0.6);
+}
+
 .table-row {
   display: grid;
   grid-template-columns: 1.2fr 1fr 1fr;
@@ -775,10 +927,15 @@ select {
   color: var(--text-main);
   cursor: pointer;
   box-shadow: 0 0 14px rgba(213, 161, 60, 0.08);
+  transition:
+    transform 150ms ease,
+    box-shadow 150ms ease,
+    filter 150ms ease;
 }
 
 .mini-button:hover,
 .mini-form button:hover {
+  transform: translateY(-1px);
   filter: brightness(1.03);
   box-shadow: 0 0 18px rgba(213, 161, 60, 0.12);
 }

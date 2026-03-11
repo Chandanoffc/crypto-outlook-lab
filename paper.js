@@ -1,16 +1,19 @@
 const START_BALANCE = 200;
 const DEFAULT_INTERVAL = "15m";
-const DEFAULT_WATCHLIST = "BTC,ETH,SOL,BNB,XRP";
 const DEFAULT_QUALITY_THRESHOLD = 68;
 const QUOTE_ASSET = "USDT";
 const AUTO_SCAN_MS = 90 * 1000;
+const PRIORITY_SCAN_COUNT = 8;
+const ROTATION_SCAN_COUNT = 20;
+const ANALYSIS_CONCURRENCY = 5;
 const STORAGE_KEY = "apex-signals-auto-paper";
 
 const dom = {
   autoForm: document.getElementById("auto-form"),
-  watchlistInput: document.getElementById("watchlist-input"),
+  universeInput: document.getElementById("universe-input"),
   scanInterval: document.getElementById("scan-interval"),
   qualityThreshold: document.getElementById("quality-threshold"),
+  universeCount: document.getElementById("universe-count"),
   scanButton: document.getElementById("scan-button"),
   autoToggleButton: document.getElementById("auto-toggle-button"),
   resetSimButton: document.getElementById("reset-sim-button"),
@@ -29,6 +32,7 @@ const dom = {
   metricLastScanNote: document.getElementById("metric-last-scan-note"),
   engineSummary: document.getElementById("engine-summary"),
   candidateGrid: document.getElementById("candidate-grid"),
+  marketTable: document.getElementById("market-table"),
   openPositionGrid: document.getElementById("open-position-grid"),
   tradeLogTable: document.getElementById("trade-log-table"),
   activityTable: document.getElementById("activity-table"),
@@ -37,7 +41,11 @@ const dom = {
 const state = loadState();
 let autoTimer = null;
 let exchangeInfoCache = null;
+let perpUniverseCache = null;
 let scanning = false;
+let universeTickerMap = new Map();
+let analysisCache = new Map();
+let scanCursor = 0;
 
 function loadState() {
   try {
@@ -46,7 +54,6 @@ function loadState() {
       startingBalance: START_BALANCE,
       balance: Number(stored.balance) || START_BALANCE,
       autoEnabled: stored.autoEnabled !== false,
-      watchlist: stored.watchlist || DEFAULT_WATCHLIST,
       interval: stored.interval || DEFAULT_INTERVAL,
       qualityThreshold: Number(stored.qualityThreshold) || DEFAULT_QUALITY_THRESHOLD,
       openTrade: stored.openTrade || null,
@@ -60,7 +67,6 @@ function loadState() {
       startingBalance: START_BALANCE,
       balance: START_BALANCE,
       autoEnabled: true,
-      watchlist: DEFAULT_WATCHLIST,
       interval: DEFAULT_INTERVAL,
       qualityThreshold: DEFAULT_QUALITY_THRESHOLD,
       openTrade: null,
@@ -78,7 +84,6 @@ function persistState() {
     JSON.stringify({
       balance: state.balance,
       autoEnabled: state.autoEnabled,
-      watchlist: state.watchlist,
       interval: state.interval,
       qualityThreshold: state.qualityThreshold,
       openTrade: state.openTrade,
@@ -106,15 +111,13 @@ function normalizeToken(rawToken) {
   return cleaned;
 }
 
-function normalizeWatchlist(rawWatchlist) {
-  return Array.from(
-    new Set(
-      String(rawWatchlist || "")
-        .split(",")
-        .map((token) => normalizeToken(token))
-        .filter(Boolean)
-    )
-  ).slice(0, 8);
+function perpUniverseSymbols(exchangeInfo) {
+  return (exchangeInfo.symbols || []).filter(
+    (symbolInfo) =>
+      symbolInfo.quoteAsset === QUOTE_ASSET &&
+      symbolInfo.contractType === "PERPETUAL" &&
+      symbolInfo.status === "TRADING"
+  );
 }
 
 function scoreSymbolCandidate(symbolInfo, cleanedToken) {
@@ -703,6 +706,30 @@ async function getExchangeInfo() {
   return exchangeInfoCache;
 }
 
+async function getPerpUniverse() {
+  if (perpUniverseCache) return perpUniverseCache;
+  const exchangeInfo = await getExchangeInfo();
+  perpUniverseCache = perpUniverseSymbols(exchangeInfo).sort((left, right) =>
+    left.symbol.localeCompare(right.symbol)
+  );
+  return perpUniverseCache;
+}
+
+async function fetchUniverseTickers() {
+  const universe = await getPerpUniverse();
+  const activeSymbols = new Set(universe.map((item) => item.symbol));
+  const tickers = await fetchJson("https://fapi.binance.com/fapi/v1/ticker/24hr", "24H tickers");
+  return tickers
+    .filter((entry) => activeSymbols.has(entry.symbol))
+    .map((entry) => ({
+      symbol: entry.symbol,
+      lastPrice: Number(entry.lastPrice),
+      changePct: Number(entry.priceChangePercent),
+      quoteVolume: Number(entry.quoteVolume),
+      volume: Number(entry.volume),
+    }));
+}
+
 async function fetchDirectSnapshot(token, interval) {
   const exchangeInfo = await getExchangeInfo();
   const resolved = resolvePerpSymbol(token, exchangeInfo);
@@ -713,7 +740,6 @@ async function fetchDirectSnapshot(token, interval) {
     fetchJson(`https://fapi.binance.com/fapi/v1/depth?symbol=${resolved.symbol}&limit=100`, "Depth"),
     fetchJson(`https://fapi.binance.com/fapi/v1/aggTrades?symbol=${resolved.symbol}&limit=400`, "Trades"),
     fetchJson(`https://fapi.binance.com/fapi/v1/premiumIndex?symbol=${resolved.symbol}`, "Premium"),
-    fetchJson(`https://fapi.binance.com/fapi/v1/openInterest?symbol=${resolved.symbol}`, "Open interest"),
     fetchJson(`https://fapi.binance.com/futures/data/openInterestHist?symbol=${resolved.symbol}&period=5m&limit=60`, "OI history"),
     fetchJson(`https://fapi.binance.com/futures/data/globalLongShortAccountRatio?symbol=${resolved.symbol}&period=1h&limit=24`, "Global L/S"),
     fetchJson(`https://fapi.binance.com/futures/data/takerlongshortRatio?symbol=${resolved.symbol}&period=5m&limit=24`, "Taker ratio"),
@@ -725,7 +751,6 @@ async function fetchDirectSnapshot(token, interval) {
     depthResult,
     tradesResult,
     premiumResult,
-    openInterestResult,
     oiHistoryResult,
     globalResult,
     takerResult,
@@ -745,7 +770,7 @@ async function fetchDirectSnapshot(token, interval) {
     depth: depthResult.status === "fulfilled" ? depthResult.value : { bids: [], asks: [] },
     trades: tradesResult.status === "fulfilled" ? tradesResult.value : [],
     premiumIndex: premiumResult.status === "fulfilled" ? premiumResult.value : null,
-    openInterest: openInterestResult.status === "fulfilled" ? openInterestResult.value : null,
+    openInterest: null,
     openInterestHistory: oiHistoryResult.status === "fulfilled" ? oiHistoryResult.value : [],
     globalLongShort: globalResult.status === "fulfilled" ? globalResult.value : [],
     takerLongShort: takerResult.status === "fulfilled" ? takerResult.value : [],
@@ -759,6 +784,166 @@ async function fetchSnapshotWithFallback(token, interval) {
   } catch (error) {
     return fetchDirectSnapshot(token, interval);
   }
+}
+
+async function fetchEngineSnapshot(token, interval) {
+  try {
+    return await fetchDirectSnapshot(token, interval);
+  } catch (error) {
+    return fetchServerSnapshot(token, interval);
+  }
+}
+
+async function mapWithConcurrency(items, concurrency, mapper) {
+  const results = new Array(items.length);
+  let cursor = 0;
+
+  async function worker() {
+    while (cursor < items.length) {
+      const currentIndex = cursor;
+      cursor += 1;
+      results[currentIndex] = await mapper(items[currentIndex], currentIndex);
+    }
+  }
+
+  const runners = Array.from({ length: Math.min(concurrency, items.length) }, () => worker());
+  await Promise.all(runners);
+  return results;
+}
+
+function buildTickerLookup(tickers) {
+  return new Map(tickers.map((entry) => [entry.symbol, entry]));
+}
+
+function selectUniverseBatch(universe) {
+  const ranked = [...universe].sort((left, right) => {
+    const rightTicker = universeTickerMap.get(right.symbol);
+    const leftTicker = universeTickerMap.get(left.symbol);
+    return (rightTicker?.quoteVolume || 0) - (leftTicker?.quoteVolume || 0);
+  });
+
+  const priority = ranked.slice(0, PRIORITY_SCAN_COUNT);
+  const rotationPool = ranked.slice(PRIORITY_SCAN_COUNT);
+  const rotationBatch = [];
+
+  if (rotationPool.length) {
+    const start = scanCursor % rotationPool.length;
+    for (let index = 0; index < Math.min(ROTATION_SCAN_COUNT, rotationPool.length); index += 1) {
+      rotationBatch.push(rotationPool[(start + index) % rotationPool.length]);
+    }
+    scanCursor = (start + ROTATION_SCAN_COUNT) % rotationPool.length;
+  }
+
+  const openTradeSymbol = state.openTrade?.symbol;
+  const combined = [...priority, ...rotationBatch];
+  if (openTradeSymbol) {
+    const openTradeInfo = universe.find((item) => item.symbol === openTradeSymbol);
+    if (openTradeInfo) combined.unshift(openTradeInfo);
+  }
+
+  return Array.from(new Map(combined.map((item) => [item.symbol, item])).values());
+}
+
+function formatParameterLine(candidate, ticker) {
+  if (!candidate) {
+    const volumeNote = ticker?.quoteVolume
+      ? `24H vol ${new Intl.NumberFormat("en-US", {
+          notation: "compact",
+          maximumFractionDigits: 2,
+        }).format(ticker.quoteVolume)}`
+      : "Awaiting deep scan";
+    return `${volumeNote} • queueing trend, flow, and leverage checks`;
+  }
+
+  return [
+    candidate.ema20 >= candidate.ema50 ? "EMA bull" : "EMA bear",
+    `RSI ${candidate.rsi.toFixed(0)}`,
+    `CVD ${formatPercent(candidate.cvdSlope)}`,
+    `OI ${formatPercent(candidate.oiChange1h)}`,
+    `RR ${candidate.rr.toFixed(2)}`,
+  ].join(" • ");
+}
+
+function buildMarketRows(universe) {
+  return universe
+    .map((symbolInfo) => {
+      const ticker = universeTickerMap.get(symbolInfo.symbol) || null;
+      const analysis = analysisCache.get(symbolInfo.symbol) || null;
+      const qualityScore = analysis?.qualityScore ?? -1;
+      return {
+        symbol: symbolInfo.symbol,
+        baseAsset: symbolInfo.baseAsset,
+        price: analysis?.currentPrice ?? ticker?.lastPrice ?? 0,
+        changePct: ticker?.changePct ?? 0,
+        biasLabel: analysis?.bias.label ?? "Monitoring",
+        biasTone: analysis?.bias.tone ?? "neutral",
+        parameters: formatParameterLine(analysis, ticker),
+        qualityScore,
+        updatedAt: analysis?.analyzedAt ?? 0,
+        volumeRank: ticker?.quoteVolume ?? 0,
+      };
+    })
+    .sort((left, right) => {
+      const rightQuality = right.qualityScore >= 0 ? right.qualityScore : -999;
+      const leftQuality = left.qualityScore >= 0 ? left.qualityScore : -999;
+      if (rightQuality !== leftQuality) return rightQuality - leftQuality;
+      return right.volumeRank - left.volumeRank;
+    });
+}
+
+function renderMarketTable(universe) {
+  if (!dom.marketTable) return;
+  const rows = buildMarketRows(universe);
+
+  if (!rows.length) {
+    dom.marketTable.innerHTML = `
+      <div class="monitor-empty">
+        Loading Binance perpetual universe...
+      </div>
+    `;
+    return;
+  }
+
+  const body = rows
+    .map((row) => {
+      const price = Number.isFinite(row.price) && row.price > 0 ? formatPrice(row.price, row.price >= 1 ? 4 : 6) : "-";
+      const updatedLabel = row.updatedAt
+        ? new Date(row.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+        : "Queue";
+      const qualityLabel = row.qualityScore >= 0 ? `Q${row.qualityScore}` : "--";
+      return `
+        <tr>
+          <td>
+            <div class="monitor-symbol">${row.symbol}</div>
+            <div class="monitor-subtle">${updatedLabel}</div>
+          </td>
+          <td>${price}</td>
+          <td class="${toneFromNumber(row.changePct, 0.15)}">${formatPercent(row.changePct)}</td>
+          <td class="${row.biasTone}">${row.biasLabel}</td>
+          <td>${row.parameters}</td>
+          <td class="monitor-quality ${row.qualityScore >= state.qualityThreshold ? "qualified" : ""}">${qualityLabel}</td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  dom.marketTable.innerHTML = `
+    <div class="monitor-table-shell">
+      <table>
+        <thead>
+          <tr>
+            <th>Pair</th>
+            <th>Price</th>
+            <th>24H</th>
+            <th>Bias</th>
+            <th>Parameters</th>
+            <th>Quality</th>
+          </tr>
+        </thead>
+        <tbody>${body}</tbody>
+      </table>
+    </div>
+  `;
 }
 
 function logActivity(message, tone = "neutral") {
@@ -862,16 +1047,16 @@ function refreshOpenTrade(candidate) {
 function summarizeEngine(candidates, threshold) {
   const qualified = highQualityCandidates(candidates, threshold);
   if (state.openTrade) {
-    return `${state.openTrade.symbol} is currently open, so the engine is only monitoring exits. ${qualified.length} fresh candidates still meet the quality filter, but the simulator stays one-position-at-a-time.`;
+    return `${state.openTrade.symbol} is currently open, so the engine is only monitoring exits. ${qualified.length} fresh candidates still meet the quality filter while the full perp universe continues rotating in the background.`;
   }
   if (!qualified.length) {
-    return `No watchlist token currently meets the quality threshold of ${threshold}. The engine is waiting for stronger alignment across trend, order flow, leverage, and risk/reward.`;
+    return `No perp currently meets the quality threshold of ${threshold}. The engine is continuously checking the full Binance USDT perp universe for stronger alignment across trend, order flow, leverage, and risk/reward.`;
   }
   const best = qualified[0];
-  return `${qualified.length} high-quality setups were found. ${best.symbol} is leading with quality ${best.qualityScore}, ${best.bias.label.toLowerCase()} bias, and ${best.rr.toFixed(2)}R projected reward to TP.`;
+  return `${qualified.length} high-quality setups are live across the perp universe. ${best.symbol} is leading with quality ${best.qualityScore}, ${best.bias.label.toLowerCase()} bias, and ${best.rr.toFixed(2)}R projected reward to TP.`;
 }
 
-function renderDashboard() {
+function renderDashboard(universe = []) {
   const realizedPnl = state.balance - state.startingBalance;
   const winCount = state.closedTrades.filter((trade) => trade.reason === "TP").length;
   const totalClosed = state.closedTrades.length;
@@ -903,10 +1088,12 @@ function renderDashboard() {
     ? new Date(state.lastScanAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     : "-";
   dom.metricLastScanNote.textContent = state.autoEnabled
-    ? "Auto engine armed"
+    ? "Auto engine armed across full perp universe"
     : "Auto engine paused";
 
   dom.engineSummary.textContent = summarizeEngine(state.lastCandidates, state.qualityThreshold);
+  if (dom.universeInput) dom.universeInput.value = "All Binance USDT Perps";
+  if (dom.universeCount) dom.universeCount.value = universe.length ? `${universe.length} contracts` : "Loading...";
 
   const candidateCards = state.lastCandidates.slice(0, 6).map((candidate) => ({
     label: candidate.symbol,
@@ -927,6 +1114,8 @@ function renderDashboard() {
           },
         ]
   );
+
+  renderMarketTable(universe);
 
   renderAnalysisGrid(
     dom.openPositionGrid,
@@ -995,26 +1184,47 @@ function renderDashboard() {
 
   dom.autoToggleButton.textContent = state.autoEnabled ? "Pause Auto" : "Resume Auto";
   dom.autoRunNote.textContent = state.autoEnabled
-    ? "Auto-scans every 90 seconds."
+    ? "Auto-scans the perp universe every 90 seconds. Liquid pairs stay hot; the rest rotate."
     : "Auto engine paused. Manual scans still work.";
 }
 
-async function scanWatchlist({ manual = false } = {}) {
+async function scanUniverse({ manual = false } = {}) {
   if (scanning) return;
   scanning = true;
-  const tokens = normalizeWatchlist(state.watchlist);
-  setStatus(`Scanning ${tokens.join(", ")} for high-quality trades...`, "neutral");
 
   try {
-    const results = await Promise.allSettled(
-      tokens.map(async (token) => analyzeSnapshot(await fetchSnapshotWithFallback(token, state.interval)))
+    const universe = await getPerpUniverse();
+    const tickers = await fetchUniverseTickers();
+    universeTickerMap = buildTickerLookup(tickers);
+    const batch = selectUniverseBatch(universe);
+
+    setStatus(
+      `Monitoring ${universe.length} perps. Deep-scanning ${batch.length} contracts for quality setups...`,
+      "neutral"
     );
+
+    const results = await mapWithConcurrency(batch, ANALYSIS_CONCURRENCY, async (symbolInfo) => {
+      try {
+        return analyzeSnapshot(await fetchEngineSnapshot(symbolInfo.symbol, state.interval));
+      } catch (error) {
+        return null;
+      }
+    });
+
     const candidates = results
-      .filter((result) => result.status === "fulfilled")
-      .map((result) => result.value)
+      .filter(Boolean)
       .sort((left, right) => right.qualityScore - left.qualityScore);
 
-    state.lastCandidates = candidates;
+    candidates.forEach((candidate) => {
+      analysisCache.set(candidate.symbol, {
+        ...candidate,
+        analyzedAt: Date.now(),
+      });
+    });
+
+    state.lastCandidates = Array.from(analysisCache.values())
+      .sort((left, right) => right.qualityScore - left.qualityScore)
+      .slice(0, 48);
     state.lastScanAt = Date.now();
 
     if (state.openTrade) {
@@ -1028,20 +1238,28 @@ async function scanWatchlist({ manual = false } = {}) {
         openTradeFromCandidate(qualified[0]);
         setStatus(`${qualified[0].symbol} qualified and was opened automatically.`, qualified[0].bias.tone);
       } else {
-        if (manual) logActivity(`Manual scan found no setup above quality ${state.qualityThreshold}.`, "neutral");
+        if (manual) {
+          logActivity(
+            `Manual universe scan found no setup above quality ${state.qualityThreshold}.`,
+            "neutral"
+          );
+        }
         setStatus(`No trade opened. Waiting for quality >= ${state.qualityThreshold}.`, "neutral");
       }
     } else {
-      setStatus(`Monitoring open ${state.openTrade.side} ${state.openTrade.symbol} for TP or SL.`, state.openTrade.side === "Long" ? "up" : "down");
+      setStatus(
+        `Monitoring open ${state.openTrade.side} ${state.openTrade.symbol} for TP or SL while the universe scan continues.`,
+        state.openTrade.side === "Long" ? "up" : "down"
+      );
     }
 
     persistState();
-    renderDashboard();
+    renderDashboard(universe);
   } catch (error) {
     setStatus(error.message || "Auto trader scan failed.", "down");
     logActivity(error.message || "Auto trader scan failed.", "down");
     persistState();
-    renderDashboard();
+    renderDashboard(perpUniverseCache || []);
   } finally {
     scanning = false;
   }
@@ -1052,23 +1270,23 @@ function scheduleAutoScan() {
   autoTimer = null;
   if (!state.autoEnabled) return;
   autoTimer = window.setInterval(() => {
-    scanWatchlist();
+    scanUniverse();
   }, AUTO_SCAN_MS);
 }
 
 function syncControls() {
-  dom.watchlistInput.value = state.watchlist;
+  if (dom.universeInput) dom.universeInput.value = "All Binance USDT Perps";
+  if (dom.universeCount) dom.universeCount.value = perpUniverseCache ? `${perpUniverseCache.length} contracts` : "Loading...";
   dom.scanInterval.value = state.interval;
   dom.qualityThreshold.value = `${state.qualityThreshold}`;
 }
 
 dom.autoForm.addEventListener("submit", (event) => {
   event.preventDefault();
-  state.watchlist = dom.watchlistInput.value || DEFAULT_WATCHLIST;
   state.interval = dom.scanInterval.value || DEFAULT_INTERVAL;
   state.qualityThreshold = Math.max(50, Number(dom.qualityThreshold.value) || DEFAULT_QUALITY_THRESHOLD);
   persistState();
-  scanWatchlist({ manual: true });
+  scanUniverse({ manual: true });
 });
 
 dom.autoToggleButton.addEventListener("click", () => {
@@ -1086,13 +1304,16 @@ dom.resetSimButton.addEventListener("click", () => {
   state.activity = [];
   state.lastCandidates = [];
   state.lastScanAt = 0;
+  analysisCache = new Map();
+  universeTickerMap = new Map();
+  scanCursor = 0;
   logActivity("Simulation reset to $200.", "neutral");
   persistState();
-  renderDashboard();
+  renderDashboard(perpUniverseCache || []);
   setStatus("Simulation reset to $200.", "neutral");
 });
 
 syncControls();
 renderDashboard();
 scheduleAutoScan();
-scanWatchlist();
+scanUniverse();
