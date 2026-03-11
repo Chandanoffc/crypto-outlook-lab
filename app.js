@@ -9,14 +9,24 @@ const RENDER_THROTTLE_MS = 220;
 const REPLAY_CAPTURE_MS = 2500;
 const REPLAY_PLAY_MS = 900;
 const TRADE_AUTO_REFRESH_MS = 15 * 60 * 1000;
+const UPBIT_NOTICE_POLL_MS = 75 * 1000;
 const TIMEFRAME_FETCH_LIMIT = 240;
 const ALERT_STORAGE_KEY = "apex-signals-alert-rules";
 const ALERT_EVENT_STORAGE_KEY = "apex-signals-alert-events";
+const ALERT_CHANNEL_STORAGE_KEY = "apex-signals-alert-channels";
+const UPBIT_SEEN_NOTICE_STORAGE_KEY = "apex-signals-seen-upbit-notices";
 const PAPER_STORAGE_KEY = "apex-signals-paper-state";
 const DEFAULT_PAPER_SETTINGS = {
   accountSize: 10000,
   riskPct: 1,
   leverage: 5,
+};
+const DEFAULT_ALERT_CHANNELS = {
+  browser: true,
+  discordWebhook: "",
+  telegramToken: "",
+  telegramChatId: "",
+  emailTo: "",
 };
 const TIMEFRAME_SUMMARY_CONFIG = [
   { key: "10m", label: "10m", fetchInterval: "5m", aggregateSeconds: 10 * 60 },
@@ -33,6 +43,7 @@ const ALERT_TYPE_LABELS = {
   oi_spike_up: "OI Spike",
   cvd_reversal_up: "CVD Reversal Up",
   cvd_reversal_down: "CVD Reversal Down",
+  upbit_market_support: "Upbit Market Support",
 };
 
 const dom = {
@@ -72,6 +83,14 @@ const dom = {
   alertLevel: document.getElementById("alert-level"),
   alertRules: document.getElementById("alert-rules"),
   alertEvents: document.getElementById("alert-events"),
+  alertChannelForm: document.getElementById("alert-channel-form"),
+  alertBrowserEnabled: document.getElementById("alert-browser-enabled"),
+  alertDiscordWebhook: document.getElementById("alert-discord-webhook"),
+  alertTelegramToken: document.getElementById("alert-telegram-token"),
+  alertTelegramChatId: document.getElementById("alert-telegram-chat-id"),
+  alertEmailTo: document.getElementById("alert-email-to"),
+  alertDestinationSave: document.getElementById("alert-destination-save"),
+  alertDeliveryNote: document.getElementById("alert-delivery-note"),
   paperForm: document.getElementById("paper-form"),
   paperAccount: document.getElementById("paper-account"),
   paperRisk: document.getElementById("paper-risk"),
@@ -88,6 +107,9 @@ const dom = {
   depthTable: document.getElementById("depth-table"),
   liquidationTable: document.getElementById("liquidation-table"),
   newsFeed: document.getElementById("news-feed"),
+  feedTabGlobal: document.getElementById("feed-tab-global"),
+  feedTabUpbit: document.getElementById("feed-tab-upbit"),
+  feedNote: document.getElementById("feed-note"),
   chartEma20: document.getElementById("chart-ema20"),
   chartEma50: document.getElementById("chart-ema50"),
   chartRsi: document.getElementById("chart-rsi"),
@@ -133,6 +155,10 @@ const state = {
   liveReplayFrame: null,
   alerts: loadAlertRules(),
   alertEvents: loadAlertEvents(),
+  alertChannels: loadAlertChannels(),
+  seenUpbitNoticeIds: loadSeenUpbitNoticeIds(),
+  upbitNotices: [],
+  activeFeedTab: "global",
   paperSettings: loadPaperState().settings,
   paperPositions: loadPaperState().positions,
   activeToken: DEFAULT_TOKEN,
@@ -146,6 +172,7 @@ let ema20LineSeries;
 let ema50LineSeries;
 let priceLines = [];
 let chartResizeBound = false;
+let upbitNoticeTimer = null;
 
 function setStatus(message, tone = "neutral") {
   dom.statusBanner.textContent = message;
@@ -200,6 +227,22 @@ function loadAlertRules() {
 function loadAlertEvents() {
   const events = readStoredJson(ALERT_EVENT_STORAGE_KEY, []);
   return Array.isArray(events) ? events : [];
+}
+
+function loadAlertChannels() {
+  const stored = readStoredJson(ALERT_CHANNEL_STORAGE_KEY, {});
+  return {
+    browser: stored?.browser === false ? false : DEFAULT_ALERT_CHANNELS.browser,
+    discordWebhook: String(stored?.discordWebhook || DEFAULT_ALERT_CHANNELS.discordWebhook),
+    telegramToken: String(stored?.telegramToken || DEFAULT_ALERT_CHANNELS.telegramToken),
+    telegramChatId: String(stored?.telegramChatId || DEFAULT_ALERT_CHANNELS.telegramChatId),
+    emailTo: String(stored?.emailTo || DEFAULT_ALERT_CHANNELS.emailTo),
+  };
+}
+
+function loadSeenUpbitNoticeIds() {
+  const stored = readStoredJson(UPBIT_SEEN_NOTICE_STORAGE_KEY, []);
+  return Array.isArray(stored) ? stored.filter(Boolean).slice(0, 120) : [];
 }
 
 function normalizeToken(rawToken) {
@@ -556,8 +599,82 @@ function classifyNews(item) {
   return "neutral";
 }
 
-function renderNews(items) {
+function cleanTickerToken(token) {
+  return String(token || "")
+    .toUpperCase()
+    .replace(/^\d+/, "")
+    .replace(/[^A-Z0-9]/g, "");
+}
+
+function matchesNoticeToActiveToken(notice) {
+  if (!state.snapshot || !notice) return false;
+  const candidates = [
+    state.snapshot.baseAsset,
+    state.snapshot.token,
+    state.activeToken,
+    state.snapshot.symbol?.replace(/USDT$/i, ""),
+  ].map(cleanTickerToken);
+  const noticeTicker = cleanTickerToken(notice.ticker);
+  return Boolean(noticeTicker) && candidates.includes(noticeTicker);
+}
+
+function renderFeedTabs() {
+  if (!dom.feedTabGlobal || !dom.feedTabUpbit) return;
+  dom.feedTabGlobal.classList.toggle("is-active", state.activeFeedTab === "global");
+  dom.feedTabUpbit.classList.toggle("is-active", state.activeFeedTab === "upbit");
+}
+
+function renderNews(items, upbitNotices = []) {
+  renderFeedTabs();
   dom.newsFeed.innerHTML = "";
+
+  if (dom.feedNote) {
+    dom.feedNote.textContent =
+      state.activeFeedTab === "upbit"
+        ? "Upbit service-center notices are polled separately and new market-support headlines can auto-trigger alerts."
+        : "Worldwide crypto catalysts are blended into the short-horizon outlook.";
+  }
+
+  if (state.activeFeedTab === "upbit") {
+    if (!upbitNotices.length) {
+      const article = document.createElement("article");
+      article.className = "news-item";
+      article.innerHTML = `
+        <strong>No Upbit notice data is available right now.</strong>
+        <span class="news-meta">The global catalyst feed is still available while the notice poller retries.</span>
+      `;
+      dom.newsFeed.appendChild(article);
+      return;
+    }
+
+    upbitNotices.forEach((item) => {
+      const tone = item.isMarketSupport ? "up" : "neutral";
+      const article = document.createElement("article");
+      article.className = `news-item ${item.isMarketSupport ? "upbit-market-support" : ""}`;
+      article.innerHTML = `
+        <div class="news-meta">
+          <span class="pill ${tone}">${item.isMarketSupport ? "Market Support" : "Notice"}</span>
+          <span>${item.ticker || "Upbit"}</span>
+          <span>${item.publishedAt ? new Date(item.publishedAt).toLocaleString() : "Latest"}</span>
+          ${
+            matchesNoticeToActiveToken(item)
+              ? '<span class="pill up">Matches active token</span>'
+              : ""
+          }
+        </div>
+        <a href="${item.url}" target="_blank" rel="noreferrer">
+          <strong>${item.title || "Untitled Upbit notice"}</strong>
+        </a>
+        <span>${
+          item.isMarketSupport
+            ? "Exchange support notice detected. These headlines often matter for short-term spot-led flow."
+            : "General Upbit operations or market notice."
+        }</span>
+      `;
+      dom.newsFeed.appendChild(article);
+    });
+    return;
+  }
 
   if (!items.length) {
     const article = document.createElement("article");
@@ -988,6 +1105,14 @@ function persistAlerts() {
   writeStoredJson(ALERT_EVENT_STORAGE_KEY, state.alertEvents);
 }
 
+function persistAlertChannels() {
+  writeStoredJson(ALERT_CHANNEL_STORAGE_KEY, state.alertChannels);
+}
+
+function persistSeenUpbitNoticeIds() {
+  writeStoredJson(UPBIT_SEEN_NOTICE_STORAGE_KEY, state.seenUpbitNoticeIds.slice(0, 120));
+}
+
 function persistPaperState() {
   writeStoredJson(PAPER_STORAGE_KEY, {
     settings: state.paperSettings,
@@ -1080,6 +1205,89 @@ function maybeTriggerBrowserNotification(title, body) {
   }
 }
 
+function syncAlertChannelInputs() {
+  if (!dom.alertBrowserEnabled) return;
+  dom.alertBrowserEnabled.checked = Boolean(state.alertChannels.browser);
+  dom.alertDiscordWebhook.value = state.alertChannels.discordWebhook || "";
+  dom.alertTelegramToken.value = state.alertChannels.telegramToken || "";
+  dom.alertTelegramChatId.value = state.alertChannels.telegramChatId || "";
+  dom.alertEmailTo.value = state.alertChannels.emailTo || "";
+}
+
+function remoteChannelPayload() {
+  return {
+    discordWebhook: String(state.alertChannels.discordWebhook || "").trim(),
+    telegramToken: String(state.alertChannels.telegramToken || "").trim(),
+    telegramChatId: String(state.alertChannels.telegramChatId || "").trim(),
+    emailTo: String(state.alertChannels.emailTo || "").trim(),
+  };
+}
+
+function updateAlertDeliveryNote(message) {
+  if (!dom.alertDeliveryNote) return;
+  dom.alertDeliveryNote.textContent = message;
+}
+
+function saveAlertChannelsFromForm() {
+  if (!dom.alertBrowserEnabled) return;
+  state.alertChannels = {
+    browser: dom.alertBrowserEnabled.checked,
+    discordWebhook: String(dom.alertDiscordWebhook.value || "").trim(),
+    telegramToken: String(dom.alertTelegramToken.value || "").trim(),
+    telegramChatId: String(dom.alertTelegramChatId.value || "").trim(),
+    emailTo: String(dom.alertEmailTo.value || "").trim(),
+  };
+  persistAlertChannels();
+
+  if (state.alertChannels.browser && "Notification" in window && Notification.permission === "default") {
+    Notification.requestPermission().catch(() => {});
+  }
+
+  const armed = [
+    state.alertChannels.browser ? "browser" : null,
+    state.alertChannels.discordWebhook ? "Discord" : null,
+    state.alertChannels.telegramToken && state.alertChannels.telegramChatId ? "Telegram" : null,
+    state.alertChannels.emailTo ? "email" : null,
+  ].filter(Boolean);
+
+  updateAlertDeliveryNote(
+    armed.length
+      ? `Alert destinations saved: ${armed.join(", ")}. Email requires Resend env setup on Vercel.`
+      : "No alert destination is armed yet."
+  );
+}
+
+function dispatchAlertChannels(event, title) {
+  if (state.alertChannels.browser) {
+    maybeTriggerBrowserNotification(title, event.message);
+  }
+
+  const destinations = remoteChannelPayload();
+  if (!destinations.discordWebhook && !(destinations.telegramToken && destinations.telegramChatId) && !destinations.emailTo) {
+    return;
+  }
+
+  fetch("/api/notify", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+    },
+    body: JSON.stringify({
+      title,
+      event,
+      destinations,
+    }),
+  }).catch((error) => {
+    console.error("alert delivery failed", error);
+  });
+}
+
+function pushAlertEvent(event, title) {
+  state.alertEvents.unshift(event);
+  state.alertEvents = state.alertEvents.slice(0, 24);
+  dispatchAlertChannels(event, title);
+}
+
 function evaluateAlerts(derived, precisionHint) {
   if (!state.snapshot) return;
 
@@ -1136,9 +1344,7 @@ function evaluateAlerts(derived, precisionHint) {
       tone,
       time: Date.now(),
     };
-    state.alertEvents.unshift(event);
-    state.alertEvents = state.alertEvents.slice(0, 24);
-    maybeTriggerBrowserNotification(`${rule.symbol} alert`, message);
+    pushAlertEvent(event, `${rule.symbol} alert`);
 
     return {
       ...rule,
@@ -1147,6 +1353,80 @@ function evaluateAlerts(derived, precisionHint) {
   });
 
   if (changed) persistAlerts();
+}
+
+async function fetchUpbitNotices() {
+  const url = new URL("/api/upbit-notices", window.location.origin);
+  url.searchParams.set("token", state.activeToken || DEFAULT_TOKEN);
+  const response = await fetch(url);
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error || "Upbit notices request failed");
+  return Array.isArray(payload.notices) ? payload.notices : [];
+}
+
+function processUpbitNoticeUpdates(notices) {
+  state.upbitNotices = notices.slice(0, 12);
+  const seenIds = new Set(state.seenUpbitNoticeIds);
+
+  if (!seenIds.size) {
+    notices.slice(0, 40).forEach((notice) => {
+      if (notice.id) seenIds.add(notice.id);
+    });
+    state.seenUpbitNoticeIds = Array.from(seenIds).slice(-120);
+    persistSeenUpbitNoticeIds();
+    return;
+  }
+
+  const freshSupportNotices = notices.filter(
+    (notice) => notice.id && !seenIds.has(notice.id) && notice.isMarketSupport
+  );
+
+  notices.slice(0, 40).forEach((notice) => {
+    if (notice.id) seenIds.add(notice.id);
+  });
+  state.seenUpbitNoticeIds = Array.from(seenIds).slice(-120);
+  persistSeenUpbitNoticeIds();
+
+  freshSupportNotices.forEach((notice) => {
+    const symbol = notice.ticker || "UPBIT";
+    pushAlertEvent(
+      {
+        id: `upbit-${notice.id}-${Date.now()}`,
+        type: "upbit_market_support",
+        symbol,
+        message: notice.title,
+        tone: "up",
+        time: Date.now(),
+      },
+      `Upbit market support • ${symbol}`
+    );
+  });
+  if (freshSupportNotices.length) persistAlerts();
+}
+
+async function refreshUpbitNotices() {
+  try {
+    const notices = await fetchUpbitNotices();
+    processUpbitNoticeUpdates(notices);
+    renderAlertEvents();
+    if (state.snapshot) {
+      renderDashboard();
+    } else {
+      renderNews([], state.upbitNotices);
+    }
+  } catch (error) {
+    console.error("upbit notice refresh failed", error);
+    if (dom.feedNote && state.activeFeedTab === "upbit") {
+      dom.feedNote.textContent = "Upbit notice polling is temporarily unavailable. Retrying automatically.";
+    }
+  }
+}
+
+function scheduleUpbitNoticePolling() {
+  if (upbitNoticeTimer) window.clearInterval(upbitNoticeTimer);
+  upbitNoticeTimer = window.setInterval(() => {
+    refreshUpbitNotices();
+  }, UPBIT_NOTICE_POLL_MS);
 }
 
 function buildPaperRiskPlan(derived) {
@@ -2342,7 +2622,7 @@ function renderEmptyDashboard(message) {
   renderTable(dom.flowTable, [], "No live flow loaded");
   renderTable(dom.depthTable, [], "No order-book data");
   renderTable(dom.liquidationTable, [], "No liquidation tape");
-  renderNews([]);
+  renderNews([], state.upbitNotices);
   renderVenueGrid([]);
   renderHeatmap(dom.depthHeatmap, { rows: [] }, "Waiting for depth replay data");
   renderHeatmap(dom.liqHeatmap, { rows: [] }, "Waiting for liquidation replay data");
@@ -2849,12 +3129,16 @@ function buildDerivedState() {
   const regime = marketRegimeLabel(btcChange, ethChange);
 
   const newsItems = snapshot.news || [];
-  const newsScore = newsItems.reduce((score, item) => {
+  const matchedUpbitNotice =
+    state.upbitNotices.find((notice) => notice.isMarketSupport && matchesNoticeToActiveToken(notice)) ||
+    null;
+  const cryptoNewsScore = newsItems.reduce((score, item) => {
     const tone = classifyNews(item);
     if (tone === "up") return score + 1;
     if (tone === "down") return score - 1;
     return score;
   }, 0);
+  const newsScore = cryptoNewsScore + (matchedUpbitNotice ? 2 : 0);
 
   const biasScore = buildBiasScore({
     currentPrice,
@@ -2933,6 +3217,7 @@ function buildDerivedState() {
     ethChange,
     regime,
     newsItems,
+    matchedUpbitNotice,
     newsScore,
     biasScore,
     bias,
@@ -3294,7 +3579,9 @@ function renderDashboard() {
       label: "News Context",
       value:
         derived.newsScore > 0 ? "Supportive" : derived.newsScore < 0 ? "Heavy" : "Mixed",
-      note: `${derived.newsItems.length} catalyst headlines scanned`,
+      note: derived.matchedUpbitNotice
+        ? `Upbit market-support notice matched ${state.snapshot.baseAsset} plus ${derived.newsItems.length} catalyst headlines`
+        : `${derived.newsItems.length} catalyst headlines scanned`,
       tone: derived.newsScore > 0 ? "up" : derived.newsScore < 0 ? "down" : "neutral",
     },
   ]);
@@ -3445,7 +3732,7 @@ function renderDashboard() {
     "Waiting for force-order events"
   );
 
-  renderNews(derived.newsItems);
+  renderNews(derived.newsItems, state.upbitNotices);
   renderTimeframeSummary();
 
   setStatus(
@@ -3628,6 +3915,7 @@ async function loadDashboard(token, interval) {
   renderEmptyDashboard(`Loading ${normalizeToken(token)} perpetual market snapshot...`);
   setTradeRefreshNote("Refreshing trade setup...");
   setStatus(`Loading ${normalizeToken(token)} perpetual market structure...`);
+  refreshUpbitNotices();
 
   try {
     const snapshot = await fetchSnapshot(token, interval);
@@ -3687,6 +3975,27 @@ dom.alertForm.addEventListener("submit", (event) => {
   event.preventDefault();
   addAlertRuleFromForm();
 });
+
+if (dom.alertChannelForm) {
+  dom.alertChannelForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    saveAlertChannelsFromForm();
+  });
+}
+
+if (dom.feedTabGlobal) {
+  dom.feedTabGlobal.addEventListener("click", () => {
+    state.activeFeedTab = "global";
+    renderNews(state.lastDerived?.newsItems || state.snapshot?.news || [], state.upbitNotices);
+  });
+}
+
+if (dom.feedTabUpbit) {
+  dom.feedTabUpbit.addEventListener("click", () => {
+    state.activeFeedTab = "upbit";
+    renderNews(state.lastDerived?.newsItems || state.snapshot?.news || [], state.upbitNotices);
+  });
+}
 
 if (dom.paperForm) {
   dom.paperForm.addEventListener("submit", (event) => {
@@ -3751,9 +4060,20 @@ if (dom.paperClearButton) {
 }
 
 syncPaperInputs();
+syncAlertChannelInputs();
+updateAlertDeliveryNote(
+  state.alertChannels.browser ||
+    state.alertChannels.discordWebhook ||
+    (state.alertChannels.telegramToken && state.alertChannels.telegramChatId) ||
+    state.alertChannels.emailTo
+    ? "Configured destinations will receive triggered alerts. Email requires Resend env setup on Vercel."
+    : "No alert destination is armed yet."
+);
 renderAlertRules();
 renderAlertEvents();
 renderPaperTable();
 renderReplaySurface();
+scheduleUpbitNoticePolling();
+refreshUpbitNotices();
 
 loadDashboard(DEFAULT_TOKEN, DEFAULT_INTERVAL);

@@ -884,11 +884,38 @@ body.dashboard-home .mini-button {
   gap: 12px;
 }
 
+.feed-tabs {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.feed-tab {
+  min-width: 132px;
+}
+
+.feed-tab.is-active {
+  border-color: rgba(213, 161, 60, 0.48);
+  background:
+    linear-gradient(180deg, rgba(213, 161, 60, 0.2), rgba(47, 31, 9, 0.94));
+  box-shadow:
+    inset 0 0 0 1px rgba(213, 161, 60, 0.08),
+    0 0 18px rgba(213, 161, 60, 0.12);
+}
+
 .news-item {
   display: grid;
   gap: 8px;
   padding: 14px;
   border-radius: 18px;
+}
+
+.news-item.upbit-market-support {
+  border-color: rgba(53, 194, 130, 0.28);
+  background:
+    linear-gradient(180deg, rgba(53, 194, 130, 0.12), transparent 52%),
+    rgba(9, 8, 6, 0.88);
 }
 
 .news-item a {
@@ -982,6 +1009,34 @@ body.dashboard-home .mini-button {
 
 .mini-form button {
   align-self: end;
+}
+
+.delivery-form {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.checkbox-card {
+  justify-content: end;
+}
+
+.checkbox-inline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  padding: 0 12px;
+  border-radius: 16px;
+  border: 1px solid var(--panel-edge);
+  background:
+    linear-gradient(180deg, rgba(176, 135, 54, 0.08), transparent 70%),
+    rgba(9, 8, 6, 0.94);
+  color: var(--text-main);
+}
+
+.checkbox-inline input {
+  width: 16px;
+  height: 16px;
+  accent-color: #d5a13c;
 }
 
 .stack-list {
@@ -1114,6 +1169,10 @@ body.dashboard-home .mini-button {
   }
 
   .mini-form {
+    grid-template-columns: 1fr;
+  }
+
+  .delivery-form {
     grid-template-columns: 1fr;
   }
 
