@@ -3,9 +3,15 @@ const DEFAULT_INTERVAL = "15m";
 const DEFAULT_QUALITY_THRESHOLD = 68;
 const QUOTE_ASSET = "USDT";
 const AUTO_SCAN_MS = 90 * 1000;
-const PRIORITY_SCAN_COUNT = 8;
-const ROTATION_SCAN_COUNT = 20;
+const PRIORITY_SCAN_COUNT = 10;
+const ROTATION_SCAN_COUNT = 24;
 const ANALYSIS_CONCURRENCY = 5;
+const MAX_CONCURRENT_TRADES = 6;
+const MAX_NEW_TRADES_PER_SCAN = 4;
+const DEFAULT_LEVERAGE = 5;
+const TARGET_MARGIN_RETURN_PCT = 22;
+const STOP_MARGIN_RETURN_PCT = 10;
+const TRADE_COOLDOWN_MS = 4 * 60 * 1000;
 const STORAGE_KEY = "apex-signals-auto-paper";
 
 const dom = {
@@ -56,7 +62,11 @@ function loadState() {
       autoEnabled: stored.autoEnabled !== false,
       interval: stored.interval || DEFAULT_INTERVAL,
       qualityThreshold: Number(stored.qualityThreshold) || DEFAULT_QUALITY_THRESHOLD,
-      openTrade: stored.openTrade || null,
+      openTrades: Array.isArray(stored.openTrades)
+        ? stored.openTrades
+        : stored.openTrade
+          ? [stored.openTrade]
+          : [],
       closedTrades: Array.isArray(stored.closedTrades) ? stored.closedTrades : [],
       activity: Array.isArray(stored.activity) ? stored.activity : [],
       lastCandidates: Array.isArray(stored.lastCandidates) ? stored.lastCandidates : [],
@@ -69,7 +79,7 @@ function loadState() {
       autoEnabled: true,
       interval: DEFAULT_INTERVAL,
       qualityThreshold: DEFAULT_QUALITY_THRESHOLD,
-      openTrade: null,
+      openTrades: [],
       closedTrades: [],
       activity: [],
       lastCandidates: [],
@@ -86,7 +96,7 @@ function persistState() {
       autoEnabled: state.autoEnabled,
       interval: state.interval,
       qualityThreshold: state.qualityThreshold,
-      openTrade: state.openTrade,
+      openTrades: state.openTrades,
       closedTrades: state.closedTrades,
       activity: state.activity,
       lastCandidates: state.lastCandidates,
@@ -98,6 +108,14 @@ function persistState() {
 function setStatus(message, tone = "neutral") {
   dom.statusBanner.textContent = message;
   dom.statusBanner.className = `status-banner ${tone}`;
+}
+
+function friendlyErrorMessage(error) {
+  const message = error?.message || String(error || "");
+  if (/failed to fetch/i.test(message)) {
+    return "Network request failed during the scan. The engine will retry automatically.";
+  }
+  return message || "Auto trader scan failed.";
 }
 
 function normalizeToken(rawToken) {
@@ -479,21 +497,26 @@ function buildPotentialTrade(context) {
   const tone = context.bias.tone === "neutral" ? (context.cvdSlope >= 0 ? "up" : "down") : context.bias.tone;
   const stance = tone === "down" ? "Short" : "Long";
   const entry = context.currentPrice;
+  const leverage = DEFAULT_LEVERAGE;
+  const targetReturnPct = TARGET_MARGIN_RETURN_PCT;
+  const stopReturnPct = STOP_MARGIN_RETURN_PCT;
   const riskUnit = Math.max(context.latestAtr * 0.9, context.currentPrice * 0.006);
   const bandBuffer = Math.max(context.bandWidth || 0, riskUnit * 0.18);
+  const targetMove = Math.max(entry * (targetReturnPct / leverage / 100), riskUnit * 1.4);
+  const stopMove = Math.max(entry * (stopReturnPct / leverage / 100), riskUnit * 0.75);
   let stopLoss;
   let takeProfit;
 
   if (tone === "up") {
     const nearestSupport = supportLevels.find((level) => level < entry) ?? entry - riskUnit;
     const nearestResistance = resistanceLevels.find((level) => level > entry) ?? entry + riskUnit * 1.2;
-    stopLoss = Math.min(nearestSupport - bandBuffer, entry - riskUnit * 0.9);
-    takeProfit = Math.max(nearestResistance, entry + riskUnit);
+    stopLoss = Math.max(nearestSupport - bandBuffer, entry - stopMove);
+    takeProfit = Math.max(nearestResistance, entry + targetMove);
   } else {
     const nearestResistance = resistanceLevels.find((level) => level > entry) ?? entry + riskUnit;
     const nearestSupport = supportLevels.find((level) => level < entry) ?? entry - riskUnit * 1.2;
-    stopLoss = Math.max(nearestResistance + bandBuffer, entry + riskUnit * 0.9);
-    takeProfit = Math.min(nearestSupport, entry - riskUnit);
+    stopLoss = Math.min(nearestResistance + bandBuffer, entry + stopMove);
+    takeProfit = Math.min(nearestSupport, entry - targetMove);
   }
 
   const rr = Math.abs(takeProfit - entry) / Math.max(Math.abs(entry - stopLoss), 0.0000001);
@@ -504,6 +527,10 @@ function buildPotentialTrade(context) {
     stopLoss,
     takeProfit,
     rr,
+    leverage,
+    targetReturnPct,
+    stopReturnPct,
+    projectedMovePct: Math.abs(pctChange(entry, takeProfit)),
   };
 }
 
@@ -836,12 +863,11 @@ function selectUniverseBatch(universe) {
     scanCursor = (start + ROTATION_SCAN_COUNT) % rotationPool.length;
   }
 
-  const openTradeSymbol = state.openTrade?.symbol;
   const combined = [...priority, ...rotationBatch];
-  if (openTradeSymbol) {
-    const openTradeInfo = universe.find((item) => item.symbol === openTradeSymbol);
+  state.openTrades.forEach((trade) => {
+    const openTradeInfo = universe.find((item) => item.symbol === trade.symbol);
     if (openTradeInfo) combined.unshift(openTradeInfo);
-  }
+  });
 
   return Array.from(new Map(combined.map((item) => [item.symbol, item])).values());
 }
@@ -854,16 +880,23 @@ function formatParameterLine(candidate, ticker) {
           maximumFractionDigits: 2,
         }).format(ticker.quoteVolume)}`
       : "Awaiting deep scan";
-    return `${volumeNote} • queueing trend, flow, and leverage checks`;
+    return `${volumeNote} • queueing trend, flow, leverage, and entry plan`;
   }
 
-  return [
-    candidate.ema20 >= candidate.ema50 ? "EMA bull" : "EMA bear",
-    `RSI ${candidate.rsi.toFixed(0)}`,
-    `CVD ${formatPercent(candidate.cvdSlope)}`,
-    `OI ${formatPercent(candidate.oiChange1h)}`,
-    `RR ${candidate.rr.toFixed(2)}`,
-  ].join(" • ");
+  return `
+    <div class="monitor-parameter-stack">
+      <div>Entry ${formatPrice(candidate.trade.entry, candidate.pricePrecision)} • TP ${formatPrice(
+        candidate.trade.takeProfit,
+        candidate.pricePrecision
+      )} • SL ${formatPrice(candidate.trade.stopLoss, candidate.pricePrecision)}</div>
+      <div class="monitor-subtle">
+        ${candidate.ema20 >= candidate.ema50 ? "EMA bull" : "EMA bear"} • RSI ${candidate.rsi.toFixed(0)} •
+        CVD ${formatPercent(candidate.cvdSlope)} • OI ${formatPercent(candidate.oiChange1h)} •
+        RR ${candidate.rr.toFixed(2)} • target ${candidate.trade.targetReturnPct}% on margin •
+        move ${formatPercent(candidate.trade.projectedMovePct)}
+      </div>
+    </div>
+  `;
 }
 
 function buildMarketRows(universe) {
@@ -957,19 +990,48 @@ function logActivity(message, tone = "neutral") {
   state.activity = state.activity.slice(0, 24);
 }
 
+function reservedMargin() {
+  return state.openTrades.reduce((sum, trade) => sum + (Number(trade.marginUsed) || 0), 0);
+}
+
+function symbolHasOpenTrade(symbol) {
+  return state.openTrades.some((trade) => trade.symbol === symbol);
+}
+
+function recentlyClosed(symbol) {
+  return state.closedTrades.some(
+    (trade) => trade.symbol === symbol && Date.now() - Number(trade.closedAt || 0) < TRADE_COOLDOWN_MS
+  );
+}
+
+function tradeReturnPct(trade, exitPrice) {
+  const direction = trade.side === "Short" ? -1 : 1;
+  return pctChange(trade.entryPrice, exitPrice) * direction * (trade.leverage || DEFAULT_LEVERAGE);
+}
+
 function openTradeFromCandidate(candidate) {
+  if (symbolHasOpenTrade(candidate.symbol)) return false;
+  if (state.openTrades.length >= MAX_CONCURRENT_TRADES) return false;
+
   const balanceBefore = state.balance;
-  const riskCapital = Math.max(balanceBefore * 0.02, 2);
-  const maxMargin = balanceBefore * 0.35;
-  const leverage = 2.5;
+  const freeCapital = Math.max(balanceBefore - reservedMargin(), 0);
+  if (freeCapital < 10) return false;
+
+  const slotsRemaining = Math.max(1, MAX_CONCURRENT_TRADES - state.openTrades.length);
+  const leverage = candidate.trade.leverage || DEFAULT_LEVERAGE;
+  const marginBudget = Math.min(
+    freeCapital,
+    Math.max(balanceBefore * 0.16, freeCapital / slotsRemaining)
+  );
+  const riskCapital = Math.max(marginBudget * 0.12, 2);
   const stopDistance = Math.abs(candidate.trade.entry - candidate.trade.stopLoss);
   const quantityByRisk = stopDistance > 0 ? riskCapital / stopDistance : 0;
-  const quantityByCapital = (maxMargin * leverage) / candidate.trade.entry;
+  const quantityByCapital = (marginBudget * leverage) / candidate.trade.entry;
   const quantity = Math.max(0, Math.min(quantityByRisk, quantityByCapital));
 
-  if (!Number.isFinite(quantity) || quantity <= 0) return;
+  if (!Number.isFinite(quantity) || quantity <= 0) return false;
 
-  state.openTrade = {
+  state.openTrades.push({
     id: `${Date.now()}-${candidate.symbol}`,
     symbol: candidate.symbol,
     token: candidate.token,
@@ -980,82 +1042,150 @@ function openTradeFromCandidate(candidate) {
     takeProfit: candidate.trade.takeProfit,
     quantity,
     leverage,
-    marginUsed: maxMargin,
+    marginUsed: marginBudget,
     qualityScore: candidate.qualityScore,
     biasScore: candidate.biasScore,
+    targetReturnPct: candidate.trade.targetReturnPct,
+    stopReturnPct: candidate.trade.stopReturnPct,
+    pricePrecision: candidate.pricePrecision,
     openedAt: Date.now(),
     balanceBefore,
     lastPrice: candidate.currentPrice,
-  };
+  });
 
   logActivity(
-    `Opened ${candidate.trade.stance} ${candidate.symbol} at ${formatPrice(candidate.trade.entry, candidate.pricePrecision)} with quality ${candidate.qualityScore}.`,
+    `Opened ${candidate.trade.stance} ${candidate.symbol} • entry ${formatPrice(
+      candidate.trade.entry,
+      candidate.pricePrecision
+    )} • TP ${formatPrice(candidate.trade.takeProfit, candidate.pricePrecision)} • SL ${formatPrice(
+      candidate.trade.stopLoss,
+      candidate.pricePrecision
+    )} • target ${candidate.trade.targetReturnPct}% on margin (${formatPercent(
+      candidate.trade.projectedMovePct
+    )} price move).`,
     candidate.trade.tone
   );
+
+  return true;
 }
 
-function closeOpenTrade(reason, exitPrice, precisionHint) {
-  if (!state.openTrade) return;
-  const direction = state.openTrade.side === "Short" ? -1 : 1;
-  const pnlUsd = (exitPrice - state.openTrade.entryPrice) * state.openTrade.quantity * direction;
-  const pnlPct = pctChange(state.openTrade.entryPrice, exitPrice) * direction;
+function closeTrade(tradeId, reason, exitPrice, precisionHint) {
+  const tradeIndex = state.openTrades.findIndex((trade) => trade.id === tradeId);
+  if (tradeIndex === -1) return;
+
+  const trade = state.openTrades[tradeIndex];
+  const direction = trade.side === "Short" ? -1 : 1;
+  const pnlUsd = (exitPrice - trade.entryPrice) * trade.quantity * direction;
+  const pnlPct = pctChange(trade.entryPrice, exitPrice) * direction;
+  const returnPct = tradeReturnPct(trade, exitPrice);
   const balanceAfter = state.balance + pnlUsd;
 
   state.closedTrades.unshift({
-    id: state.openTrade.id,
-    symbol: state.openTrade.symbol,
-    side: state.openTrade.side,
-    entryPrice: state.openTrade.entryPrice,
+    id: trade.id,
+    symbol: trade.symbol,
+    side: trade.side,
+    entryPrice: trade.entryPrice,
     exitPrice,
-    stopLoss: state.openTrade.stopLoss,
-    takeProfit: state.openTrade.takeProfit,
-    openedAt: state.openTrade.openedAt,
+    stopLoss: trade.stopLoss,
+    takeProfit: trade.takeProfit,
+    openedAt: trade.openedAt,
     closedAt: Date.now(),
     reason,
     pnlUsd,
     pnlPct,
-    balanceBefore: state.openTrade.balanceBefore,
+    returnPct,
+    balanceBefore: trade.balanceBefore,
     balanceAfter,
-    quantity: state.openTrade.quantity,
+    quantity: trade.quantity,
+    pricePrecision: trade.pricePrecision,
   });
-  state.closedTrades = state.closedTrades.slice(0, 60);
+  state.closedTrades = state.closedTrades.slice(0, 90);
   state.balance = balanceAfter;
+  state.openTrades.splice(tradeIndex, 1);
+
   logActivity(
-    `${reason} closed ${state.openTrade.side} ${state.openTrade.symbol} at ${formatPrice(
-      exitPrice,
+    `${reason} closed ${trade.side} ${trade.symbol} • entry ${formatPrice(
+      trade.entryPrice,
       precisionHint
-    )} for ${formatPercent(pnlPct)} and ${formatCompactUsd(pnlUsd, 2)}.`,
+    )} • exit ${formatPrice(exitPrice, precisionHint)} • ${formatPercent(
+      returnPct
+    )} on margin • ${formatCompactUsd(pnlUsd, 2)}.`,
     reason === "TP" ? "up" : "down"
   );
-  state.openTrade = null;
 }
 
-function refreshOpenTrade(candidate) {
-  if (!state.openTrade || !candidate) return;
-  state.openTrade.lastPrice = candidate.currentPrice;
-  const hitTarget =
-    state.openTrade.side === "Long"
-      ? candidate.currentPrice >= state.openTrade.takeProfit
-      : candidate.currentPrice <= state.openTrade.takeProfit;
-  const hitStop =
-    state.openTrade.side === "Long"
-      ? candidate.currentPrice <= state.openTrade.stopLoss
-      : candidate.currentPrice >= state.openTrade.stopLoss;
+function refreshOpenTrades(candidates) {
+  if (!state.openTrades.length) return;
+  const candidateMap = new Map(candidates.map((candidate) => [candidate.symbol, candidate]));
+  const trades = [...state.openTrades];
 
-  if (hitTarget) closeOpenTrade("TP", state.openTrade.takeProfit, candidate.pricePrecision);
-  else if (hitStop) closeOpenTrade("SL", state.openTrade.stopLoss, candidate.pricePrecision);
+  trades.forEach((trade) => {
+    const candidate = candidateMap.get(trade.symbol);
+    if (!candidate) return;
+
+    trade.lastPrice = candidate.currentPrice;
+    trade.pricePrecision = candidate.pricePrecision;
+    const hitTarget =
+      trade.side === "Long"
+        ? candidate.currentPrice >= trade.takeProfit
+        : candidate.currentPrice <= trade.takeProfit;
+    const hitStop =
+      trade.side === "Long"
+        ? candidate.currentPrice <= trade.stopLoss
+        : candidate.currentPrice >= trade.stopLoss;
+
+    if (hitTarget) closeTrade(trade.id, "TP", trade.takeProfit, candidate.pricePrecision);
+    else if (hitStop) closeTrade(trade.id, "SL", trade.stopLoss, candidate.pricePrecision);
+  });
+}
+
+function openQualifiedTrades(candidates) {
+  const opened = [];
+  const availableSlots = MAX_CONCURRENT_TRADES - state.openTrades.length;
+  if (availableSlots <= 0) return opened;
+
+  const eligible = candidates.filter(
+    (candidate) => !symbolHasOpenTrade(candidate.symbol) && !recentlyClosed(candidate.symbol)
+  );
+
+  eligible
+    .slice(0, Math.min(availableSlots, MAX_NEW_TRADES_PER_SCAN))
+    .forEach((candidate) => {
+      if (openTradeFromCandidate(candidate)) opened.push(candidate);
+    });
+
+  return opened;
 }
 
 function summarizeEngine(candidates, threshold) {
   const qualified = highQualityCandidates(candidates, threshold);
-  if (state.openTrade) {
-    return `${state.openTrade.symbol} is currently open, so the engine is only monitoring exits. ${qualified.length} fresh candidates still meet the quality filter while the full perp universe continues rotating in the background.`;
-  }
   if (!qualified.length) {
+    if (state.openTrades.length) {
+      return `${state.openTrades.length}/${MAX_CONCURRENT_TRADES} paper positions are active. No fresh setup currently clears quality ${threshold}, so the engine is focused on managing existing TP and SL levels.`;
+    }
     return `No perp currently meets the quality threshold of ${threshold}. The engine is continuously checking the full Binance USDT perp universe for stronger alignment across trend, order flow, leverage, and risk/reward.`;
   }
+
   const best = qualified[0];
-  return `${qualified.length} high-quality setups are live across the perp universe. ${best.symbol} is leading with quality ${best.qualityScore}, ${best.bias.label.toLowerCase()} bias, and ${best.rr.toFixed(2)}R projected reward to TP.`;
+  if (state.openTrades.length) {
+    return `${state.openTrades.length}/${MAX_CONCURRENT_TRADES} paper positions are active. ${qualified.length} fresh candidates still meet the filter, and ${best.symbol} leads with entry ${formatPrice(
+      best.trade.entry,
+      best.pricePrecision
+    )}, TP ${formatPrice(best.trade.takeProfit, best.pricePrecision)}, and SL ${formatPrice(
+      best.trade.stopLoss,
+      best.pricePrecision
+    )}.`;
+  }
+
+  return `${qualified.length} high-quality setups are live across the perp universe. ${best.symbol} leads with entry ${formatPrice(
+    best.trade.entry,
+    best.pricePrecision
+  )}, TP ${formatPrice(best.trade.takeProfit, best.pricePrecision)}, SL ${formatPrice(
+    best.trade.stopLoss,
+    best.pricePrecision
+  )}, and ${best.trade.targetReturnPct}% target return on margin (${formatPercent(
+    best.trade.projectedMovePct
+  )} price move).`;
 }
 
 function renderDashboard(universe = []) {
@@ -1063,17 +1193,20 @@ function renderDashboard(universe = []) {
   const winCount = state.closedTrades.filter((trade) => trade.reason === "TP").length;
   const totalClosed = state.closedTrades.length;
   const winRate = totalClosed ? (winCount / totalClosed) * 100 : 0;
-  const openTrade = state.openTrade;
-  const unrealizedPct =
-    openTrade && Number.isFinite(openTrade.lastPrice)
-      ? pctChange(openTrade.entryPrice, openTrade.lastPrice) * (openTrade.side === "Short" ? -1 : 1)
-      : 0;
+  const openTrades = state.openTrades;
+  const unrealizedUsd = openTrades.reduce((sum, trade) => {
+    const direction = trade.side === "Short" ? -1 : 1;
+    if (!Number.isFinite(trade.lastPrice)) return sum;
+    return sum + (trade.lastPrice - trade.entryPrice) * trade.quantity * direction;
+  }, 0);
+  const currentEquity = state.balance + unrealizedUsd;
+  const leadOpenTrade = openTrades[0] || null;
 
   dom.metricStartBalance.textContent = formatPrice(state.startingBalance, 2);
-  dom.metricCurrentEquity.textContent = formatPrice(state.balance, 2);
-  dom.metricCurrentEquity.className = toneFromNumber(realizedPnl, 0.01);
-  dom.metricCurrentNote.textContent = openTrade
-    ? `Open ${openTrade.side} ${openTrade.symbol} • unrealized ${formatPercent(unrealizedPct)}`
+  dom.metricCurrentEquity.textContent = formatPrice(currentEquity, 2);
+  dom.metricCurrentEquity.className = toneFromNumber(currentEquity - state.startingBalance, 0.01);
+  dom.metricCurrentNote.textContent = openTrades.length
+    ? `${openTrades.length} open positions • unrealized ${formatCompactUsd(unrealizedUsd, 2)}`
     : "No open position";
   dom.metricRealizedPnl.textContent = formatCompactUsd(realizedPnl, 2);
   dom.metricRealizedPnl.className = toneFromNumber(realizedPnl, 0.01);
@@ -1081,10 +1214,20 @@ function renderDashboard(universe = []) {
   dom.metricWinRate.textContent = `${winRate.toFixed(0)}%`;
   dom.metricWinRate.className = toneFromNumber(winRate - 50, 2);
   dom.metricWinRateNote.textContent = `${winCount} winners / ${totalClosed} closed trades`;
-  dom.metricOpenTrade.textContent = openTrade ? `${openTrade.side} ${openTrade.symbol}` : "None";
-  dom.metricOpenTrade.className = openTrade ? (openTrade.side === "Long" ? "up" : "down") : "neutral";
-  dom.metricOpenNote.textContent = openTrade
-    ? `Entry ${formatPrice(openTrade.entryPrice, 2)} • TP ${formatPrice(openTrade.takeProfit, 2)} • SL ${formatPrice(openTrade.stopLoss, 2)}`
+  dom.metricOpenTrade.textContent = openTrades.length
+    ? `${openTrades.length} Active`
+    : "None";
+  dom.metricOpenTrade.className = openTrades.length
+    ? toneFromNumber(unrealizedUsd, 0.01)
+    : "neutral";
+  dom.metricOpenNote.textContent = leadOpenTrade
+    ? `${leadOpenTrade.symbol} ${leadOpenTrade.side} • entry ${formatPrice(
+        leadOpenTrade.entryPrice,
+        leadOpenTrade.pricePrecision || 2
+      )} • TP ${formatPrice(leadOpenTrade.takeProfit, leadOpenTrade.pricePrecision || 2)} • SL ${formatPrice(
+        leadOpenTrade.stopLoss,
+        leadOpenTrade.pricePrecision || 2
+      )}`
     : "Waiting for a high-quality setup";
   dom.metricLastScan.textContent = state.lastScanAt
     ? new Date(state.lastScanAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
@@ -1102,7 +1245,12 @@ function renderDashboard(universe = []) {
   const candidateCards = state.lastCandidates.slice(0, 6).map((candidate) => ({
     label: candidate.symbol,
     value: `${candidate.bias.label} • Q${candidate.qualityScore}`,
-    note: `${formatPrice(candidate.currentPrice, candidate.pricePrecision)} • RR ${candidate.rr.toFixed(2)} • CVD ${formatPercent(candidate.cvdSlope)} • OI ${formatPercent(candidate.oiChange1h)}`,
+    note: `Entry ${formatPrice(candidate.trade.entry, candidate.pricePrecision)} • TP ${formatPrice(
+      candidate.trade.takeProfit,
+      candidate.pricePrecision
+    )} • SL ${formatPrice(candidate.trade.stopLoss, candidate.pricePrecision)} • target ${
+      candidate.trade.targetReturnPct
+    }% • move ${formatPercent(candidate.trade.projectedMovePct)} • RR ${candidate.rr.toFixed(2)}`,
     tone: candidate.bias.tone,
   }));
   renderAnalysisGrid(
@@ -1123,27 +1271,21 @@ function renderDashboard(universe = []) {
 
   renderAnalysisGrid(
     dom.openPositionGrid,
-    openTrade
-      ? [
-          {
-            label: `${openTrade.symbol} ${openTrade.side}`,
-            value: formatPrice(openTrade.lastPrice || openTrade.entryPrice, 2),
-            note: `Entry ${formatPrice(openTrade.entryPrice, 2)} • TP ${formatPrice(openTrade.takeProfit, 2)} • SL ${formatPrice(openTrade.stopLoss, 2)}`,
-            tone: openTrade.side === "Long" ? "up" : "down",
-          },
-          {
-            label: "Unrealized %",
-            value: formatPercent(unrealizedPct),
-            note: `Qty ${formatCompactNumber(openTrade.quantity, 3)} • leverage ${openTrade.leverage}x`,
-            tone: toneFromNumber(unrealizedPct, 0.02),
-          },
-          {
-            label: "Margin Used",
-            value: formatPrice(openTrade.marginUsed, 2),
-            note: `Quality ${openTrade.qualityScore} • bias ${openTrade.biasScore}`,
-            tone: "neutral",
-          },
-        ]
+    openTrades.length
+      ? openTrades.slice(0, 6).map((trade) => ({
+          label: `${trade.symbol} ${trade.side}`,
+          value: `${formatPercent(
+            tradeReturnPct(trade, trade.lastPrice || trade.entryPrice)
+          )} live`,
+          note: `Entry ${formatPrice(trade.entryPrice, trade.pricePrecision || 2)} • TP ${formatPrice(
+            trade.takeProfit,
+            trade.pricePrecision || 2
+          )} • SL ${formatPrice(trade.stopLoss, trade.pricePrecision || 2)} • margin ${formatPrice(
+            trade.marginUsed,
+            2
+          )} • ${trade.leverage}x`,
+          tone: trade.side === "Long" ? "up" : "down",
+        }))
       : [
           {
             label: "Engine waiting",
@@ -1158,11 +1300,20 @@ function renderDashboard(universe = []) {
     dom.tradeLogTable,
     state.closedTrades.slice(0, 12).map((trade) => ({
       label: `${trade.symbol} • ${trade.reason}`,
-      primary: `${formatPrice(trade.entryPrice, 2)} -> ${formatPrice(trade.exitPrice, 2)}`,
-      secondaryLabel: "Outcome",
-      secondary: `${formatPercent(trade.pnlPct)} • ${formatCompactUsd(trade.pnlUsd, 2)}`,
-      tertiaryLabel: "Balance",
-      tertiary: formatPrice(trade.balanceAfter, 2),
+      primary: `Entry ${formatPrice(trade.entryPrice, trade.pricePrecision || 2)} • Exit ${formatPrice(
+        trade.exitPrice,
+        trade.pricePrecision || 2
+      )}`,
+      secondaryLabel: "Plan",
+      secondary: `TP ${formatPrice(trade.takeProfit, trade.pricePrecision || 2)} • SL ${formatPrice(
+        trade.stopLoss,
+        trade.pricePrecision || 2
+      )}`,
+      tertiaryLabel: "Result",
+      tertiary: `${formatPercent(trade.returnPct || 0)} on margin • ${formatCompactUsd(
+        trade.pnlUsd,
+        2
+      )} • Bal ${formatPrice(trade.balanceAfter, 2)}`,
       tone: trade.reason === "TP" ? "up" : "down",
     })),
     "No closed trades yet"
@@ -1188,7 +1339,7 @@ function renderDashboard(universe = []) {
 
   dom.autoToggleButton.textContent = state.autoEnabled ? "Pause Auto" : "Resume Auto";
   dom.autoRunNote.textContent = state.autoEnabled
-    ? "Auto-scans the perp universe every 90 seconds. Liquid pairs stay hot; the rest rotate."
+    ? `Auto-scans every 90 seconds and can hold up to ${MAX_CONCURRENT_TRADES} quality positions.`
     : "Auto engine paused. Manual scans still work.";
 }
 
@@ -1231,37 +1382,43 @@ async function scanUniverse({ manual = false } = {}) {
       .slice(0, 48);
     state.lastScanAt = Date.now();
 
-    if (state.openTrade) {
-      const matching = candidates.find((candidate) => candidate.symbol === state.openTrade.symbol);
-      if (matching) refreshOpenTrade(matching);
-    }
+    refreshOpenTrades(candidates);
 
-    if (!state.openTrade) {
-      const qualified = highQualityCandidates(candidates, state.qualityThreshold);
-      if (qualified.length) {
-        openTradeFromCandidate(qualified[0]);
-        setStatus(`${qualified[0].symbol} qualified and was opened automatically.`, qualified[0].bias.tone);
-      } else {
-        if (manual) {
-          logActivity(
-            `Manual universe scan found no setup above quality ${state.qualityThreshold}.`,
-            "neutral"
-          );
-        }
-        setStatus(`No trade opened. Waiting for quality >= ${state.qualityThreshold}.`, "neutral");
-      }
-    } else {
+    const qualified = highQualityCandidates(candidates, state.qualityThreshold);
+    const opened = openQualifiedTrades(qualified);
+
+    if (opened.length) {
+      const lead = opened[0];
       setStatus(
-        `Monitoring open ${state.openTrade.side} ${state.openTrade.symbol} for TP or SL while the universe scan continues.`,
-        state.openTrade.side === "Long" ? "up" : "down"
+        `Opened ${opened.length} new paper trade${opened.length > 1 ? "s" : ""}. ${state.openTrades.length}/${MAX_CONCURRENT_TRADES} positions active, led by ${lead.symbol}.`,
+        lead.bias.tone
       );
+    } else if (state.openTrades.length) {
+      setStatus(
+        `Monitoring ${state.openTrades.length} active paper position${state.openTrades.length > 1 ? "s" : ""} while the universe scan continues.`,
+        state.openTrades.some((trade) => trade.side === "Long") ? "up" : "down"
+      );
+    } else if (qualified.length) {
+      setStatus(
+        `${qualified.length} setups qualify, but margin or cooldown rules are holding entries for now.`,
+        qualified[0].bias.tone
+      );
+    } else {
+      if (manual) {
+        logActivity(
+          `Manual universe scan found no setup above quality ${state.qualityThreshold}.`,
+          "neutral"
+        );
+      }
+      setStatus(`No trade opened. Waiting for quality >= ${state.qualityThreshold}.`, "neutral");
     }
 
     persistState();
     renderDashboard(universe);
   } catch (error) {
-    setStatus(error.message || "Auto trader scan failed.", "down");
-    logActivity(error.message || "Auto trader scan failed.", "down");
+    const message = friendlyErrorMessage(error);
+    setStatus(message, "down");
+    logActivity(message, "down");
     persistState();
     renderDashboard(perpUniverseCache || []);
   } finally {
@@ -1303,7 +1460,7 @@ dom.autoToggleButton.addEventListener("click", () => {
 
 dom.resetSimButton.addEventListener("click", () => {
   state.balance = START_BALANCE;
-  state.openTrade = null;
+  state.openTrades = [];
   state.closedTrades = [];
   state.activity = [];
   state.lastCandidates = [];

@@ -908,7 +908,7 @@ body.paper-trader-page .panel-monitor-large .monitor-table td {
 }
 
 body.paper-trader-page .panel-monitor-large .monitor-table td:nth-child(5) {
-  min-width: 320px;
+  min-width: 420px;
 }
 
 body.paper-trader-page .panel-monitor-large .monitor-symbol {
@@ -955,6 +955,12 @@ body.paper-trader-page .panel-monitor-large .monitor-symbol {
   margin-top: 4px;
   font-size: 0.72rem;
   color: var(--text-dim);
+}
+
+.monitor-parameter-stack {
+  display: grid;
+  gap: 4px;
+  line-height: 1.45;
 }
 
 .monitor-quality {
