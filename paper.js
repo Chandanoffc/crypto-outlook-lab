@@ -6,12 +6,22 @@ const AUTO_SCAN_MS = 90 * 1000;
 const PRIORITY_SCAN_COUNT = 10;
 const ROTATION_SCAN_COUNT = 24;
 const ANALYSIS_CONCURRENCY = 5;
-const MAX_CONCURRENT_TRADES = 6;
-const MAX_NEW_TRADES_PER_SCAN = 4;
+const HTF_CONFIRMATION_CONCURRENCY = 4;
+const HTF_CONFIRMATION_CACHE_MS = 5 * 60 * 1000;
+const MAX_CONCURRENT_TRADES = 4;
+const MAX_NEW_TRADES_PER_SCAN = 2;
 const DEFAULT_LEVERAGE = 5;
 const TARGET_MARGIN_RETURN_PCT = 22;
 const STOP_MARGIN_RETURN_PCT = 10;
 const TRADE_COOLDOWN_MS = 4 * 60 * 1000;
+const HIGH_VOLUME_FLOOR = 100_000_000;
+const MIN_RR = 1.6;
+const MIN_PROJECTED_MOVE_PCT = 2.1;
+const STRATEGY_VERSION = 2;
+const HTF_CONFIRMATION_CONFIG = [
+  { key: "1h", label: "1H", interval: "1h" },
+  { key: "4h", label: "4H", interval: "4h" },
+];
 const STORAGE_KEY = "apex-signals-auto-paper";
 
 const dom = {
@@ -58,6 +68,7 @@ let perpUniverseCache = null;
 let scanning = false;
 let universeTickerMap = new Map();
 let analysisCache = new Map();
+let confirmationCache = new Map();
 let scanCursor = 0;
 
 function loadState() {
@@ -74,6 +85,7 @@ function loadState() {
         : stored.openTrade
           ? [stored.openTrade]
           : [],
+      strategyVersion: Number(stored.strategyVersion) || 1,
       activeTab: stored.activeTab || "positions",
       closedTrades: Array.isArray(stored.closedTrades) ? stored.closedTrades : [],
       activity: Array.isArray(stored.activity) ? stored.activity : [],
@@ -88,6 +100,7 @@ function loadState() {
       interval: DEFAULT_INTERVAL,
       qualityThreshold: DEFAULT_QUALITY_THRESHOLD,
       openTrades: [],
+      strategyVersion: STRATEGY_VERSION,
       activeTab: "positions",
       closedTrades: [],
       activity: [],
@@ -106,6 +119,7 @@ function persistState() {
       interval: state.interval,
       qualityThreshold: state.qualityThreshold,
       openTrades: state.openTrades,
+      strategyVersion: state.strategyVersion,
       activeTab: state.activeTab,
       closedTrades: state.closedTrades,
       activity: state.activity,
@@ -412,6 +426,10 @@ function computeSupportResistance(candles, currentPrice, latestAtr) {
   };
 }
 
+function hasGoodTradingVolume(quoteVolume) {
+  return Number(quoteVolume) >= HIGH_VOLUME_FLOOR;
+}
+
 function normalizeTrade(rawTrade) {
   const price = Number(rawTrade.p || rawTrade.price);
   const quantity = Number(rawTrade.q || rawTrade.quantity);
@@ -510,14 +528,23 @@ function buildBiasScore(context) {
   let score = 0;
   score += context.currentPrice > context.ema20 ? 12 : -12;
   score += context.ema20 > context.ema50 ? 14 : -14;
-  score += context.rsi >= 52 && context.rsi <= 68 ? 8 : context.rsi < 44 ? -10 : -4;
+  score += context.recentPriceChange > 0.7 ? 8 : context.recentPriceChange < -0.7 ? -8 : 0;
+  score += context.rsi >= 52 && context.rsi <= 66 ? 8 : context.rsi <= 48 && context.rsi >= 34 ? -8 : 0;
+  score += context.rsi > 72 ? -6 : context.rsi < 28 ? 6 : 0;
   score += context.macdHistogram > 0 ? 10 : -10;
   score += context.cvdSlope > 0 ? 12 : -12;
   score += context.depthImbalance > 0.04 ? 8 : context.depthImbalance < -0.04 ? -8 : 0;
-  score += context.oiChange1h > 0 ? 7 : -7;
+  if (context.oiChange1h > 0 && context.recentPriceChange > 0) score += 8;
+  else if (context.oiChange1h > 0 && context.recentPriceChange < 0) score -= 8;
+  else if (context.oiChange1h < 0 && context.recentPriceChange > 0) score += 2;
+  else if (context.oiChange1h < 0 && context.recentPriceChange < 0) score -= 2;
   score += context.takerRatio > 1.02 ? 8 : context.takerRatio < 0.98 ? -8 : 0;
-  score += context.fundingRate > 0 && context.fundingRate < 0.03 ? 4 : context.fundingRate < 0 ? -3 : -4;
-  score += context.globalLongShortRatio > 1.04 ? 3 : context.globalLongShortRatio < 0.96 ? -3 : 0;
+  if (context.fundingRate > 0.035) score -= 4;
+  else if (context.fundingRate < -0.035) score += 4;
+  else if (context.fundingRate > 0 && context.recentPriceChange > 0) score += 1;
+  else if (context.fundingRate < 0 && context.recentPriceChange < 0) score -= 1;
+  if (context.globalLongShortRatio > 1.15) score -= 2;
+  else if (context.globalLongShortRatio < 0.85) score += 2;
   score += context.venueConsensus.priceSpreadBps < 8 ? 4 : -4;
   return Math.max(-100, Math.min(100, Math.round(score)));
 }
@@ -573,6 +600,28 @@ function buildPotentialTrade(context) {
   };
 }
 
+function summarizeTimeframe(candles) {
+  const closes = candles.map((candle) => candle.close);
+  const currentPrice = closes[closes.length - 1] || 0;
+  const ema20Series = ema(closes, 20);
+  const ema50Series = ema(closes, 50);
+  const rsiSeries = rsi(closes, 14);
+  const ema20Value = latestDefinedValue(ema20Series) ?? currentPrice;
+  const ema50Value = latestDefinedValue(ema50Series) ?? currentPrice;
+  const rsiValue = latestDefinedValue(rsiSeries) ?? 50;
+  const lookback = Math.min(8, Math.max(1, closes.length - 1));
+  const changePct = lookback > 0 ? pctChange(closes[closes.length - 1 - lookback], currentPrice) : 0;
+  let score = 0;
+  score += currentPrice > ema20Value ? 10 : -10;
+  score += ema20Value > ema50Value ? 12 : -12;
+  score += rsiValue >= 52 && rsiValue <= 66 ? 8 : rsiValue <= 48 && rsiValue >= 34 ? -8 : 0;
+  score += changePct > 0.8 ? 6 : changePct < -0.8 ? -6 : 0;
+
+  if (score >= 14) return { label: "Bullish", tone: "up", score, rsi: rsiValue, changePct };
+  if (score <= -14) return { label: "Bearish", tone: "down", score, rsi: rsiValue, changePct };
+  return { label: "Balanced", tone: "neutral", score, rsi: rsiValue, changePct };
+}
+
 function analyzeSnapshot(snapshot) {
   const candles = (snapshot.candles || []).map((candle) => ({ ...candle }));
   const closes = candles.map((candle) => candle.close);
@@ -589,6 +638,7 @@ function analyzeSnapshot(snapshot) {
   const takerSummary = analyzeTakerLongShort(snapshot.takerLongShort || []);
   const oiHistory = (snapshot.openInterestHistory || []).map((entry) => Number(entry.sumOpenInterest));
   const oiChange1h = pctChangeFromLookback(oiHistory, 12);
+  const recentPriceChange = pctChangeFromLookback(closes, Math.min(4, Math.max(1, closes.length - 1)));
   const fundingRate = (Number(snapshot.premiumIndex?.lastFundingRate) || 0) * 100;
   const globalLongShortRatio = snapshot.globalLongShort?.length
     ? Number(snapshot.globalLongShort[snapshot.globalLongShort.length - 1].longShortRatio)
@@ -603,6 +653,7 @@ function analyzeSnapshot(snapshot) {
     cvdSlope: tradeSummary.cvdSlope,
     depthImbalance: depthSummary.imbalance,
     oiChange1h,
+    recentPriceChange,
     takerRatio: takerSummary.latestRatio,
     fundingRate,
     globalLongShortRatio,
@@ -624,7 +675,8 @@ function analyzeSnapshot(snapshot) {
       (rr >= 1.5 ? 10 : rr >= 1.2 ? 4 : -8) +
       (venueConsensus.priceSpreadBps < 8 ? 8 : -6) +
       (tradeSummary.cvdSlope * (bias.tone === "up" ? 1 : -1) > 0 ? 6 : -6) +
-      (oiChange1h * (bias.tone === "up" ? 1 : -1) > 0 ? 6 : -6) +
+      (oiChange1h > 0 ? 4 : -2) +
+      (Math.abs(recentPriceChange) > 0.8 ? 4 : 0) +
       (Math.abs(fundingRate) < 0.03 ? 4 : -4)
   );
 
@@ -643,6 +695,7 @@ function analyzeSnapshot(snapshot) {
     latestAtr,
     fundingRate,
     oiChange1h,
+    recentPriceChange,
     cvdSlope: tradeSummary.cvdSlope,
     depthImbalance: depthSummary.imbalance,
     takerRatio: takerSummary.latestRatio,
@@ -658,10 +711,19 @@ function highQualityCandidates(candidates, threshold) {
     .filter(
       (candidate) =>
         candidate.bias.tone !== "neutral" &&
-        candidate.qualityScore >= threshold &&
-        candidate.rr >= 1.2
+        (candidate.refinedQualityScore ?? candidate.qualityScore) >= threshold + 10 &&
+        candidate.entryQualityScore >= 16 &&
+        candidate.alignedCount >= 2 &&
+        candidate.conflictCount === 0 &&
+        hasGoodTradingVolume(candidate.quoteVolume) &&
+        candidate.rr >= MIN_RR &&
+        candidate.trade.projectedMovePct >= MIN_PROJECTED_MOVE_PCT
     )
-    .sort((left, right) => right.qualityScore - left.qualityScore);
+    .sort(
+      (left, right) =>
+        (right.refinedQualityScore ?? right.qualityScore) -
+        (left.refinedQualityScore ?? left.qualityScore)
+    );
 }
 
 function formatPrice(value, digits = 2) {
@@ -883,6 +945,83 @@ function buildTickerLookup(tickers) {
   return new Map(tickers.map((entry) => [entry.symbol, entry]));
 }
 
+async function fetchHigherTimeframeConfirmation(symbol) {
+  const cached = confirmationCache.get(symbol);
+  if (cached && Date.now() - cached.fetchedAt < HTF_CONFIRMATION_CACHE_MS) {
+    return cached.summary;
+  }
+
+  const results = await Promise.allSettled(
+    HTF_CONFIRMATION_CONFIG.map((config) =>
+      fetchJson(
+        `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${config.interval}&limit=180`,
+        `${config.label} confirmation`
+      ).then((entries) => summarizeTimeframe(entries.map(mapKlineEntry)))
+    )
+  );
+
+  const summary = HTF_CONFIRMATION_CONFIG.reduce((accumulator, config, index) => {
+    const result = results[index];
+    accumulator[config.key] =
+      result.status === "fulfilled"
+        ? result.value
+        : { label: "Unavailable", tone: "neutral", score: 0, rsi: 50, changePct: 0 };
+    return accumulator;
+  }, {});
+
+  confirmationCache.set(symbol, {
+    fetchedAt: Date.now(),
+    summary,
+  });
+  return summary;
+}
+
+function applyCandidateConfirmation(candidate, ticker, confirmation) {
+  const quoteVolume = ticker?.quoteVolume || 0;
+  const direction = candidate.bias.tone;
+  const alignedTone = direction === "up" ? "up" : "down";
+  const opposingTone = alignedTone === "up" ? "down" : "up";
+  const timeframeStates = Object.values(confirmation || {});
+  const alignedCount = timeframeStates.filter((entry) => entry.tone === alignedTone).length;
+  const conflictCount = timeframeStates.filter((entry) => entry.tone === opposingTone).length;
+  const distanceFromEma20Pct = Math.abs(pctChange(candidate.ema20, candidate.currentPrice));
+  let entryQualityScore = 0;
+
+  if (hasGoodTradingVolume(quoteVolume)) entryQualityScore += 10;
+  else entryQualityScore -= 14;
+
+  if (direction === "up") {
+    entryQualityScore += candidate.rsi >= 52 && candidate.rsi <= 64 ? 8 : -8;
+    entryQualityScore += candidate.cvdSlope > 0 ? 8 : -10;
+    entryQualityScore += candidate.takerRatio > 1.01 ? 6 : -6;
+    entryQualityScore += candidate.depthImbalance > 0.02 ? 5 : -5;
+    entryQualityScore += candidate.oiChange1h > 0 ? 5 : -3;
+    if (candidate.fundingRate > 0.03) entryQualityScore -= 8;
+  } else {
+    entryQualityScore += candidate.rsi <= 48 && candidate.rsi >= 34 ? 8 : -8;
+    entryQualityScore += candidate.cvdSlope < 0 ? 8 : -10;
+    entryQualityScore += candidate.takerRatio < 0.99 ? 6 : -6;
+    entryQualityScore += candidate.depthImbalance < -0.02 ? 5 : -5;
+    entryQualityScore += candidate.oiChange1h > 0 ? 5 : -3;
+    if (candidate.fundingRate < -0.03) entryQualityScore -= 8;
+  }
+
+  entryQualityScore += alignedCount >= 2 ? 16 : -20;
+  if (conflictCount > 0) entryQualityScore -= 10;
+  entryQualityScore += distanceFromEma20Pct <= 2.8 ? 4 : -8;
+  entryQualityScore += Math.abs(candidate.recentPriceChange) >= 0.8 ? 3 : -3;
+
+  return {
+    ...candidate,
+    quoteVolume,
+    confirmation,
+    alignedCount,
+    conflictCount,
+    entryQualityScore,
+    refinedQualityScore: candidate.qualityScore + entryQualityScore,
+  };
+}
+
 function selectUniverseBatch(universe) {
   const ranked = [...universe].sort((left, right) => {
     const rightTicker = universeTickerMap.get(right.symbol);
@@ -934,6 +1073,11 @@ function formatParameterLine(candidate, ticker) {
         RR ${candidate.rr.toFixed(2)} • target ${candidate.trade.targetReturnPct}% on margin •
         move ${formatPercent(candidate.trade.projectedMovePct)}
       </div>
+      <div class="monitor-subtle">
+        1H ${candidate.confirmation?.["1h"]?.label || "Queue"} • 4H ${
+          candidate.confirmation?.["4h"]?.label || "Queue"
+        } • entry score ${candidate.entryQualityScore ?? "--"}
+      </div>
     </div>
   `;
 }
@@ -943,7 +1087,7 @@ function buildMarketRows(universe) {
     .map((symbolInfo) => {
       const ticker = universeTickerMap.get(symbolInfo.symbol) || null;
       const analysis = analysisCache.get(symbolInfo.symbol) || null;
-      const qualityScore = analysis?.qualityScore ?? -1;
+      const qualityScore = analysis?.refinedQualityScore ?? analysis?.qualityScore ?? -1;
       return {
         symbol: symbolInfo.symbol,
         baseAsset: symbolInfo.baseAsset,
@@ -985,6 +1129,7 @@ function renderMarketTable(universe) {
         ? new Date(row.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
         : "Queue";
       const qualityLabel = row.qualityScore >= 0 ? `Q${row.qualityScore}` : "--";
+      const qualityQualified = row.qualityScore >= state.qualityThreshold + 10;
       return `
         <tr>
           <td>
@@ -995,7 +1140,7 @@ function renderMarketTable(universe) {
           <td class="${toneFromNumber(row.changePct, 0.15)}">${formatPercent(row.changePct)}</td>
           <td class="${row.biasTone}">${row.biasLabel}</td>
           <td>${row.parameters}</td>
-          <td class="monitor-quality ${row.qualityScore >= state.qualityThreshold ? "qualified" : ""}">${qualityLabel}</td>
+          <td class="monitor-quality ${qualityQualified ? "qualified" : ""}">${qualityLabel}</td>
         </tr>
       `;
     })
@@ -1027,6 +1172,18 @@ function logActivity(message, tone = "neutral") {
     tone,
   });
   state.activity = state.activity.slice(0, 24);
+}
+
+function applyStrategyUpgradeNotice() {
+  if (state.strategyVersion >= STRATEGY_VERSION) return;
+  if (state.closedTrades.length || state.openTrades.length) {
+    logActivity(
+      "Strategy model upgraded. Existing journal rows may include legacy trades; reset the simulation to evaluate the refined model cleanly.",
+      "neutral"
+    );
+  }
+  state.strategyVersion = STRATEGY_VERSION;
+  persistState();
 }
 
 function reservedMargin() {
@@ -1082,11 +1239,13 @@ function openTradeFromCandidate(candidate) {
     quantity,
     leverage,
     marginUsed: marginBudget,
-    qualityScore: candidate.qualityScore,
+    qualityScore: candidate.refinedQualityScore ?? candidate.qualityScore,
     biasScore: candidate.biasScore,
     targetReturnPct: candidate.trade.targetReturnPct,
     stopReturnPct: candidate.trade.stopReturnPct,
     pricePrecision: candidate.pricePrecision,
+    breakEvenArmed: false,
+    profitLockArmed: false,
     openedAt: Date.now(),
     balanceBefore,
     lastPrice: candidate.currentPrice,
@@ -1099,7 +1258,7 @@ function openTradeFromCandidate(candidate) {
     )} • TP ${formatPrice(candidate.trade.takeProfit, candidate.pricePrecision)} • SL ${formatPrice(
       candidate.trade.stopLoss,
       candidate.pricePrecision
-    )} • target ${candidate.trade.targetReturnPct}% on margin (${formatPercent(
+    )} • refined quality ${candidate.refinedQualityScore ?? candidate.qualityScore} • target ${candidate.trade.targetReturnPct}% on margin (${formatPercent(
       candidate.trade.projectedMovePct
     )} price move).`,
     candidate.trade.tone
@@ -1153,6 +1312,37 @@ function closeTrade(tradeId, reason, exitPrice, precisionHint) {
   );
 }
 
+function tightenTradeProtection(trade, candidate) {
+  const direction = trade.side === "Short" ? -1 : 1;
+  const targetDistance = Math.abs(trade.takeProfit - trade.entryPrice);
+  if (!Number.isFinite(targetDistance) || targetDistance <= 0) return;
+
+  const progress = Math.abs(candidate.currentPrice - trade.entryPrice) / targetDistance;
+  const breakevenStop = trade.entryPrice;
+  const lockedStop = trade.entryPrice + direction * targetDistance * 0.3;
+
+  if (progress >= 0.45 && !trade.breakEvenArmed) {
+    trade.stopLoss = breakevenStop;
+    trade.breakEvenArmed = true;
+    logActivity(
+      `Protected ${trade.symbol} by moving the stop to breakeven after early follow-through.`,
+      "neutral"
+    );
+  }
+
+  if (progress >= 0.75 && !trade.profitLockArmed) {
+    trade.stopLoss = lockedStop;
+    trade.profitLockArmed = true;
+    logActivity(
+      `Locked profit on ${trade.symbol}; stop advanced to ${formatPrice(
+        trade.stopLoss,
+        candidate.pricePrecision
+      )}.`,
+      direction === 1 ? "up" : "down"
+    );
+  }
+}
+
 function refreshOpenTrades(candidates) {
   if (!state.openTrades.length) return;
   const candidateMap = new Map(candidates.map((candidate) => [candidate.symbol, candidate]));
@@ -1164,6 +1354,7 @@ function refreshOpenTrades(candidates) {
 
     trade.lastPrice = candidate.currentPrice;
     trade.pricePrecision = candidate.pricePrecision;
+    tightenTradeProtection(trade, candidate);
     const hitTarget =
       trade.side === "Long"
         ? candidate.currentPrice >= trade.takeProfit
@@ -1213,7 +1404,7 @@ function summarizeEngine(candidates, threshold) {
     )}, TP ${formatPrice(best.trade.takeProfit, best.pricePrecision)}, and SL ${formatPrice(
       best.trade.stopLoss,
       best.pricePrecision
-    )}.`;
+    )}. Higher-timeframe confirmation is now required before a new trade opens.`;
   }
 
   return `${qualified.length} high-quality setups are live across the perp universe. ${best.symbol} leads with entry ${formatPrice(
@@ -1222,7 +1413,9 @@ function summarizeEngine(candidates, threshold) {
   )}, TP ${formatPrice(best.trade.takeProfit, best.pricePrecision)}, SL ${formatPrice(
     best.trade.stopLoss,
     best.pricePrecision
-  )}, and ${best.trade.targetReturnPct}% target return on margin (${formatPercent(
+  )}, refined quality ${best.refinedQualityScore ?? best.qualityScore}, and ${
+    best.trade.targetReturnPct
+  }% target return on margin (${formatPercent(
     best.trade.projectedMovePct
   )} price move).`;
 }
@@ -1283,13 +1476,17 @@ function renderDashboard(universe = []) {
 
   const candidateCards = state.lastCandidates.slice(0, 6).map((candidate) => ({
     label: candidate.symbol,
-    value: `${candidate.bias.label} • Q${candidate.qualityScore}`,
+    value: `${candidate.bias.label} • Q${candidate.refinedQualityScore ?? candidate.qualityScore}`,
     note: `Entry ${formatPrice(candidate.trade.entry, candidate.pricePrecision)} • TP ${formatPrice(
       candidate.trade.takeProfit,
       candidate.pricePrecision
     )} • SL ${formatPrice(candidate.trade.stopLoss, candidate.pricePrecision)} • target ${
       candidate.trade.targetReturnPct
-    }% • move ${formatPercent(candidate.trade.projectedMovePct)} • RR ${candidate.rr.toFixed(2)}`,
+    }% • move ${formatPercent(candidate.trade.projectedMovePct)} • RR ${
+      candidate.rr.toFixed(2)
+    } • 1H ${candidate.confirmation?.["1h"]?.label || "Queue"} • 4H ${
+      candidate.confirmation?.["4h"]?.label || "Queue"
+    }`,
     tone: candidate.bias.tone,
   }));
   renderAnalysisGrid(
@@ -1338,7 +1535,7 @@ function renderDashboard(universe = []) {
   renderTable(
     dom.tradeLogTable,
     state.closedTrades.slice(0, 12).map((trade) => ({
-      label: `${trade.symbol} • ${trade.reason}`,
+      label: `${trade.symbol} ${trade.side} • ${trade.reason}`,
       primary: `Entry ${formatPrice(trade.entryPrice, trade.pricePrecision || 2)} • Exit ${formatPrice(
         trade.exitPrice,
         trade.pricePrecision || 2
@@ -1406,9 +1603,50 @@ async function scanUniverse({ manual = false } = {}) {
       }
     });
 
-    const candidates = results
+    const rawCandidates = results
       .filter(Boolean)
       .sort((left, right) => right.qualityScore - left.qualityScore);
+
+    const confirmationSymbols = Array.from(
+      new Set([
+        ...rawCandidates.slice(0, 16).map((candidate) => candidate.symbol),
+        ...state.openTrades.map((trade) => trade.symbol),
+      ])
+    );
+
+    const confirmationResults = await mapWithConcurrency(
+      confirmationSymbols,
+      HTF_CONFIRMATION_CONCURRENCY,
+      async (symbol) => {
+        try {
+          return { symbol, summary: await fetchHigherTimeframeConfirmation(symbol) };
+        } catch (error) {
+          return {
+            symbol,
+            summary: {
+              "1h": { label: "Unavailable", tone: "neutral", score: 0, rsi: 50, changePct: 0 },
+              "4h": { label: "Unavailable", tone: "neutral", score: 0, rsi: 50, changePct: 0 },
+            },
+          };
+        }
+      }
+    );
+
+    const confirmationMap = new Map(confirmationResults.map((entry) => [entry.symbol, entry.summary]));
+
+    const candidates = rawCandidates
+      .map((candidate) =>
+        applyCandidateConfirmation(
+          candidate,
+          universeTickerMap.get(candidate.symbol) || null,
+          confirmationMap.get(candidate.symbol) || {}
+        )
+      )
+      .sort(
+        (left, right) =>
+          (right.refinedQualityScore ?? right.qualityScore) -
+          (left.refinedQualityScore ?? left.qualityScore)
+      );
 
     candidates.forEach((candidate) => {
       analysisCache.set(candidate.symbol, {
@@ -1418,7 +1656,11 @@ async function scanUniverse({ manual = false } = {}) {
     });
 
     state.lastCandidates = Array.from(analysisCache.values())
-      .sort((left, right) => right.qualityScore - left.qualityScore)
+      .sort(
+        (left, right) =>
+          (right.refinedQualityScore ?? right.qualityScore) -
+          (left.refinedQualityScore ?? left.qualityScore)
+      )
       .slice(0, 48);
     state.lastScanAt = Date.now();
 
@@ -1539,6 +1781,7 @@ if (dom.paperTabActivity) {
 }
 
 syncControls();
+applyStrategyUpgradeNotice();
 renderDashboard();
 scheduleAutoScan();
 scanUniverse();
