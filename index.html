@@ -16,47 +16,62 @@
   </head>
   <body class="dashboard-home">
     <div class="page-shell">
-      <header class="topbar">
-        <div>
-          <p class="eyebrow">Educational Dashboard</p>
-          <h1>Apex Signals</h1>
-          <p class="subtitle">
-            Futures-first dashboard for structure, leverage, order flow,
-            liquidation pressure, and short-horizon setups.
-          </p>
-          <div class="nav-links">
-            <a class="mini-button nav-link is-current" href="./index.html">Main Dashboard</a>
-            <a class="mini-button nav-link" href="./paper.html">Auto Paper Trader</a>
-            <a class="mini-button nav-link" href="./arena.html">Trading Arena</a>
-          </div>
+      <header class="app-header">
+        <div class="app-bar">
+          <a class="brand-block" href="./index.html">
+            <span class="brand-mark">AS</span>
+            <span class="brand-copy">
+              <strong>Apex Signals</strong>
+              <small>Gold Perps Suite</small>
+            </span>
+          </a>
+
+          <nav class="page-tabs" aria-label="Primary pages">
+            <a class="page-tab is-current" href="./index.html">Main Dashboard</a>
+            <a class="page-tab" href="./paper.html">Auto Paper Trader</a>
+            <a class="page-tab" href="./arena.html">Trading Arena</a>
+          </nav>
+
+          <div class="app-pill">Live Perps</div>
         </div>
 
-        <form id="token-form" class="token-form">
-          <label>
-            Token
-            <input
-              id="token-input"
-              name="token"
-              type="text"
-              placeholder="BTC"
-              value="BTC"
-              autocomplete="off"
-              spellcheck="false"
-            />
-          </label>
+        <div class="hero-shell">
+          <div class="hero-copy">
+            <p class="eyebrow">Main Dashboard</p>
+            <h1>Institutional perps workspace</h1>
+            <p class="subtitle">
+              Futures-first dashboard for structure, leverage, order flow,
+              liquidation pressure, and short-horizon setups.
+            </p>
+          </div>
 
-          <label>
-            Chart Interval
-            <select id="interval-select" name="interval">
-              <option value="5m">5m</option>
-              <option value="15m" selected>15m</option>
-              <option value="1h">1h</option>
-              <option value="4h">4h</option>
-            </select>
-          </label>
+          <form id="token-form" class="token-form hero-form">
+            <label>
+              Token
+              <input
+                id="token-input"
+                name="token"
+                type="text"
+                placeholder="BTC"
+                value="BTC"
+                autocomplete="off"
+                spellcheck="false"
+              />
+            </label>
 
-          <button type="submit">Load Dashboard</button>
-        </form>
+            <label>
+              Chart Interval
+              <select id="interval-select" name="interval">
+                <option value="5m">5m</option>
+                <option value="15m" selected>15m</option>
+                <option value="1h">1h</option>
+                <option value="4h">4h</option>
+              </select>
+            </label>
+
+            <button type="submit">Load Dashboard</button>
+          </form>
+        </div>
       </header>
 
       <div id="status-banner" class="status-banner">

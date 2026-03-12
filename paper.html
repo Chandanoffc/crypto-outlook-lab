@@ -15,50 +15,65 @@
   </head>
   <body class="paper-trader-page">
     <div class="page-shell">
-      <header class="topbar">
-        <div>
-          <p class="eyebrow">Auto Paper Trader</p>
-          <h1>Apex Signals</h1>
-          <p class="subtitle">
-            Automated paper-trading simulator. It scans the full Binance USDT
-            perp universe, can hold multiple high-quality paper positions,
-            starts at $200, and logs every TP or SL outcome.
-          </p>
-          <div class="nav-links">
-            <a class="mini-button nav-link" href="./index.html">Main Dashboard</a>
-            <a class="mini-button nav-link is-current" href="./paper.html">Auto Paper Trader</a>
-            <a class="mini-button nav-link" href="./arena.html">Trading Arena</a>
-          </div>
+      <header class="app-header">
+        <div class="app-bar">
+          <a class="brand-block" href="./index.html">
+            <span class="brand-mark">AS</span>
+            <span class="brand-copy">
+              <strong>Apex Signals</strong>
+              <small>Gold Perps Suite</small>
+            </span>
+          </a>
+
+          <nav class="page-tabs" aria-label="Primary pages">
+            <a class="page-tab" href="./index.html">Main Dashboard</a>
+            <a class="page-tab is-current" href="./paper.html">Auto Paper Trader</a>
+            <a class="page-tab" href="./arena.html">Trading Arena</a>
+          </nav>
+
+          <div class="app-pill">Auto Sim</div>
         </div>
 
-        <form id="auto-form" class="token-form token-form-wide">
-          <label>
-            Perp Universe
-            <input id="universe-input" type="text" value="All Binance USDT Perps" readonly />
-          </label>
+        <div class="hero-shell">
+          <div class="hero-copy">
+            <p class="eyebrow">Auto Paper Trader</p>
+            <h1>Automated paper execution desk</h1>
+            <p class="subtitle">
+              Automated paper-trading simulator. It scans the full Binance USDT
+              perp universe, can hold multiple high-quality paper positions,
+              starts at $200, and logs every TP or SL outcome.
+            </p>
+          </div>
 
-          <label>
-            Signal Interval
-            <select id="scan-interval">
-              <option value="5m">5m</option>
-              <option value="15m" selected>15m</option>
-              <option value="1h">1h</option>
-              <option value="4h">4h</option>
-            </select>
-          </label>
+          <form id="auto-form" class="token-form token-form-wide hero-form">
+            <label>
+              Perp Universe
+              <input id="universe-input" type="text" value="All Binance USDT Perps" readonly />
+            </label>
 
-          <label>
-            Min Quality
-            <input id="quality-threshold" type="number" min="50" max="95" step="1" value="68" />
-          </label>
+            <label>
+              Signal Interval
+              <select id="scan-interval">
+                <option value="5m">5m</option>
+                <option value="15m" selected>15m</option>
+                <option value="1h">1h</option>
+                <option value="4h">4h</option>
+              </select>
+            </label>
 
-          <label>
-            Universe Count
-            <input id="universe-count" type="text" value="Loading..." readonly />
-          </label>
+            <label>
+              Min Quality
+              <input id="quality-threshold" type="number" min="50" max="95" step="1" value="68" />
+            </label>
 
-          <button id="scan-button" type="submit">Run Scan</button>
-        </form>
+            <label>
+              Universe Count
+              <input id="universe-count" type="text" value="Loading..." readonly />
+            </label>
+
+            <button id="scan-button" type="submit">Run Scan</button>
+          </form>
+        </div>
       </header>
 
       <div id="paper-status-banner" class="status-banner">
