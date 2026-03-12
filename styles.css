@@ -8,27 +8,31 @@
 }
 
 :root {
-  --page-bg: #020202;
-  --page-bg-soft: #0b0905;
-  --panel-bg: rgba(11, 9, 7, 0.92);
-  --panel-bg-strong: rgba(16, 13, 10, 0.96);
-  --panel-edge: rgba(176, 135, 54, 0.28);
-  --panel-edge-soft: rgba(176, 135, 54, 0.14);
-  --text-main: #f8f2e3;
-  --text-soft: #b7ab8e;
-  --text-dim: #7d735f;
-  --orange: #d5a13c;
-  --orange-soft: rgba(213, 161, 60, 0.16);
-  --orange-glow: rgba(213, 161, 60, 0.2);
+  --page-bg: #04070d;
+  --page-bg-soft: #0b1220;
+  --panel-bg: rgba(10, 14, 22, 0.92);
+  --panel-bg-strong: rgba(12, 18, 28, 0.96);
+  --panel-edge: rgba(84, 136, 220, 0.22);
+  --panel-edge-soft: rgba(84, 136, 220, 0.12);
+  --text-main: #edf3ff;
+  --text-soft: #9eb1c9;
+  --text-dim: #66748a;
+  --orange: #eef5ff;
+  --orange-soft: rgba(98, 208, 255, 0.14);
+  --orange-glow: rgba(98, 208, 255, 0.18);
+  --tab-accent: #67d5ff;
+  --tab-accent-soft: rgba(103, 213, 255, 0.16);
+  --tab-accent-edge: rgba(103, 213, 255, 0.34);
+  --tab-accent-glow: rgba(103, 213, 255, 0.14);
   --green: #35c282;
   --green-soft: rgba(53, 194, 130, 0.12);
   --green-edge: rgba(53, 194, 130, 0.22);
   --red: #e04c4c;
   --red-soft: rgba(224, 76, 76, 0.14);
   --red-edge: rgba(224, 76, 76, 0.24);
-  --neutral: #6aa889;
-  --neutral-soft: rgba(106, 168, 137, 0.12);
-  --neutral-edge: rgba(106, 168, 137, 0.18);
+  --neutral: #87a1c8;
+  --neutral-soft: rgba(135, 161, 200, 0.12);
+  --neutral-edge: rgba(135, 161, 200, 0.18);
   --font-stack:
     "Prima Sans Mono Std",
     "SFMono-Regular",
@@ -55,10 +59,10 @@ body {
   font-family: var(--body-font, var(--font-stack));
   color: var(--text-main);
   background:
-    radial-gradient(circle at top right, rgba(176, 135, 54, 0.12), transparent 22%),
-    radial-gradient(circle at 12% 16%, rgba(176, 135, 54, 0.08), transparent 24%),
-    radial-gradient(circle at bottom left, rgba(176, 135, 54, 0.05), transparent 28%),
-    linear-gradient(180deg, #010101 0%, #080604 40%, #020201 100%);
+    radial-gradient(circle at top right, rgba(52, 108, 205, 0.16), transparent 22%),
+    radial-gradient(circle at 12% 16%, rgba(32, 202, 255, 0.09), transparent 24%),
+    radial-gradient(circle at bottom left, rgba(67, 103, 196, 0.08), transparent 28%),
+    linear-gradient(180deg, #03060c 0%, #09111d 42%, #04070d 100%);
 }
 
 body.dashboard-home {
@@ -128,12 +132,12 @@ select {
   border: 1px solid var(--panel-edge);
   border-radius: 24px;
   background:
-    linear-gradient(180deg, rgba(176, 135, 54, 0.08), transparent 58%),
-    rgba(8, 7, 5, 0.88);
+    linear-gradient(180deg, rgba(91, 146, 228, 0.08), transparent 58%),
+    rgba(8, 12, 18, 0.88);
   box-shadow:
-    inset 0 0 0 1px rgba(176, 135, 54, 0.04),
+    inset 0 0 0 1px rgba(91, 146, 228, 0.04),
     0 16px 34px rgba(0, 0, 0, 0.28),
-    0 0 18px rgba(176, 135, 54, 0.04);
+    0 0 18px rgba(91, 146, 228, 0.05);
   backdrop-filter: blur(16px);
 }
 
@@ -151,16 +155,16 @@ select {
   display: grid;
   place-items: center;
   border-radius: 14px;
-  border: 1px solid rgba(213, 161, 60, 0.3);
+  border: 1px solid var(--tab-accent-edge);
   background:
-    linear-gradient(180deg, rgba(213, 161, 60, 0.22), rgba(48, 31, 9, 0.95));
+    linear-gradient(180deg, rgba(103, 213, 255, 0.2), rgba(14, 24, 43, 0.95));
   box-shadow:
-    inset 0 0 0 1px rgba(213, 161, 60, 0.06),
-    0 0 18px rgba(213, 161, 60, 0.08);
+    inset 0 0 0 1px rgba(103, 213, 255, 0.06),
+    0 0 18px rgba(103, 213, 255, 0.08);
   font-family: var(--display-font);
   font-size: 0.82rem;
   letter-spacing: 0.08em;
-  color: #f4d996;
+  color: #dcf7ff;
 }
 
 .brand-copy {
@@ -172,7 +176,7 @@ select {
   font-family: var(--display-font);
   font-size: 1.02rem;
   letter-spacing: 0.05em;
-  color: var(--orange);
+  color: #edf5ff;
 }
 
 .brand-copy small {
@@ -191,11 +195,11 @@ select {
   border: 1px solid var(--panel-edge-soft);
   border-radius: 22px;
   background:
-    linear-gradient(180deg, rgba(176, 135, 54, 0.05), transparent 65%),
-    rgba(6, 5, 4, 0.92);
+    linear-gradient(180deg, rgba(91, 146, 228, 0.05), transparent 65%),
+    rgba(7, 11, 18, 0.92);
   box-shadow:
-    inset 0 0 0 1px rgba(176, 135, 54, 0.03),
-    0 0 14px rgba(176, 135, 54, 0.04);
+    inset 0 0 0 1px rgba(91, 146, 228, 0.03),
+    0 0 14px rgba(91, 146, 228, 0.04);
 }
 
 .page-tab {
@@ -224,14 +228,14 @@ select {
 }
 
 .page-tab.is-current {
-  border-color: rgba(213, 161, 60, 0.34);
+  border-color: var(--tab-accent-edge);
   background:
-    linear-gradient(180deg, rgba(213, 161, 60, 0.2), rgba(47, 31, 9, 0.96));
-  color: #fff4d6;
+    linear-gradient(180deg, rgba(103, 213, 255, 0.16), rgba(12, 22, 38, 0.96));
+  color: #effaff;
   box-shadow:
-    inset 0 0 0 1px rgba(213, 161, 60, 0.05),
+    inset 0 0 0 1px rgba(103, 213, 255, 0.05),
     0 10px 18px rgba(0, 0, 0, 0.24),
-    0 0 16px rgba(213, 161, 60, 0.1);
+    0 0 16px rgba(103, 213, 255, 0.12);
 }
 
 .app-pill {
@@ -243,9 +247,9 @@ select {
   border-radius: 16px;
   border: 1px solid var(--panel-edge-soft);
   background:
-    linear-gradient(180deg, rgba(176, 135, 54, 0.08), transparent 65%),
-    rgba(10, 8, 6, 0.88);
-  color: #f1d18a;
+    linear-gradient(180deg, rgba(91, 146, 228, 0.08), transparent 65%),
+    rgba(9, 13, 21, 0.88);
+  color: #a8dfff;
   font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -260,13 +264,13 @@ select {
   border: 1px solid var(--panel-edge);
   border-radius: 28px;
   background:
-    radial-gradient(circle at 72% 76%, rgba(176, 135, 54, 0.08), transparent 28%),
-    linear-gradient(180deg, rgba(176, 135, 54, 0.06), transparent 52%),
-    linear-gradient(180deg, rgba(9, 8, 6, 0.96), rgba(4, 4, 3, 0.94));
+    radial-gradient(circle at 72% 76%, rgba(46, 112, 214, 0.08), transparent 28%),
+    linear-gradient(180deg, rgba(91, 146, 228, 0.06), transparent 52%),
+    linear-gradient(180deg, rgba(8, 12, 18, 0.96), rgba(4, 7, 12, 0.94));
   box-shadow:
-    inset 0 0 0 1px rgba(176, 135, 54, 0.03),
+    inset 0 0 0 1px rgba(91, 146, 228, 0.03),
     0 18px 42px rgba(0, 0, 0, 0.34),
-    0 0 20px rgba(176, 135, 54, 0.05);
+    0 0 20px rgba(91, 146, 228, 0.05);
 }
 
 .hero-copy {
@@ -291,11 +295,11 @@ select {
   border: 1px solid var(--panel-edge-soft);
   border-radius: 22px;
   background:
-    linear-gradient(180deg, rgba(176, 135, 54, 0.08), transparent 62%),
-    rgba(8, 7, 5, 0.82);
+    linear-gradient(180deg, rgba(91, 146, 228, 0.08), transparent 62%),
+    rgba(8, 12, 18, 0.82);
   box-shadow:
-    inset 0 0 0 1px rgba(176, 135, 54, 0.03),
-    0 0 18px rgba(176, 135, 54, 0.04);
+    inset 0 0 0 1px rgba(91, 146, 228, 0.03),
+    0 0 18px rgba(91, 146, 228, 0.04);
 }
 
 .topbar {
@@ -313,7 +317,7 @@ select {
   text-transform: uppercase;
   font-size: 0.68rem;
   font-weight: 800;
-  color: #cfb56b;
+  color: #78cfff;
 }
 
 .topbar h1,
@@ -336,7 +340,7 @@ select {
   line-height: 1.02;
   letter-spacing: 0.04em;
   color: var(--orange);
-  text-shadow: 0 0 20px rgba(213, 161, 60, 0.12);
+  text-shadow: 0 0 20px rgba(103, 213, 255, 0.12);
 }
 
 .subtitle {
@@ -371,9 +375,9 @@ select {
   font-weight: 700;
   transform: translateY(-1px);
   box-shadow:
-    inset 0 0 0 1px rgba(213, 161, 60, 0.06),
+    inset 0 0 0 1px rgba(103, 213, 255, 0.06),
     0 12px 24px rgba(0, 0, 0, 0.24),
-    0 0 18px rgba(213, 161, 60, 0.08);
+    0 0 18px rgba(103, 213, 255, 0.08);
 }
 
 .nav-links .mini-button:hover {
@@ -381,13 +385,13 @@ select {
 }
 
 .nav-links .mini-button.is-current {
-  border-color: rgba(213, 161, 60, 0.5);
+  border-color: var(--tab-accent-edge);
   background:
-    linear-gradient(180deg, rgba(213, 161, 60, 0.22), rgba(52, 35, 12, 0.96));
+    linear-gradient(180deg, rgba(103, 213, 255, 0.18), rgba(12, 22, 38, 0.96));
   box-shadow:
-    inset 0 0 0 1px rgba(213, 161, 60, 0.08),
+    inset 0 0 0 1px rgba(103, 213, 255, 0.08),
     0 14px 26px rgba(0, 0, 0, 0.26),
-    0 0 20px rgba(213, 161, 60, 0.12);
+    0 0 20px rgba(103, 213, 255, 0.12);
 }
 
 body.dashboard-home .topbar h1 {
@@ -470,12 +474,12 @@ body.dashboard-home .mini-button {
 .token-form select {
   border: 1px solid var(--panel-edge);
   background:
-    linear-gradient(180deg, rgba(176, 135, 54, 0.08), transparent 70%),
-    rgba(9, 8, 6, 0.94);
+    linear-gradient(180deg, rgba(91, 146, 228, 0.08), transparent 70%),
+    rgba(8, 12, 18, 0.94);
   color: var(--text-main);
   box-shadow:
-    inset 0 0 0 1px rgba(176, 135, 54, 0.04),
-    0 0 16px rgba(176, 135, 54, 0.04);
+    inset 0 0 0 1px rgba(91, 146, 228, 0.04),
+    0 0 16px rgba(91, 146, 228, 0.04);
 }
 
 .token-form input:focus,
@@ -488,14 +492,14 @@ body.dashboard-home .mini-button {
 }
 
 .token-form button {
-  border: 1px solid rgba(176, 135, 54, 0.34);
+  border: 1px solid var(--tab-accent-edge);
   font-weight: 800;
-  color: #201709;
+  color: #04111a;
   background:
-    linear-gradient(180deg, #e0b65c 0%, #c8942d 56%, #9e6d18 100%);
+    linear-gradient(180deg, #86e4ff 0%, #47aeff 54%, #2f5fd1 100%);
   box-shadow:
-    0 10px 20px rgba(20, 14, 6, 0.3),
-    0 0 16px rgba(176, 135, 54, 0.08);
+    0 10px 20px rgba(5, 10, 18, 0.34),
+    0 0 16px rgba(103, 213, 255, 0.1);
   cursor: pointer;
   transition:
     transform 150ms ease,
@@ -507,8 +511,8 @@ body.dashboard-home .mini-button {
   transform: translateY(-1px);
   filter: brightness(1.02);
   box-shadow:
-    0 14px 24px rgba(20, 14, 6, 0.34),
-    0 0 20px rgba(176, 135, 54, 0.1);
+    0 14px 24px rgba(5, 10, 18, 0.38),
+    0 0 20px rgba(103, 213, 255, 0.12);
 }
 
 .status-banner {
@@ -517,12 +521,12 @@ body.dashboard-home .mini-button {
   border-radius: 18px;
   border: 1px solid var(--panel-edge);
   background:
-    linear-gradient(90deg, rgba(176, 135, 54, 0.14), transparent 46%),
-    rgba(10, 8, 6, 0.86);
+    linear-gradient(90deg, rgba(91, 146, 228, 0.14), transparent 46%),
+    rgba(8, 12, 18, 0.86);
   color: var(--text-soft);
   box-shadow:
-    inset 0 0 0 1px rgba(176, 135, 54, 0.03),
-    0 0 22px rgba(176, 135, 54, 0.04);
+    inset 0 0 0 1px rgba(91, 146, 228, 0.03),
+    0 0 22px rgba(91, 146, 228, 0.04);
   backdrop-filter: blur(18px);
 }
 
@@ -531,7 +535,7 @@ body.dashboard-home .mini-button {
   border-color: var(--green-edge);
   background:
     linear-gradient(90deg, rgba(53, 194, 130, 0.1), transparent 50%),
-    rgba(10, 8, 6, 0.86);
+    rgba(8, 12, 18, 0.86);
 }
 
 .status-banner.down {
@@ -539,7 +543,7 @@ body.dashboard-home .mini-button {
   border-color: var(--red-edge);
   background:
     linear-gradient(90deg, rgba(224, 76, 76, 0.14), transparent 50%),
-    rgba(10, 8, 6, 0.86);
+    rgba(8, 12, 18, 0.86);
 }
 
 .status-banner.neutral {
@@ -560,13 +564,13 @@ body.dashboard-home .mini-button {
   border: 1px solid var(--panel-edge);
   border-radius: 24px;
   background:
-    linear-gradient(180deg, rgba(176, 135, 54, 0.05), transparent 42%),
-    linear-gradient(180deg, rgba(10, 8, 6, 0.97), rgba(3, 3, 2, 0.95));
+    linear-gradient(180deg, rgba(91, 146, 228, 0.05), transparent 42%),
+    linear-gradient(180deg, rgba(8, 12, 18, 0.97), rgba(4, 7, 12, 0.95));
   box-shadow:
-    inset 0 0 0 1px rgba(176, 135, 54, 0.04),
-    0 0 0 1px rgba(176, 135, 54, 0.02),
+    inset 0 0 0 1px rgba(91, 146, 228, 0.04),
+    0 0 0 1px rgba(91, 146, 228, 0.02),
     0 20px 52px rgba(0, 0, 0, 0.42),
-    0 0 24px rgba(176, 135, 54, 0.04);
+    0 0 24px rgba(91, 146, 228, 0.04);
   backdrop-filter: blur(18px);
 }
 
@@ -578,7 +582,7 @@ body.dashboard-home .mini-button {
   width: 240px;
   height: 240px;
   border-radius: 999px;
-  background: radial-gradient(circle, rgba(176, 135, 54, 0.12), transparent 70%);
+  background: radial-gradient(circle, rgba(91, 146, 228, 0.12), transparent 70%);
   pointer-events: none;
   opacity: 0.72;
 }
@@ -591,7 +595,7 @@ body.dashboard-home .mini-button {
   width: 260px;
   height: 260px;
   border-radius: 999px;
-  background: radial-gradient(circle, rgba(176, 135, 54, 0.05), transparent 72%);
+  background: radial-gradient(circle, rgba(91, 146, 228, 0.05), transparent 72%);
   pointer-events: none;
 }
 
@@ -650,11 +654,11 @@ body.dashboard-home .mini-button {
 .trade-idea-stat {
   border: 1px solid var(--panel-edge-soft);
   background:
-    linear-gradient(180deg, rgba(176, 135, 54, 0.05), transparent 50%),
-    rgba(9, 8, 6, 0.86);
+    linear-gradient(180deg, rgba(91, 146, 228, 0.05), transparent 50%),
+    rgba(8, 12, 18, 0.86);
   box-shadow:
-    inset 0 0 0 1px rgba(176, 135, 54, 0.02),
-    0 0 16px rgba(176, 135, 54, 0.03);
+    inset 0 0 0 1px rgba(91, 146, 228, 0.02),
+    0 0 16px rgba(91, 146, 228, 0.03);
 }
 
 .headline-chip {
@@ -720,13 +724,13 @@ body.dashboard-home .mini-button {
   height: 430px;
   border-radius: 20px;
   overflow: hidden;
-  border: 1px solid rgba(176, 135, 54, 0.14);
+  border: 1px solid rgba(84, 136, 220, 0.14);
   background:
-    linear-gradient(180deg, rgba(176, 135, 54, 0.04), transparent 45%),
-    #040302;
+    linear-gradient(180deg, rgba(91, 146, 228, 0.04), transparent 45%),
+    #050913;
   box-shadow:
-    inset 0 0 0 1px rgba(176, 135, 54, 0.02),
-    0 0 20px rgba(176, 135, 54, 0.04);
+    inset 0 0 0 1px rgba(91, 146, 228, 0.02),
+    0 0 20px rgba(91, 146, 228, 0.04);
 }
 
 .chart-hud {
@@ -767,13 +771,13 @@ body.dashboard-home .mini-button {
   margin-top: 14px;
   padding: 14px 16px;
   border-radius: 18px;
-  border-color: rgba(213, 161, 60, 0.42);
+  border-color: var(--tab-accent-edge);
   background:
-    linear-gradient(180deg, rgba(213, 161, 60, 0.16), transparent 52%),
-    rgba(12, 9, 6, 0.92);
+    linear-gradient(180deg, rgba(103, 213, 255, 0.14), transparent 52%),
+    rgba(10, 15, 24, 0.92);
   box-shadow:
-    inset 0 0 0 1px rgba(213, 161, 60, 0.08),
-    0 0 26px rgba(213, 161, 60, 0.12);
+    inset 0 0 0 1px rgba(103, 213, 255, 0.08),
+    0 0 26px rgba(103, 213, 255, 0.1);
 }
 
 .trade-idea-head {
@@ -784,7 +788,7 @@ body.dashboard-home .mini-button {
 }
 
 .trade-idea-card .stack-label {
-  color: #f0cd74;
+  color: #8fdfff;
 }
 
 .trade-actions {
@@ -797,24 +801,24 @@ body.dashboard-home .mini-button {
   display: block;
   margin-top: 6px;
   font-size: 0.74rem;
-  color: #d6bc7a;
+  color: #8cb4d5;
 }
 
 .trade-refresh-button {
   min-height: 34px;
   padding: 0 12px;
   border-radius: 999px;
-  border: 1px solid rgba(213, 161, 60, 0.4);
+  border: 1px solid var(--tab-accent-edge);
   background:
-    linear-gradient(180deg, rgba(232, 191, 96, 0.2), rgba(47, 31, 9, 0.92));
-  color: #fbf2d8;
-  box-shadow: 0 0 18px rgba(213, 161, 60, 0.12);
+    linear-gradient(180deg, rgba(103, 213, 255, 0.18), rgba(14, 24, 43, 0.92));
+  color: #ebfaff;
+  box-shadow: 0 0 18px rgba(103, 213, 255, 0.12);
   cursor: pointer;
 }
 
 .trade-refresh-button:hover {
   filter: brightness(1.03);
-  box-shadow: 0 0 22px rgba(213, 161, 60, 0.18);
+  box-shadow: 0 0 22px rgba(103, 213, 255, 0.18);
 }
 
 .trade-idea-grid {
@@ -857,8 +861,8 @@ body.dashboard-home .mini-button {
   border-radius: 18px;
   border: 1px solid var(--panel-edge-soft);
   background:
-    linear-gradient(180deg, rgba(176, 135, 54, 0.05), transparent 50%),
-    rgba(9, 8, 6, 0.8);
+    linear-gradient(180deg, rgba(91, 146, 228, 0.05), transparent 50%),
+    rgba(8, 12, 18, 0.8);
 }
 
 .stack-label {
@@ -937,7 +941,7 @@ body.dashboard-home .mini-button {
   place-items: center;
   font-weight: 800;
   font-size: 0.98rem;
-  box-shadow: 0 0 14px rgba(176, 135, 54, 0.05);
+  box-shadow: 0 0 14px rgba(91, 146, 228, 0.05);
 }
 
 .stream-status {
@@ -1044,11 +1048,11 @@ body.dashboard-home .mini-button {
   border-radius: 20px;
   border: 1px solid var(--panel-edge-soft);
   background:
-    linear-gradient(180deg, rgba(176, 135, 54, 0.04), transparent 52%),
-    rgba(9, 8, 6, 0.78);
+    linear-gradient(180deg, rgba(91, 146, 228, 0.04), transparent 52%),
+    rgba(8, 12, 18, 0.78);
   box-shadow:
-    inset 0 0 0 1px rgba(176, 135, 54, 0.02),
-    0 0 18px rgba(176, 135, 54, 0.03);
+    inset 0 0 0 1px rgba(91, 146, 228, 0.02),
+    0 0 18px rgba(91, 146, 228, 0.03);
 }
 
 .subpanel .panel-label {
@@ -1121,8 +1125,8 @@ body.dashboard-home .mini-button {
   border: 1px solid var(--panel-edge-soft);
   border-radius: 18px;
   background:
-    linear-gradient(180deg, rgba(176, 135, 54, 0.05), transparent 55%),
-    rgba(9, 8, 6, 0.82);
+    linear-gradient(180deg, rgba(91, 146, 228, 0.05), transparent 55%),
+    rgba(8, 12, 18, 0.82);
 }
 
 .monitor-table table {
@@ -1152,14 +1156,14 @@ body.paper-trader-page .panel-monitor-large .monitor-symbol {
   position: sticky;
   top: 0;
   z-index: 1;
-  background: rgba(14, 11, 8, 0.96);
+  background: rgba(9, 13, 21, 0.96);
 }
 
 .monitor-table th,
 .monitor-table td {
   padding: 12px 14px;
   text-align: left;
-  border-bottom: 1px solid rgba(176, 135, 54, 0.08);
+  border-bottom: 1px solid rgba(84, 136, 220, 0.08);
   vertical-align: top;
 }
 
@@ -1167,7 +1171,7 @@ body.paper-trader-page .panel-monitor-large .monitor-symbol {
   font-size: 0.78rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #cfb56b;
+  color: #78cfff;
 }
 
 .monitor-table td {
@@ -1176,7 +1180,7 @@ body.paper-trader-page .panel-monitor-large .monitor-symbol {
 }
 
 .monitor-table tbody tr:hover {
-  background: rgba(213, 161, 60, 0.05);
+  background: rgba(103, 213, 255, 0.05);
 }
 
 .monitor-symbol {
@@ -1202,7 +1206,7 @@ body.paper-trader-page .panel-monitor-large .monitor-symbol {
 }
 
 .monitor-quality.qualified {
-  color: #f3d487;
+  color: #8fdfff;
 }
 
 .monitor-empty {
@@ -1242,8 +1246,8 @@ body.paper-trader-page .panel-monitor-large .monitor-symbol {
   border: 1px solid var(--panel-edge-soft);
   border-radius: 20px;
   background:
-    linear-gradient(180deg, rgba(176, 135, 54, 0.04), transparent 68%),
-    rgba(8, 7, 5, 0.8);
+    linear-gradient(180deg, rgba(91, 146, 228, 0.04), transparent 68%),
+    rgba(8, 12, 18, 0.8);
 }
 
 .feed-tab {
@@ -1254,12 +1258,12 @@ body.paper-trader-page .panel-monitor-large .monitor-symbol {
 }
 
 .feed-tab.is-active {
-  border-color: rgba(213, 161, 60, 0.48);
+  border-color: var(--tab-accent-edge);
   background:
-    linear-gradient(180deg, rgba(213, 161, 60, 0.2), rgba(47, 31, 9, 0.94));
+    linear-gradient(180deg, rgba(103, 213, 255, 0.14), rgba(13, 22, 39, 0.94));
   box-shadow:
-    inset 0 0 0 1px rgba(213, 161, 60, 0.08),
-    0 0 18px rgba(213, 161, 60, 0.12);
+    inset 0 0 0 1px rgba(103, 213, 255, 0.08),
+    0 0 18px rgba(103, 213, 255, 0.12);
 }
 
 .news-item {
@@ -1306,12 +1310,12 @@ body.paper-trader-page .panel-monitor-large .monitor-symbol {
   min-height: 34px;
   padding: 0 12px;
   border-radius: 999px;
-  border: 1px solid rgba(213, 161, 60, 0.28);
+  border: 1px solid var(--tab-accent-edge);
   background:
-    linear-gradient(180deg, rgba(213, 161, 60, 0.14), rgba(31, 20, 6, 0.92));
+    linear-gradient(180deg, rgba(103, 213, 255, 0.12), rgba(11, 19, 34, 0.92));
   color: var(--text-main);
   cursor: pointer;
-  box-shadow: 0 0 14px rgba(213, 161, 60, 0.08);
+  box-shadow: 0 0 14px rgba(103, 213, 255, 0.08);
   transition:
     transform 150ms ease,
     box-shadow 150ms ease,
@@ -1322,7 +1326,7 @@ body.paper-trader-page .panel-monitor-large .monitor-symbol {
 .mini-form button:hover {
   transform: translateY(-1px);
   filter: brightness(1.03);
-  box-shadow: 0 0 18px rgba(213, 161, 60, 0.12);
+  box-shadow: 0 0 18px rgba(103, 213, 255, 0.12);
 }
 
 .replay-meta,
@@ -1360,8 +1364,8 @@ body.paper-trader-page .panel-monitor-large .monitor-symbol {
   padding: 0 12px;
   border: 1px solid var(--panel-edge);
   background:
-    linear-gradient(180deg, rgba(176, 135, 54, 0.08), transparent 70%),
-    rgba(9, 8, 6, 0.94);
+    linear-gradient(180deg, rgba(91, 146, 228, 0.08), transparent 70%),
+    rgba(8, 12, 18, 0.94);
   color: var(--text-main);
 }
 
@@ -1386,15 +1390,15 @@ body.paper-trader-page .panel-monitor-large .monitor-symbol {
   border-radius: 16px;
   border: 1px solid var(--panel-edge);
   background:
-    linear-gradient(180deg, rgba(176, 135, 54, 0.08), transparent 70%),
-    rgba(9, 8, 6, 0.94);
+    linear-gradient(180deg, rgba(91, 146, 228, 0.08), transparent 70%),
+    rgba(8, 12, 18, 0.94);
   color: var(--text-main);
 }
 
 .checkbox-inline input {
   width: 16px;
   height: 16px;
-  accent-color: #d5a13c;
+  accent-color: #67d5ff;
 }
 
 .stack-list {
@@ -1407,8 +1411,8 @@ body.paper-trader-page .panel-monitor-large .monitor-symbol {
   border-radius: 16px;
   padding: 12px 14px;
   background:
-    linear-gradient(180deg, rgba(176, 135, 54, 0.05), transparent 50%),
-    rgba(9, 8, 6, 0.84);
+    linear-gradient(180deg, rgba(91, 146, 228, 0.05), transparent 50%),
+    rgba(8, 12, 18, 0.84);
 }
 
 .stack-card strong,
@@ -1453,8 +1457,8 @@ body.paper-trader-page .panel-monitor-large .monitor-symbol {
   border-radius: 16px;
   padding: 10px 12px;
   background:
-    linear-gradient(180deg, rgba(176, 135, 54, 0.04), transparent 50%),
-    rgba(9, 8, 6, 0.72);
+    linear-gradient(180deg, rgba(91, 146, 228, 0.04), transparent 50%),
+    rgba(8, 12, 18, 0.72);
 }
 
 .heatmap-row-head,
@@ -1494,7 +1498,7 @@ body.paper-trader-page .panel-monitor-large .monitor-symbol {
 }
 
 .heatmap-fill.neutral {
-  background: linear-gradient(90deg, rgba(213, 161, 60, 0.2), rgba(213, 161, 60, 0.7));
+  background: linear-gradient(90deg, rgba(103, 213, 255, 0.2), rgba(103, 213, 255, 0.7));
 }
 
 @media (max-width: 1180px) {
