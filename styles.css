@@ -746,14 +746,14 @@ body.dashboard-home .mini-button {
 
 .chart-series-label {
   position: absolute;
-  right: 98px;
-  transform: translateY(-50%);
-  min-width: 78px;
-  padding: 6px 10px;
+  left: 0;
+  transform: translate(-50%, -100%);
+  min-width: 44px;
+  padding: 4px 8px;
   border-radius: 999px;
   border: 1px solid transparent;
   font-family: var(--ui-font);
-  font-size: 0.72rem;
+  font-size: 0.66rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-align: center;
@@ -1757,10 +1757,9 @@ body.paper-trader-page .panel-monitor-large .monitor-symbol {
   }
 
   .chart-series-label {
-    right: 72px;
-    min-width: 68px;
-    padding: 5px 8px;
-    font-size: 0.68rem;
+    min-width: 40px;
+    padding: 4px 7px;
+    font-size: 0.62rem;
   }
 
   .table-row {

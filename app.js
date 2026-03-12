@@ -1685,13 +1685,27 @@ function hideChartSeriesLabels() {
   if (dom.chartLineLabelEma50) dom.chartLineLabelEma50.hidden = true;
 }
 
-function renderChartSeriesLabels(ema20Value = null, ema50Value = null) {
+function applyTrapMarkers(markers = []) {
+  if (!candleSeries || typeof candleSeries.setMarkers !== "function") return;
+  candleSeries.setMarkers(markers);
+}
+
+function renderChartSeriesLabels(ema20Value = null, ema50Value = null, anchorTime = null) {
   if (!chart || !ema20LineSeries || !ema50LineSeries) {
     hideChartSeriesLabels();
     return;
   }
 
   window.requestAnimationFrame(() => {
+    const latestTime = anchorTime ?? state.candles[state.candles.length - 1]?.time ?? null;
+    const chartWidth = dom.chart.clientWidth;
+    const xCoordinate = Number.isFinite(latestTime)
+      ? chart.timeScale().timeToCoordinate(latestTime)
+      : null;
+    const labelX = Number.isFinite(xCoordinate)
+      ? Math.max(44, Math.min(chartWidth - 88, xCoordinate - 14))
+      : chartWidth - 110;
+
     const labelEntries = [
       {
         element: dom.chartLineLabelEma20,
@@ -1706,9 +1720,9 @@ function renderChartSeriesLabels(ema20Value = null, ema50Value = null) {
     ];
 
     const chartHeight = dom.chart.clientHeight;
-    const minGap = 28;
-    const topPadding = 18;
-    const bottomPadding = 18;
+    const minGap = 24;
+    const topPadding = 26;
+    const bottomPadding = 14;
 
     const active = labelEntries
       .map((entry) => {
@@ -1732,7 +1746,7 @@ function renderChartSeriesLabels(ema20Value = null, ema50Value = null) {
 
     const positioned = [];
     active.forEach((entry, index) => {
-      let y = Math.max(topPadding, Math.min(chartHeight - bottomPadding, entry.y));
+      let y = Math.max(topPadding, Math.min(chartHeight - bottomPadding, entry.y - 6));
       if (index > 0 && y - positioned[index - 1].y < minGap) {
         y = positioned[index - 1].y + minGap;
       }
@@ -1752,6 +1766,7 @@ function renderChartSeriesLabels(ema20Value = null, ema50Value = null) {
 
     positioned.forEach((entry) => {
       entry.element.hidden = false;
+      entry.element.style.left = `${labelX}px`;
       entry.element.style.top = `${entry.y}px`;
     });
   });
@@ -1792,7 +1807,11 @@ function syncChartTaSeries(derived) {
   if (!ema20LineSeries || !ema50LineSeries) return;
   ema20LineSeries.setData(derived.ema20LineData);
   ema50LineSeries.setData(derived.ema50LineData);
-  renderChartSeriesLabels(derived.latestEma20, derived.latestEma50);
+  renderChartSeriesLabels(
+    derived.latestEma20,
+    derived.latestEma50,
+    derived.ema20LineData[derived.ema20LineData.length - 1]?.time || state.candles[state.candles.length - 1]?.time
+  );
   renderChartTaHud({
     ema20Value: derived.latestEma20,
     ema50Value: derived.latestEma50,
@@ -2386,6 +2405,156 @@ function analyzeForceOrders(forceOrders, currentPrice, latestAtr) {
   };
 }
 
+function nearestLevelDistance(levels, price) {
+  if (!Array.isArray(levels) || !levels.length || !Number.isFinite(price)) return Infinity;
+  return levels.reduce((closest, level) => Math.min(closest, Math.abs(level - price)), Infinity);
+}
+
+function nearbyForceNotional(orders, side, price, band) {
+  return (orders || []).reduce((sum, order) => {
+    if (order.side !== side) return sum;
+    if (Math.abs(Number(order.price) - price) > band) return sum;
+    return sum + Number(order.notional || 0);
+  }, 0);
+}
+
+function buildTrapSignals(context) {
+  const candles = context.candles || [];
+  if (candles.length < 18) {
+    return {
+      markers: [],
+      leadTrap: null,
+      summary: {
+        label: "No active trap",
+        value: "Waiting",
+        note: "Need more structure before a reliable long or short trap can be marked.",
+        tone: "neutral",
+      },
+    };
+  }
+
+  const lookbackWindow = 8;
+  const recentWindow = Math.min(72, candles.length - 1);
+  const sweepThreshold = Math.max(context.latestAtr * 0.14, context.currentPrice * 0.0012);
+  const liquidityBand = Math.max(context.latestAtr * 0.7, context.currentPrice * 0.0025);
+  const supportLevels = context.supportResistance.supportLevels || [];
+  const resistanceLevels = context.supportResistance.resistanceLevels || [];
+  const recentOrders = context.forceSummary.recentOrders || [];
+  const candidates = [];
+
+  for (let index = Math.max(lookbackWindow, candles.length - recentWindow); index < candles.length; index += 1) {
+    const candle = candles[index];
+    const previous = candles.slice(index - lookbackWindow, index);
+    if (previous.length < lookbackWindow) continue;
+
+    const priorHigh = Math.max(...previous.map((entry) => entry.high));
+    const priorLow = Math.min(...previous.map((entry) => entry.low));
+    const avgVolume = average(
+      candles.slice(Math.max(0, index - 10), index).map((entry) => entry.volume)
+    ) || candle.volume || 1;
+    const nextCandle = candles[index + 1] || null;
+    const volumeFactor = candle.volume / Math.max(avgVolume, 1);
+    const range = Math.max(candle.high - candle.low, sweepThreshold);
+    const upperWickRatio = (candle.high - Math.max(candle.open, candle.close)) / range;
+    const lowerWickRatio = (Math.min(candle.open, candle.close) - candle.low) / range;
+    const supportDistance = nearestLevelDistance(supportLevels, candle.low);
+    const resistanceDistance = nearestLevelDistance(resistanceLevels, candle.high);
+    const flushedLongsNotional = nearbyForceNotional(recentOrders, "SELL", candle.low, liquidityBand);
+    const squeezedShortsNotional = nearbyForceNotional(recentOrders, "BUY", candle.high, liquidityBand);
+
+    let shortTrapScore = 0;
+    let longTrapScore = 0;
+
+    if (candle.low < priorLow - sweepThreshold) shortTrapScore += 34;
+    if (candle.close > priorLow) shortTrapScore += 16;
+    if (candle.close > candle.open) shortTrapScore += 8;
+    if (lowerWickRatio > 0.24) shortTrapScore += 10;
+    if (volumeFactor > 1.2) shortTrapScore += 8;
+    if (supportDistance <= liquidityBand) shortTrapScore += 10;
+    if (flushedLongsNotional > 0) shortTrapScore += 10;
+    if (nextCandle && nextCandle.close > candle.close) shortTrapScore += 8;
+
+    if (candle.high > priorHigh + sweepThreshold) longTrapScore += 34;
+    if (candle.close < priorHigh) longTrapScore += 16;
+    if (candle.close < candle.open) longTrapScore += 8;
+    if (upperWickRatio > 0.24) longTrapScore += 10;
+    if (volumeFactor > 1.2) longTrapScore += 8;
+    if (resistanceDistance <= liquidityBand) longTrapScore += 10;
+    if (squeezedShortsNotional > 0) longTrapScore += 10;
+    if (nextCandle && nextCandle.close < candle.close) longTrapScore += 8;
+
+    if (shortTrapScore >= 62) {
+      candidates.push({
+        type: "short_trap",
+        time: candle.time,
+        price: candle.low,
+        score: shortTrapScore - (candles.length - 1 - index) * 0.45,
+        rawScore: shortTrapScore,
+        tone: "up",
+        markerPosition: "belowBar",
+        text: "ST",
+        value: "Short Trap",
+        note: `Downside liquidity sweep reclaimed near ${formatPrice(candle.low, context.pricePrecision)} after weak longs were flushed.`,
+      });
+    }
+
+    if (longTrapScore >= 62) {
+      candidates.push({
+        type: "long_trap",
+        time: candle.time,
+        price: candle.high,
+        score: longTrapScore - (candles.length - 1 - index) * 0.45,
+        rawScore: longTrapScore,
+        tone: "down",
+        markerPosition: "aboveBar",
+        text: "LT",
+        value: "Long Trap",
+        note: `Upside breakout faded near ${formatPrice(candle.high, context.pricePrecision)} after late longs chased into resistance.`,
+      });
+    }
+  }
+
+  const selected = candidates
+    .sort((left, right) => right.score - left.score)
+    .reduce((accumulator, candidate) => {
+      if (accumulator.some((item) => Math.abs(item.time - candidate.time) < 60 * 60)) return accumulator;
+      accumulator.push(candidate);
+      return accumulator;
+    }, [])
+    .slice(0, 3);
+
+  const markers = selected.map((candidate) => ({
+    time: candidate.time,
+    position: candidate.markerPosition,
+    color: candidate.tone === "up" ? "#35c282" : "#e04c4c",
+    shape: "circle",
+    text: candidate.text,
+  }));
+
+  const leadTrap = selected[0] || null;
+
+  return {
+    markers,
+    leadTrap,
+    summary: leadTrap
+      ? {
+          label: leadTrap.value,
+          value: `Score ${Math.round(leadTrap.rawScore)}`,
+          note: leadTrap.note,
+          tone: leadTrap.tone,
+        }
+      : {
+          label: "No active trap",
+          value: "Neutral",
+          note:
+            context.forceSummary.recentOrders.length > 0
+              ? "Liquidations are printing, but price has not formed a clean long or short trap pattern yet."
+              : "No recent sweep-and-reclaim trap stands out against the liquidation map yet.",
+          tone: "neutral",
+        },
+  };
+}
+
 function marketRegimeLabel(btcChange, ethChange) {
   if (btcChange > 0 && ethChange > 0) return { label: "Risk-On", tone: "up" };
   if (btcChange < 0 && ethChange < 0) return { label: "Risk-Off", tone: "down" };
@@ -2614,8 +2783,11 @@ function buildOutlook(context) {
       : context.forceSummary.longLiquidationNotional > context.forceSummary.shortLiquidationNotional
         ? "Recent forced orders are skewing toward long liquidations, which keeps downside pressure active until that flush stabilizes."
         : "Liquidation flow is currently light, so squeeze dynamics are present but not yet dominant.";
+  const trapText = context.trapSignals?.leadTrap
+    ? `Trap map read: ${context.trapSignals.leadTrap.note}`
+    : "Trap map read: no clean institutional-style long or short trap is dominating the current structure.";
 
-  return `${structureText} ${leverageText} ${tapeText} ${liquidationText}`;
+  return `${structureText} ${leverageText} ${tapeText} ${liquidationText} ${trapText}`;
 }
 
 function buildPotentialTrade(context) {
@@ -2711,6 +2883,7 @@ function renderPotentialTrade(trade, precisionHint = 2) {
 function renderEmptyDashboard(message) {
   removePriceLines();
   candleSeries.setData([]);
+  applyTrapMarkers([]);
   volumeSeries.setData([]);
   ema20LineSeries.setData([]);
   ema50LineSeries.setData([]);
@@ -3208,6 +3381,14 @@ function buildDerivedState() {
   const supportResistance = computeSupportResistance(candles, currentPrice, latestAtr);
   const takerSummary = analyzeTakerLongShort(snapshot.takerLongShort);
   const forceSummary = analyzeForceOrders(state.forceOrders, currentPrice, latestAtr);
+  const trapSignals = buildTrapSignals({
+    candles,
+    currentPrice,
+    latestAtr,
+    supportResistance,
+    forceSummary,
+    pricePrecision: snapshot.pricePrecision || 2,
+  });
 
   const fundingRate =
     Number.isFinite(state.liveFundingRate)
@@ -3307,6 +3488,7 @@ function buildDerivedState() {
   });
 
   return {
+    candles,
     currentPrice,
     priceChange24h: Number(snapshot.ticker?.priceChangePercent) || 0,
     latestEma20,
@@ -3343,6 +3525,7 @@ function buildDerivedState() {
     biasScore,
     bias,
     forceSummary,
+    trapSignals,
     setups,
     potentialTrade,
     nextFundingTime: Number.isFinite(state.liveNextFundingTime)
@@ -3475,6 +3658,7 @@ function renderDashboard() {
     addLevelLine(level, `R${index + 1}`, "#c23a3a");
   });
   syncChartTaSeries(derived);
+  applyTrapMarkers(derived.trapSignals.markers);
 
   dom.assetTitle.textContent = `${snapshot.symbol} Perpetual`;
   dom.assetSubtitle.textContent = snapshot.aliasUsed
@@ -3658,6 +3842,12 @@ function renderDashboard() {
       note: `BTC ${formatPercent(derived.btcChange)} • ETH ${formatPercent(derived.ethChange)}`,
       tone: derived.regime.tone,
     },
+    {
+      label: "Trap Map",
+      value: derived.trapSignals.summary.label,
+      note: derived.trapSignals.summary.note,
+      tone: derived.trapSignals.summary.tone,
+    },
   ]);
 
   renderAnalysisGrid(dom.fundingGrid, [
@@ -3747,6 +3937,12 @@ function renderDashboard() {
           : derived.fundingRate > 0 && derived.oiChange1h > 0
             ? "down"
             : "neutral",
+    },
+    {
+      label: "Trap Read",
+      value: derived.trapSignals.summary.label,
+      note: derived.trapSignals.summary.note,
+      tone: derived.trapSignals.summary.tone,
     },
   ]);
 
