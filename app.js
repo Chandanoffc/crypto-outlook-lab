@@ -1598,7 +1598,7 @@ function initChart() {
     layout: {
       background: { color: "#050913" },
       textColor: "#9eb1c9",
-      fontFamily: '"Space Grotesk", "Helvetica Neue", "Segoe UI", sans-serif',
+      fontFamily: '"IBM Plex Sans", "Helvetica Neue", "Segoe UI", sans-serif',
     },
     grid: {
       vertLines: { color: "rgba(84, 136, 220, 0.08)" },

@@ -34,13 +34,14 @@
   --neutral-soft: rgba(135, 161, 200, 0.12);
   --neutral-edge: rgba(135, 161, 200, 0.18);
   --font-stack:
+    "IBM Plex Mono",
     "Prima Sans Mono Std",
     "SFMono-Regular",
     Consolas,
     "Liberation Mono",
     monospace;
-  --ui-font: "Space Grotesk", "Helvetica Neue", "Segoe UI", sans-serif;
-  --display-font: "Silkscreen", "Prima Sans Mono Std", "SFMono-Regular", monospace;
+  --ui-font: "IBM Plex Sans", "Helvetica Neue", "Segoe UI", sans-serif;
+  --display-font: "IBM Plex Sans", "Helvetica Neue", "Segoe UI", sans-serif;
   --shadow: 0 22px 60px rgba(0, 0, 0, 0.45);
 }
 
@@ -161,9 +162,10 @@ select {
   box-shadow:
     inset 0 0 0 1px rgba(103, 213, 255, 0.06),
     0 0 18px rgba(103, 213, 255, 0.08);
-  font-family: var(--display-font);
-  font-size: 0.82rem;
-  letter-spacing: 0.08em;
+  font-family: var(--ui-font);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
   color: #dcf7ff;
 }
 
@@ -175,13 +177,15 @@ select {
 .brand-copy strong {
   font-family: var(--display-font);
   font-size: 1.02rem;
-  letter-spacing: 0.05em;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   color: #edf5ff;
 }
 
 .brand-copy small {
   color: var(--text-soft);
-  font-size: 0.72rem;
+  font-size: 0.7rem;
+  font-family: var(--font-stack);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
