@@ -121,6 +121,8 @@ const dom = {
   chartEma50: document.getElementById("chart-ema50"),
   chartRsi: document.getElementById("chart-rsi"),
   chartVolume: document.getElementById("chart-volume"),
+  chartLineLabelEma20: document.getElementById("chart-line-label-ema20"),
+  chartLineLabelEma50: document.getElementById("chart-line-label-ema50"),
   timeframeSummaryCopy: document.getElementById("timeframe-summary-copy"),
   tradeStance: document.getElementById("trade-stance"),
   tradeEntry: document.getElementById("trade-entry"),
@@ -1589,6 +1591,9 @@ function resizeChart() {
     width: dom.chart.clientWidth,
     height: dom.chart.clientHeight,
   });
+  if (state.lastDerived) {
+    renderChartSeriesLabels(state.lastDerived.latestEma20, state.lastDerived.latestEma50);
+  }
 }
 
 function initChart() {
@@ -1675,6 +1680,83 @@ function resetChart() {
   initChart();
 }
 
+function hideChartSeriesLabels() {
+  if (dom.chartLineLabelEma20) dom.chartLineLabelEma20.hidden = true;
+  if (dom.chartLineLabelEma50) dom.chartLineLabelEma50.hidden = true;
+}
+
+function renderChartSeriesLabels(ema20Value = null, ema50Value = null) {
+  if (!chart || !ema20LineSeries || !ema50LineSeries) {
+    hideChartSeriesLabels();
+    return;
+  }
+
+  window.requestAnimationFrame(() => {
+    const labelEntries = [
+      {
+        element: dom.chartLineLabelEma20,
+        series: ema20LineSeries,
+        value: ema20Value,
+      },
+      {
+        element: dom.chartLineLabelEma50,
+        series: ema50LineSeries,
+        value: ema50Value,
+      },
+    ];
+
+    const chartHeight = dom.chart.clientHeight;
+    const minGap = 28;
+    const topPadding = 18;
+    const bottomPadding = 18;
+
+    const active = labelEntries
+      .map((entry) => {
+        const y = Number.isFinite(entry.value) ? entry.series.priceToCoordinate(entry.value) : null;
+        if (!entry.element || !Number.isFinite(y)) {
+          if (entry.element) entry.element.hidden = true;
+          return null;
+        }
+        return {
+          ...entry,
+          y,
+        };
+      })
+      .filter(Boolean)
+      .sort((left, right) => left.y - right.y);
+
+    if (!active.length) {
+      hideChartSeriesLabels();
+      return;
+    }
+
+    const positioned = [];
+    active.forEach((entry, index) => {
+      let y = Math.max(topPadding, Math.min(chartHeight - bottomPadding, entry.y));
+      if (index > 0 && y - positioned[index - 1].y < minGap) {
+        y = positioned[index - 1].y + minGap;
+      }
+      positioned.push({
+        element: entry.element,
+        y,
+      });
+    });
+
+    for (let index = positioned.length - 2; index >= 0; index -= 1) {
+      const next = positioned[index + 1];
+      if (next.y > chartHeight - bottomPadding) {
+        positioned[index + 1].y = chartHeight - bottomPadding;
+        positioned[index].y = Math.max(topPadding, positioned[index + 1].y - minGap);
+      }
+    }
+
+    positioned.forEach((entry) => {
+      entry.element.hidden = false;
+      entry.element.style.top = `${entry.y}px`;
+    });
+  });
+}
+
 function renderChartTaHud({
   ema20Value = null,
   ema50Value = null,
@@ -1710,6 +1792,7 @@ function syncChartTaSeries(derived) {
   if (!ema20LineSeries || !ema50LineSeries) return;
   ema20LineSeries.setData(derived.ema20LineData);
   ema50LineSeries.setData(derived.ema50LineData);
+  renderChartSeriesLabels(derived.latestEma20, derived.latestEma50);
   renderChartTaHud({
     ema20Value: derived.latestEma20,
     ema50Value: derived.latestEma50,
@@ -2631,6 +2714,7 @@ function renderEmptyDashboard(message) {
   volumeSeries.setData([]);
   ema20LineSeries.setData([]);
   ema50LineSeries.setData([]);
+  hideChartSeriesLabels();
   renderChartTaHud();
   dom.assetTitle.textContent = "Perpetual contract";
   dom.assetSubtitle.textContent = message;
