@@ -8,6 +8,8 @@ const ANALYSIS_CONCURRENCY = 5;
 const TIMEFRAME_CONCURRENCY = 4;
 const TIMEFRAME_CACHE_MS = 4.5 * 60 * 1000;
 const STORAGE_KEY = "apex-signals-arena-state";
+const TICKER_STORAGE_KEY = "apex-signals-arena-tickers";
+const TICKER_CACHE_MAX_AGE_MS = 30 * 60 * 1000;
 const TIMEFRAME_CONFIG = [
   { key: "30m", label: "30m", interval: "30m" },
   { key: "1h", label: "1H", interval: "1h" },
@@ -61,6 +63,11 @@ let timeframeCache = new Map();
 let scanCursor = 0;
 let scanTimer = null;
 let scanning = false;
+let tickerFeedState = {
+  source: "pending",
+  degraded: false,
+  warning: "",
+};
 
 function loadState() {
   try {
@@ -91,6 +98,24 @@ function persistState() {
       lastCandidates: state.lastCandidates,
     })
   );
+}
+
+function readStoredJson(key, fallback) {
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw);
+  } catch (error) {
+    return fallback;
+  }
+}
+
+function writeStoredJson(key, value) {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch (error) {
+    // Ignore storage failures in degraded environments.
+  }
 }
 
 function setStatus(message, tone = "neutral") {
@@ -678,19 +703,114 @@ async function getPerpUniverse() {
   return perpUniverseCache;
 }
 
-async function fetchUniverseTickers() {
-  const universe = await getPerpUniverse();
-  const activeSymbols = new Set(universe.map((item) => item.symbol));
-  const tickers = await fetchJson("https://fapi.binance.com/fapi/v1/ticker/24hr", "24H tickers");
-  return tickers
+function mapUniverseTickers(entries, activeSymbols) {
+  return (entries || [])
     .filter((entry) => activeSymbols.has(entry.symbol))
     .map((entry) => ({
       symbol: entry.symbol,
-      lastPrice: Number(entry.lastPrice),
-      changePct: Number(entry.priceChangePercent),
-      quoteVolume: Number(entry.quoteVolume),
-      volume: Number(entry.volume),
+      lastPrice: Number(entry.lastPrice ?? entry.price ?? entry.markPrice),
+      changePct: Number(entry.priceChangePercent) || 0,
+      quoteVolume: Number(entry.quoteVolume) || 0,
+      volume: Number(entry.volume) || 0,
     }));
+}
+
+function loadStoredTickers(activeSymbols) {
+  const stored = readStoredJson(TICKER_STORAGE_KEY, null);
+  if (!stored || !Array.isArray(stored.tickers) || !stored.savedAt) return null;
+  if (Date.now() - Number(stored.savedAt) > TICKER_CACHE_MAX_AGE_MS) return null;
+  return mapUniverseTickers(stored.tickers, activeSymbols);
+}
+
+function persistTickers(tickers) {
+  writeStoredJson(TICKER_STORAGE_KEY, {
+    savedAt: Date.now(),
+    tickers,
+  });
+}
+
+async function fetchUniverseTickersDirect(activeSymbols) {
+  const tickers = await fetchJson("https://fapi.binance.com/fapi/v1/ticker/24hr", "24H tickers");
+  return mapUniverseTickers(tickers, activeSymbols);
+}
+
+async function fetchUniverseTickersServer(activeSymbols) {
+  const response = await fetch(new URL("/api/arena-universe", window.location.origin));
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || `Arena ticker proxy failed (${response.status})`);
+  }
+  tickerFeedState = {
+    source: payload.source || "server proxy",
+    degraded: Boolean(payload.degraded),
+    warning: payload.warning || "",
+  };
+  return mapUniverseTickers(payload.tickers || [], activeSymbols);
+}
+
+async function fetchUniversePricesFallback(activeSymbols) {
+  const prices = await fetchJson("https://fapi.binance.com/fapi/v1/ticker/price", "Ticker prices");
+  return mapUniverseTickers(prices, activeSymbols);
+}
+
+function buildShellTickers(activeSymbols) {
+  return Array.from(activeSymbols).map((symbol) => ({
+    symbol,
+    lastPrice: 0,
+    changePct: 0,
+    quoteVolume: 0,
+    volume: 0,
+  }));
+}
+
+async function fetchUniverseTickers() {
+  const universe = await getPerpUniverse();
+  const activeSymbols = new Set(universe.map((item) => item.symbol));
+  const cachedTickers = loadStoredTickers(activeSymbols);
+
+  try {
+    const tickers = await fetchUniverseTickersDirect(activeSymbols);
+    tickerFeedState = {
+      source: "browser 24H feed",
+      degraded: false,
+      warning: "",
+    };
+    persistTickers(tickers);
+    return tickers;
+  } catch (directError) {
+    try {
+      const tickers = await fetchUniverseTickersServer(activeSymbols);
+      if (tickers.length) persistTickers(tickers);
+      return tickers;
+    } catch (serverError) {
+      if (cachedTickers?.length) {
+        tickerFeedState = {
+          source: "cached 24H feed",
+          degraded: true,
+          warning: serverError.message || directError.message,
+        };
+        return cachedTickers;
+      }
+
+      try {
+        const tickers = await fetchUniversePricesFallback(activeSymbols);
+        tickerFeedState = {
+          source: "price-only fallback",
+          degraded: true,
+          warning: serverError.message || directError.message,
+        };
+        return tickers;
+      } catch (priceError) {
+        tickerFeedState = {
+          source: "universe shell fallback",
+          degraded: true,
+          warning:
+            priceError.message || serverError.message || directError.message || "Universe ticker feed unavailable",
+        };
+        return buildShellTickers(activeSymbols);
+      }
+    }
+  }
 }
 
 async function fetchDirectSnapshot(token, interval) {
@@ -1227,18 +1347,26 @@ function renderArena(universe) {
   dom.metricUniverseNote.textContent = "Tradable Binance perpetuals";
   dom.metricHighVolume.textContent = `${highVolumeCount}`;
   dom.metricHighVolume.className = "up";
-  dom.metricHighVolumeNote.textContent = "Best liquidity bucket";
+  dom.metricHighVolumeNote.textContent = tickerFeedState.degraded
+    ? `Fallback feed: ${tickerFeedState.source}`
+    : "Best liquidity bucket";
   dom.metricMidVolume.textContent = `${midVolumeCount}`;
   dom.metricMidVolume.className = "neutral";
-  dom.metricMidVolumeNote.textContent = "Secondary flow bucket";
+  dom.metricMidVolumeNote.textContent = tickerFeedState.degraded
+    ? "Estimated from fallback ticker data"
+    : "Secondary flow bucket";
   dom.metricLowVolume.textContent = `${lowVolumeCount}`;
   dom.metricLowVolume.className = "down";
-  dom.metricLowVolumeNote.textContent = "Thin but still monitored";
+  dom.metricLowVolumeNote.textContent = tickerFeedState.degraded
+    ? "Price-only or cached rows still stay in rotation"
+    : "Thin but still monitored";
   dom.metricQualified.textContent = `${qualified.length}`;
   dom.metricQualified.className = qualified.length ? "up" : "neutral";
   dom.metricQualifiedNote.textContent = `Quality >= ${state.qualityThreshold} and RR >= 1.2`;
   dom.metricLastScan.textContent = state.lastScanAt ? formatClock(state.lastScanAt) : "-";
-  dom.metricLastScanNote.textContent = "Auto scan every 5m";
+  dom.metricLastScanNote.textContent = tickerFeedState.degraded
+    ? `${tickerFeedState.source} • auto scan every 5m`
+    : "Auto scan every 5m";
   dom.engineSummary.textContent = summarizeEngine(state.lastCandidates);
   dom.refreshNote.textContent = state.lastScanAt
     ? `Last refresh ${formatClock(state.lastScanAt)} • auto 5m`
@@ -1348,14 +1476,16 @@ async function scanArena({ manual = false } = {}) {
     persistState();
 
     const qualified = highQualityCandidates(state.lastCandidates, state.qualityThreshold);
-    setStatus(
-      qualified.length
-        ? `${qualified.length} arena setups currently qualify. ${qualified[0].symbol} is leading the board.`
-        : manual
-          ? "Manual arena refresh complete. No pair currently clears the active quality bar."
-          : "Arena scan complete. Waiting for a stronger setup cluster.",
-      qualified.length ? qualified[0].bias.tone : "neutral"
-    );
+    const baseMessage = qualified.length
+      ? `${qualified.length} arena setups currently qualify. ${qualified[0].symbol} is leading the board.`
+      : manual
+        ? "Manual arena refresh complete. No pair currently clears the active quality bar."
+        : "Arena scan complete. Waiting for a stronger setup cluster.";
+    const degradationNote = tickerFeedState.degraded
+      ? ` Using ${tickerFeedState.source} because Binance blocked the bulk 24H ticker feed.`
+      : "";
+
+    setStatus(`${baseMessage}${degradationNote}`, qualified.length ? qualified[0].bias.tone : "neutral");
   } catch (error) {
     console.error(error);
     setStatus(error.message || "Trading Arena scan failed.", "down");
