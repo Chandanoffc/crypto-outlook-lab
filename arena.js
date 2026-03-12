@@ -649,6 +649,55 @@ function toneFromNumber(value, flatBand = 0.02) {
   return "neutral";
 }
 
+function qualityTier(score) {
+  if (!Number.isFinite(score)) {
+    return {
+      className: "quality-tier-neutral",
+      label: "Unscored",
+    };
+  }
+
+  if (score >= 200) {
+    return {
+      className: "quality-tier-shining-gold",
+      label: "Elite",
+    };
+  }
+
+  if (score >= 100) {
+    return {
+      className: "quality-tier-gold",
+      label: "Prime",
+    };
+  }
+
+  if (score >= 80) {
+    return {
+      className: "quality-tier-green",
+      label: "Strong",
+    };
+  }
+
+  if (score >= 60) {
+    return {
+      className: "quality-tier-light-orange",
+      label: "Watch",
+    };
+  }
+
+  if (score >= 40) {
+    return {
+      className: "quality-tier-orange",
+      label: "Weak",
+    };
+  }
+
+  return {
+    className: "quality-tier-red",
+    label: "Poor",
+  };
+}
+
 function formatClock(timestamp) {
   if (!timestamp) return "-";
   return new Date(timestamp).toLocaleTimeString([], {
@@ -1060,6 +1109,7 @@ function buildQualityRows(candidates) {
     const timeframeSummary = timeframeCache.get(candidate.symbol)?.summary || {};
     const tier = volumeTier(ticker.quoteVolume || 0);
     const signals = buildBullBearSignals(candidate, ticker, timeframeSummary);
+    const quality = qualityTier(candidate.qualityScore);
 
     return {
       symbol: candidate.symbol,
@@ -1073,7 +1123,8 @@ function buildQualityRows(candidates) {
       bullishSignals: signals.bullishSignals.join(" • ") || "-",
       bearishSignals: signals.bearishSignals.join(" • ") || "-",
       qualityScore: candidate.qualityScore,
-      qualityTone: candidate.qualityScore >= state.qualityThreshold ? "up" : candidate.bias.tone,
+      qualityClass: quality.className,
+      qualityLabel: quality.label,
     };
   });
 }
@@ -1154,7 +1205,11 @@ function renderQualityTable(candidates) {
       <td class="${row.tf1d.tone}">${row.tf1d.label}</td>
       <td>${row.bullishSignals}</td>
       <td>${row.bearishSignals}</td>
-      <td class="${row.qualityTone}">Q${row.qualityScore}</td>
+      <td class="quality-column quality-column-centered">
+        <span class="quality-chip ${row.qualityClass}" title="${row.qualityLabel}">
+          Q${row.qualityScore}
+        </span>
+      </td>
     </tr>
   `);
 
@@ -1171,7 +1226,7 @@ function renderQualityTable(candidates) {
       "1D",
       "Bullish Signals",
       "Bearish Signals",
-      "Final Quality",
+      '<span class="quality-column-heading">Final Quality</span>',
     ],
     rows
   );
@@ -1186,7 +1241,11 @@ function renderTrendingTable(universeRows) {
       <td class="${row.tier.tone}">${row.tier.label}</td>
       <td>${row.bullishSignals}</td>
       <td>${row.bearishSignals}</td>
-      <td class="${row.qualityScore >= state.qualityThreshold ? "up" : "neutral"}">Q${row.qualityScore}</td>
+      <td class="quality-column quality-column-centered">
+        <span class="quality-chip ${qualityTier(row.qualityScore).className}">
+          Q${row.qualityScore}
+        </span>
+      </td>
       <td class="${row.hotScore >= 80 ? "up" : row.hotScore >= 55 ? "neutral" : "down"}">${row.hotScore}</td>
     </tr>
   `);
@@ -1200,7 +1259,7 @@ function renderTrendingTable(universeRows) {
       "Volume Tier",
       "Bullish Signals",
       "Bearish Signals",
-      "Quality",
+      '<span class="quality-column-heading">Quality</span>',
       "Hot Score",
     ],
     rows
