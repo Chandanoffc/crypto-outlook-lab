@@ -55,6 +55,65 @@ async function fetchJson(url, label) {
   return response.json();
 }
 
+function buildSpotCoreSymbolCandidates(resolved) {
+  const candidates = [resolved.symbol];
+  if (!/^\d/.test(resolved.baseAsset || "")) {
+    candidates.push(`${resolved.baseAsset}${QUOTE_ASSET}`);
+    candidates.push(`${resolved.cleanedToken}${QUOTE_ASSET}`);
+  }
+  return Array.from(new Set(candidates.filter(Boolean)));
+}
+
+async function fetchFirstSuccessful(candidates, loader) {
+  for (const candidate of candidates) {
+    try {
+      const value = await loader(candidate);
+      if (value) return value;
+    } catch (error) {
+      // Try the next symbol variant.
+    }
+  }
+  return null;
+}
+
+async function fetchSpotCoreSnapshot(resolved, interval) {
+  const candidates = buildSpotCoreSymbolCandidates(resolved);
+  return fetchFirstSuccessful(candidates, async (symbol) => {
+    const requests = await Promise.allSettled([
+      fetchJson(
+        `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=240`,
+        "Spot klines"
+      ),
+      fetchJson(
+        `https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`,
+        "Spot 24H ticker"
+      ),
+      fetchJson(
+        `https://api.binance.com/api/v3/depth?symbol=${symbol}&limit=100`,
+        "Spot orderbook"
+      ),
+      fetchJson(
+        `https://api.binance.com/api/v3/aggTrades?symbol=${symbol}&limit=400`,
+        "Spot agg trades"
+      ),
+    ]);
+
+    const [klinesResult, tickerResult, depthResult, tradesResult] = requests;
+
+    if (klinesResult.status !== "fulfilled" || tickerResult.status !== "fulfilled") {
+      throw new Error(`Spot core data unavailable for ${symbol}`);
+    }
+
+    return {
+      symbol,
+      candles: klinesResult.value.map(transformCandle),
+      ticker: tickerResult.value,
+      depth: depthResult.status === "fulfilled" ? depthResult.value : { bids: [], asks: [] },
+      trades: tradesResult.status === "fulfilled" ? tradesResult.value : [],
+    };
+  });
+}
+
 async function getExchangeInfo() {
   if (exchangeInfoCache.data && Date.now() < exchangeInfoCache.expiresAt) {
     return exchangeInfoCache.data;
@@ -433,16 +492,35 @@ module.exports = async function handler(req, res) {
       newsResult,
     ] = requests;
 
-    if (klinesResult.status !== "fulfilled" || tickerResult.status !== "fulfilled") {
-      buildJsonResponse(res, 502, {
-        error: `Core perpetual market data is unavailable for ${resolved.symbol}.`,
-      });
-      return;
+    let candles;
+    let tickerPayload;
+    let depth;
+    let trades;
+    let coreDataSource = "futures";
+
+    if (klinesResult.status === "fulfilled" && tickerResult.status === "fulfilled") {
+      candles = klinesResult.value.map(transformCandle);
+      tickerPayload = tickerResult.value;
+      depth = depthResult.status === "fulfilled" ? depthResult.value : { bids: [], asks: [] };
+      trades = tradesResult.status === "fulfilled" ? tradesResult.value : [];
+    } else {
+      const spotCore = await fetchSpotCoreSnapshot(resolved, interval);
+      if (!spotCore) {
+        buildJsonResponse(res, 502, {
+          error: `Core perpetual market data is unavailable for ${resolved.symbol}.`,
+        });
+        return;
+      }
+      candles = spotCore.candles;
+      tickerPayload = spotCore.ticker;
+      depth = spotCore.depth;
+      trades = spotCore.trades;
+      coreDataSource = `spot:${spotCore.symbol}`;
     }
 
     const venues = await buildVenueMatrix(
       resolved,
-      tickerResult.value,
+      tickerPayload,
       premiumIndexResult.status === "fulfilled" ? premiumIndexResult.value : null,
       openInterestResult.status === "fulfilled" ? openInterestResult.value : null
     ).catch(() => []);
@@ -458,10 +536,10 @@ module.exports = async function handler(req, res) {
       suggestions: resolved.suggestions,
       interval,
       fetchedAt: Date.now(),
-      candles: klinesResult.value.map(transformCandle),
-      ticker: tickerResult.value,
-      depth: depthResult.status === "fulfilled" ? depthResult.value : { bids: [], asks: [] },
-      trades: tradesResult.status === "fulfilled" ? tradesResult.value : [],
+      candles,
+      ticker: tickerPayload,
+      depth,
+      trades,
       premiumIndex:
         premiumIndexResult.status === "fulfilled" ? premiumIndexResult.value : null,
       openInterest:
@@ -485,6 +563,7 @@ module.exports = async function handler(req, res) {
         newsResult.status === "fulfilled" && Array.isArray(newsResult.value.Data)
           ? newsResult.value.Data.slice(0, NEWS_LIMIT)
           : [],
+      coreDataSource,
     });
   } catch (error) {
     buildJsonResponse(res, 500, {

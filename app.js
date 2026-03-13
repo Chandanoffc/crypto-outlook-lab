@@ -3035,6 +3035,53 @@ async function fetchDirectJson(url, label) {
   return response.json();
 }
 
+function buildSpotCoreSymbolCandidates(resolved) {
+  const candidates = [resolved.symbol];
+  if (!/^\d/.test(resolved.baseAsset || "")) {
+    candidates.push(`${resolved.baseAsset}${QUOTE_ASSET}`);
+    candidates.push(`${resolved.cleanedToken}${QUOTE_ASSET}`);
+  }
+  return Array.from(new Set(candidates.filter(Boolean)));
+}
+
+async function fetchSpotCoreSnapshotDirect(resolved, interval) {
+  const candidates = buildSpotCoreSymbolCandidates(resolved);
+  return fetchFirstSuccessful(candidates, async (symbol) => {
+    const requests = await Promise.allSettled([
+      fetchDirectJson(
+        `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=240`,
+        "Spot klines"
+      ),
+      fetchDirectJson(
+        `https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`,
+        "Spot 24H ticker"
+      ),
+      fetchDirectJson(
+        `https://api.binance.com/api/v3/depth?symbol=${symbol}&limit=100`,
+        "Spot orderbook"
+      ),
+      fetchDirectJson(
+        `https://api.binance.com/api/v3/aggTrades?symbol=${symbol}&limit=400`,
+        "Spot agg trades"
+      ),
+    ]);
+
+    const [klinesResult, tickerResult, depthResult, tradesResult] = requests;
+
+    if (klinesResult.status !== "fulfilled" || tickerResult.status !== "fulfilled") {
+      throw new Error(`Spot core data unavailable for ${symbol}`);
+    }
+
+    return {
+      symbol,
+      candles: klinesResult.value.map(mapKlineEntry),
+      ticker: tickerResult.value,
+      depth: depthResult.status === "fulfilled" ? depthResult.value : { bids: [], asks: [] },
+      trades: tradesResult.status === "fulfilled" ? tradesResult.value : [],
+    };
+  });
+}
+
 async function fetchFirstSuccessful(candidates, loader) {
   for (const candidate of candidates) {
     try {
@@ -3253,13 +3300,32 @@ async function fetchDirectSnapshot(token, interval) {
     newsResult,
   ] = requests;
 
-  if (klinesResult.status !== "fulfilled" || tickerResult.status !== "fulfilled") {
-    throw new Error(`Core perpetual market data is unavailable for ${resolved.symbol}.`);
+  let candles;
+  let ticker;
+  let depth;
+  let trades;
+  let coreDataSource = "futures";
+
+  if (klinesResult.status === "fulfilled" && tickerResult.status === "fulfilled") {
+    candles = klinesResult.value.map(mapKlineEntry);
+    ticker = tickerResult.value;
+    depth = depthResult.status === "fulfilled" ? depthResult.value : { bids: [], asks: [] };
+    trades = tradesResult.status === "fulfilled" ? tradesResult.value : [];
+  } else {
+    const spotCore = await fetchSpotCoreSnapshotDirect(resolved, interval).catch(() => null);
+    if (!spotCore) {
+      throw new Error(`Core perpetual market data is unavailable for ${resolved.symbol}.`);
+    }
+    candles = spotCore.candles;
+    ticker = spotCore.ticker;
+    depth = spotCore.depth;
+    trades = spotCore.trades;
+    coreDataSource = `spot:${spotCore.symbol}`;
   }
 
   const venues = await buildVenueMatrixDirect(
     resolved,
-    tickerResult.value,
+    ticker,
     premiumIndexResult.status === "fulfilled" ? premiumIndexResult.value : null,
     openInterestResult.status === "fulfilled" ? openInterestResult.value : null
   ).catch(() => []);
@@ -3275,10 +3341,10 @@ async function fetchDirectSnapshot(token, interval) {
     suggestions: resolved.suggestions,
     interval,
     fetchedAt: Date.now(),
-    candles: klinesResult.value.map(mapKlineEntry),
-    ticker: tickerResult.value,
-    depth: depthResult.status === "fulfilled" ? depthResult.value : { bids: [], asks: [] },
-    trades: tradesResult.status === "fulfilled" ? tradesResult.value : [],
+    candles,
+    ticker,
+    depth,
+    trades,
     premiumIndex: premiumIndexResult.status === "fulfilled" ? premiumIndexResult.value : null,
     openInterest: openInterestResult.status === "fulfilled" ? openInterestResult.value : null,
     openInterestHistory:
@@ -3300,7 +3366,8 @@ async function fetchDirectSnapshot(token, interval) {
       newsResult.status === "fulfilled" && Array.isArray(newsResult.value.Data)
         ? newsResult.value.Data.slice(0, 6)
         : [],
-    dataSource: "browser",
+    coreDataSource,
+    dataSource: coreDataSource === "futures" ? "browser" : "browser-spot-fallback",
   };
 }
 
