@@ -1,4 +1,11 @@
-const START_BALANCE = 200;
+const STRATEGY_SPECS = [
+  { id: "core", label: "Core Trend", shortLabel: "Core", tone: "up", maxOpenTrades: 1 },
+  { id: "liq", label: "Liq Magnet", shortLabel: "Liq", tone: "neutral", maxOpenTrades: 1 },
+  { id: "obfvg", label: "OB + FVG", shortLabel: "OB/FVG", tone: "up", maxOpenTrades: 1 },
+  { id: "funding", label: "Funding MR", shortLabel: "Funding", tone: "down", maxOpenTrades: 1 },
+];
+const STRATEGY_START_BALANCE = 100;
+const START_BALANCE = STRATEGY_SPECS.length * STRATEGY_START_BALANCE;
 const DEFAULT_INTERVAL = "15m";
 const DEFAULT_QUALITY_THRESHOLD = 68;
 const QUOTE_ASSET = "USDT";
@@ -8,8 +15,8 @@ const ROTATION_SCAN_COUNT = 24;
 const ANALYSIS_CONCURRENCY = 5;
 const HTF_CONFIRMATION_CONCURRENCY = 4;
 const HTF_CONFIRMATION_CACHE_MS = 5 * 60 * 1000;
-const MAX_CONCURRENT_TRADES = 4;
-const MAX_NEW_TRADES_PER_SCAN = 2;
+const MAX_CONCURRENT_TRADES = STRATEGY_SPECS.reduce((sum, item) => sum + item.maxOpenTrades, 0);
+const MAX_NEW_TRADES_PER_SCAN = STRATEGY_SPECS.length;
 const DEFAULT_LEVERAGE = 5;
 const TARGET_MARGIN_RETURN_PCT = 22;
 const STOP_MARGIN_RETURN_PCT = 10;
@@ -17,7 +24,7 @@ const TRADE_COOLDOWN_MS = 4 * 60 * 1000;
 const HIGH_VOLUME_FLOOR = 100_000_000;
 const MIN_RR = 1.6;
 const MIN_PROJECTED_MOVE_PCT = 2.1;
-const STRATEGY_VERSION = 2;
+const STRATEGY_VERSION = 3;
 const HTF_CONFIRMATION_CONFIG = [
   { key: "1h", label: "1H", interval: "1h" },
   { key: "4h", label: "4H", interval: "4h" },
@@ -46,8 +53,7 @@ const dom = {
   metricOpenNote: document.getElementById("metric-open-note"),
   metricLastScan: document.getElementById("metric-last-scan"),
   metricLastScanNote: document.getElementById("metric-last-scan-note"),
-  engineSummary: document.getElementById("engine-summary"),
-  candidateGrid: document.getElementById("candidate-grid"),
+  strategySleeveGrid: document.getElementById("strategy-sleeve-grid"),
   marketTable: document.getElementById("market-table"),
   paperTabPositions: document.getElementById("paper-tab-positions"),
   paperTabTrades: document.getElementById("paper-tab-trades"),
@@ -71,23 +77,70 @@ let analysisCache = new Map();
 let confirmationCache = new Map();
 let scanCursor = 0;
 
+function buildDefaultStrategyBalances() {
+  return STRATEGY_SPECS.reduce((accumulator, spec) => {
+    accumulator[spec.id] = STRATEGY_START_BALANCE;
+    return accumulator;
+  }, {});
+}
+
+function normalizeStrategyBalances(storedBalances = {}) {
+  const fallback = buildDefaultStrategyBalances();
+  STRATEGY_SPECS.forEach((spec) => {
+    const value = Number(storedBalances?.[spec.id]);
+    if (Number.isFinite(value)) fallback[spec.id] = value;
+  });
+  return fallback;
+}
+
+function recomputeTotalBalance() {
+  state.balance = STRATEGY_SPECS.reduce(
+    (sum, spec) => sum + (Number(state.strategyBalances?.[spec.id]) || 0),
+    0
+  );
+}
+
+function strategySpec(strategyId) {
+  return STRATEGY_SPECS.find((spec) => spec.id === strategyId) || STRATEGY_SPECS[0];
+}
+
 function loadState() {
   try {
     const stored = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || "{}");
+    const strategyBalances = normalizeStrategyBalances(stored.strategyBalances);
+    const openTrades = Array.isArray(stored.openTrades)
+      ? stored.openTrades.map((trade) => ({
+          ...trade,
+          strategyId: trade.strategyId || "core",
+          strategyLabel: trade.strategyLabel || strategySpec(trade.strategyId || "core").label,
+        }))
+      : stored.openTrade
+        ? [
+            {
+              ...stored.openTrade,
+              strategyId: "core",
+              strategyLabel: strategySpec("core").label,
+            },
+          ]
+        : [];
+    const closedTrades = Array.isArray(stored.closedTrades)
+      ? stored.closedTrades.map((trade) => ({
+          ...trade,
+          strategyId: trade.strategyId || "core",
+          strategyLabel: trade.strategyLabel || strategySpec(trade.strategyId || "core").label,
+        }))
+      : [];
     return {
       startingBalance: START_BALANCE,
-      balance: Number(stored.balance) || START_BALANCE,
+      balance: STRATEGY_SPECS.reduce((sum, spec) => sum + (Number(strategyBalances[spec.id]) || 0), 0),
+      strategyBalances,
       autoEnabled: stored.autoEnabled !== false,
       interval: stored.interval || DEFAULT_INTERVAL,
       qualityThreshold: Number(stored.qualityThreshold) || DEFAULT_QUALITY_THRESHOLD,
-      openTrades: Array.isArray(stored.openTrades)
-        ? stored.openTrades
-        : stored.openTrade
-          ? [stored.openTrade]
-          : [],
+      openTrades,
       strategyVersion: Number(stored.strategyVersion) || 1,
       activeTab: stored.activeTab || "positions",
-      closedTrades: Array.isArray(stored.closedTrades) ? stored.closedTrades : [],
+      closedTrades,
       activity: Array.isArray(stored.activity) ? stored.activity : [],
       lastCandidates: Array.isArray(stored.lastCandidates) ? stored.lastCandidates : [],
       lastScanAt: Number(stored.lastScanAt) || 0,
@@ -96,6 +149,7 @@ function loadState() {
     return {
       startingBalance: START_BALANCE,
       balance: START_BALANCE,
+      strategyBalances: buildDefaultStrategyBalances(),
       autoEnabled: true,
       interval: DEFAULT_INTERVAL,
       qualityThreshold: DEFAULT_QUALITY_THRESHOLD,
@@ -115,6 +169,7 @@ function persistState() {
     STORAGE_KEY,
     JSON.stringify({
       balance: state.balance,
+      strategyBalances: state.strategyBalances,
       autoEnabled: state.autoEnabled,
       interval: state.interval,
       qualityThreshold: state.qualityThreshold,
@@ -385,6 +440,123 @@ function atr(candles, period = 14) {
   return result;
 }
 
+function sma(values, period) {
+  if (values.length < period) return [];
+  const result = [];
+  for (let index = 0; index < values.length; index += 1) {
+    if (index < period - 1) {
+      result.push(null);
+      continue;
+    }
+    result.push(average(values.slice(index - period + 1, index + 1)));
+  }
+  return result;
+}
+
+function standardDeviation(values) {
+  if (!values.length) return 0;
+  const mean = average(values);
+  const variance = average(values.map((value) => (value - mean) ** 2));
+  return Math.sqrt(variance);
+}
+
+function bollingerBands(values, period = 20, multiplier = 2) {
+  if (values.length < period) return { middle: [], upper: [], lower: [] };
+  const middle = sma(values, period);
+  const upper = [];
+  const lower = [];
+
+  for (let index = 0; index < values.length; index += 1) {
+    if (index < period - 1) {
+      upper.push(null);
+      lower.push(null);
+      continue;
+    }
+    const window = values.slice(index - period + 1, index + 1);
+    const deviation = standardDeviation(window) * multiplier;
+    upper.push(middle[index] + deviation);
+    lower.push(middle[index] - deviation);
+  }
+
+  return { middle, upper, lower };
+}
+
+function candleBody(candle) {
+  return Math.abs(candle.close - candle.open);
+}
+
+function candleRange(candle) {
+  return Math.max(candle.high - candle.low, 0.0000001);
+}
+
+function lowerWickRatio(candle) {
+  return (Math.min(candle.open, candle.close) - candle.low) / candleRange(candle);
+}
+
+function upperWickRatio(candle) {
+  return (candle.high - Math.max(candle.open, candle.close)) / candleRange(candle);
+}
+
+function withinPercent(reference, price, pct) {
+  if (!Number.isFinite(reference) || !Number.isFinite(price) || !reference) return false;
+  return Math.abs((price - reference) / reference) * 100 <= pct;
+}
+
+function findPivotIndices(candles, direction, startIndex = 2, endIndex = candles.length - 3) {
+  const pivots = [];
+  for (let index = startIndex; index <= endIndex; index += 1) {
+    const current = candles[index];
+    const previous = candles.slice(index - 2, index);
+    const next = candles.slice(index + 1, index + 3);
+    if (direction === "low") {
+      if (previous.every((item) => current.low <= item.low) && next.every((item) => current.low <= item.low)) {
+        pivots.push(index);
+      }
+    } else if (
+      previous.every((item) => current.high >= item.high) &&
+      next.every((item) => current.high >= item.high)
+    ) {
+      pivots.push(index);
+    }
+  }
+  return pivots;
+}
+
+function detectRecentDivergence(candles, rsiSeries, direction) {
+  const pivots = findPivotIndices(candles, direction === "bullish" ? "low" : "high");
+  if (pivots.length < 2) return null;
+
+  for (let index = pivots.length - 1; index >= 1; index -= 1) {
+    const currentIndex = pivots[index];
+    const previousIndex = pivots[index - 1];
+    if (candles.length - 1 - currentIndex > 18) continue;
+
+    const currentCandle = candles[currentIndex];
+    const previousCandle = candles[previousIndex];
+    const currentRsi = rsiSeries[currentIndex];
+    const previousRsi = rsiSeries[previousIndex];
+    if (!Number.isFinite(currentRsi) || !Number.isFinite(previousRsi)) continue;
+
+    if (
+      direction === "bullish" &&
+      currentCandle.low < previousCandle.low &&
+      currentRsi > previousRsi + 2
+    ) {
+      return { pivotIndex: currentIndex, previousIndex, currentCandle };
+    }
+
+    if (
+      direction === "bearish" &&
+      currentCandle.high > previousCandle.high &&
+      currentRsi < previousRsi - 2
+    ) {
+      return { pivotIndex: currentIndex, previousIndex, currentCandle };
+    }
+  }
+
+  return null;
+}
+
 function computeSupportResistance(candles, currentPrice, latestAtr) {
   const supports = [];
   const resistances = [];
@@ -637,6 +809,7 @@ function analyzeSnapshot(snapshot) {
   const rsiSeries = rsi(closes, 14);
   const macdSeries = macd(closes);
   const atrSeries = atr(candles, 14);
+  const bollingerSeries = bollingerBands(closes, 20, 2);
   const latestAtr = latestDefinedValue(atrSeries) ?? currentPrice * 0.01;
   const supportResistance = computeSupportResistance(candles, currentPrice, latestAtr);
   const tradeSummary = analyzeTradeTape(snapshot.trades || []);
@@ -646,6 +819,7 @@ function analyzeSnapshot(snapshot) {
   const oiChange1h = pctChangeFromLookback(oiHistory, 12);
   const recentPriceChange = pctChangeFromLookback(closes, Math.min(4, Math.max(1, closes.length - 1)));
   const fundingRate = (Number(snapshot.premiumIndex?.lastFundingRate) || 0) * 100;
+  const quoteVolume = Number(snapshot.ticker?.quoteVolume) || 0;
   const globalLongShortRatio = snapshot.globalLongShort?.length
     ? Number(snapshot.globalLongShort[snapshot.globalLongShort.length - 1].longShortRatio)
     : 1;
@@ -695,11 +869,18 @@ function analyzeSnapshot(snapshot) {
     biasScore,
     qualityScore,
     rr,
+    candles,
+    closes,
+    rsiSeries,
+    ema20Series,
+    ema50Series,
+    bollingerSeries,
     ema20: latestDefinedValue(ema20Series) ?? currentPrice,
     ema50: latestDefinedValue(ema50Series) ?? currentPrice,
     rsi: latestDefinedValue(rsiSeries) ?? 50,
     latestAtr,
     fundingRate,
+    quoteVolume,
     oiChange1h,
     recentPriceChange,
     cvdSlope: tradeSummary.cvdSlope,
@@ -707,8 +888,14 @@ function analyzeSnapshot(snapshot) {
     takerRatio: takerSummary.latestRatio,
     globalLongShortRatio,
     venueConsensus,
+    supportResistance,
+    tradeSummary,
+    depthSummary,
+    takerSummary,
     trade: potentialTrade,
     summary: `${bias.label} bias • Q${qualityScore} • RR ${rr.toFixed(2)} • funding ${fundingRate.toFixed(4)}%`,
+    strategySignals: {},
+    bestStrategyQuality: qualityScore,
   };
 }
 
@@ -1074,6 +1261,322 @@ function applyCandidateConfirmation(candidate, ticker, confirmation) {
   };
 }
 
+function buildStrategySignal({
+  strategyId,
+  side,
+  tone,
+  qualityScore,
+  detectedAt,
+  entry,
+  stopLoss,
+  takeProfit,
+  leverage,
+  note,
+  reason,
+}) {
+  const rr = Math.abs(takeProfit - entry) / Math.max(Math.abs(entry - stopLoss), 0.0000001);
+  return {
+    id: `${strategyId}:${side}:${detectedAt}:${entry}`,
+    strategyId,
+    strategyLabel: strategySpec(strategyId).label,
+    side,
+    tone,
+    qualityScore: Math.max(0, Math.round(qualityScore)),
+    detectedAt,
+    entry,
+    stopLoss,
+    takeProfit,
+    rr,
+    leverage,
+    projectedMovePct: Math.abs(pctChange(entry, takeProfit)),
+    targetReturnPct: Math.abs(pctChange(entry, takeProfit)) * leverage,
+    stopReturnPct: Math.abs(pctChange(entry, stopLoss)) * leverage,
+    note,
+    reason,
+  };
+}
+
+function buildCoreTrendStrategySignal(candidate) {
+  if (
+    candidate.bias.tone === "neutral" ||
+    candidate.alignedCount < 2 ||
+    candidate.conflictCount > 0 ||
+    !hasGoodTradingVolume(candidate.quoteVolume) ||
+    candidate.rr < MIN_RR
+  ) {
+    return null;
+  }
+
+  return buildStrategySignal({
+    strategyId: "core",
+    side: candidate.trade.stance,
+    tone: candidate.trade.tone,
+    qualityScore: (candidate.refinedQualityScore ?? candidate.qualityScore) + 6,
+    detectedAt: Date.now(),
+    entry: candidate.trade.entry,
+    stopLoss: candidate.trade.stopLoss,
+    takeProfit: candidate.trade.takeProfit,
+    leverage: candidate.trade.leverage || DEFAULT_LEVERAGE,
+    note: "Trend stack, flow confirmation, and higher-timeframe alignment all support continuation.",
+    reason: `${candidate.bias.label} • RR ${candidate.rr.toFixed(2)} • 1H ${candidate.confirmation?.["1h"]?.label || "Queue"} • 4H ${candidate.confirmation?.["4h"]?.label || "Queue"}`,
+  });
+}
+
+function buildLiquidationMagnetStrategySignal(candidate) {
+  const candles = candidate.candles || [];
+  if (candles.length < 30) return null;
+
+  const recent = candles.slice(-18);
+  const avgVolume = average(candles.slice(-21, -1).map((entry) => entry.volume).filter(Boolean)) || 1;
+  const bullishDiv = detectRecentDivergence(candles, candidate.rsiSeries || [], "bullish");
+  const bearishDiv = detectRecentDivergence(candles, candidate.rsiSeries || [], "bearish");
+  const nearestSupport = candidate.supportResistance?.supportLevels?.[0];
+  const nearestResistance = candidate.supportResistance?.resistanceLevels?.[0];
+
+  const sweepCandidates = recent
+    .map((candle, index) => ({ candle, index: candles.length - recent.length + index }))
+    .filter((entry) => entry.index >= candles.length - 10);
+
+  const bestLongSweep = sweepCandidates
+    .filter((entry) => lowerWickRatio(entry.candle) >= 0.45)
+    .sort((left, right) => lowerWickRatio(right.candle) - lowerWickRatio(left.candle))[0];
+  const bestShortSweep = sweepCandidates
+    .filter((entry) => upperWickRatio(entry.candle) >= 0.45)
+    .sort((left, right) => upperWickRatio(right.candle) - upperWickRatio(left.candle))[0];
+
+  const longValid =
+    bullishDiv &&
+    bestLongSweep &&
+    withinPercent(nearestSupport, bullishDiv.currentCandle.low, 1.0) &&
+    candidate.currentPrice > (nearestSupport || candidate.currentPrice) &&
+    candidate.cvdSlope >= 0 &&
+    Math.max(bestLongSweep.candle.volume, bullishDiv.currentCandle.volume) >= avgVolume * 1.25;
+
+  const shortValid =
+    bearishDiv &&
+    bestShortSweep &&
+    withinPercent(nearestResistance, bearishDiv.currentCandle.high, 1.0) &&
+    candidate.currentPrice < (nearestResistance || candidate.currentPrice) &&
+    candidate.cvdSlope <= 0 &&
+    Math.max(bestShortSweep.candle.volume, bearishDiv.currentCandle.volume) >= avgVolume * 1.25;
+
+  if (!longValid && !shortValid) return null;
+
+  const side = longValid ? "Long" : "Short";
+  const tone = longValid ? "up" : "down";
+  const sweepCandle = longValid ? bullishDiv.currentCandle : bearishDiv.currentCandle;
+  const entry = candidate.currentPrice;
+  const baseStop =
+    side === "Long"
+      ? Math.min(sweepCandle.low, nearestSupport || sweepCandle.low) - Math.max(candidate.latestAtr * 0.14, entry * 0.0012)
+      : Math.max(sweepCandle.high, nearestResistance || sweepCandle.high) + Math.max(candidate.latestAtr * 0.14, entry * 0.0012);
+  const stopLoss =
+    side === "Long"
+      ? Math.min(baseStop, entry * (1 - 0.0045))
+      : Math.max(baseStop, entry * (1 + 0.0045));
+  const fallbackTarget = side === "Long" ? entry * 1.018 : entry * 0.982;
+  const takeProfit =
+    side === "Long"
+      ? Math.max(fallbackTarget, nearestResistance || fallbackTarget)
+      : Math.min(fallbackTarget, nearestSupport || fallbackTarget);
+  const movePct = Math.abs(pctChange(entry, takeProfit));
+  if (movePct < 0.9) return null;
+
+  let qualityScore = 60;
+  qualityScore += side === "Long" ? 8 : 8;
+  qualityScore += Math.round((longValid ? lowerWickRatio(sweepCandle) : upperWickRatio(sweepCandle)) * 24);
+  qualityScore += Math.max(0, Math.round((Math.max(sweepCandle.volume / avgVolume, 1) - 1) * 14));
+  qualityScore += side === "Long" ? (candidate.rsi <= 42 ? 8 : 0) : candidate.rsi >= 58 ? 8 : 0;
+  qualityScore += side === "Long" ? (candidate.fundingRate > 0 ? 4 : 0) : candidate.fundingRate < 0 ? 4 : 0;
+  qualityScore += side === "Long" ? (candidate.oiChange1h < 0 ? 4 : 0) : candidate.oiChange1h < 0 ? 4 : 0;
+
+  return buildStrategySignal({
+    strategyId: "liq",
+    side,
+    tone,
+    qualityScore,
+    detectedAt: sweepCandle.time * 1000,
+    entry,
+    stopLoss,
+    takeProfit,
+    leverage: 8,
+    note: "Proxy liquidation sweep: wick + RSI divergence + reclaim near clustered support/resistance.",
+    reason: `${side === "Long" ? "Downside" : "Upside"} sweep reclaimed • wick trap confirmed • ${formatPercent(movePct)} target move`,
+  });
+}
+
+function buildObFvgStrategySignal(candidate) {
+  const candles = candidate.candles || [];
+  if (candles.length < 40) return null;
+
+  const bodies = candles.map(candleBody);
+  const volumes = candles.map((candle) => candle.volume);
+  let bestSignal = null;
+
+  for (let index = Math.max(22, candles.length - 32); index < candles.length - 2; index += 1) {
+    const first = candles[index - 1];
+    const displacement = candles[index];
+    const third = candles[index + 1];
+    const avgBody = average(bodies.slice(index - 20, index)) || candleBody(displacement);
+    const avgVolume = average(volumes.slice(index - 20, index)) || displacement.volume;
+    const bullishDisplacement =
+      displacement.close > displacement.open &&
+      candleBody(displacement) >= avgBody * 2 &&
+      displacement.volume >= avgVolume * 1.2 &&
+      first.high < third.low;
+    const bearishDisplacement =
+      displacement.close < displacement.open &&
+      candleBody(displacement) >= avgBody * 2 &&
+      displacement.volume >= avgVolume * 1.2 &&
+      first.low > third.high;
+
+    if (!bullishDisplacement && !bearishDisplacement) continue;
+
+    const side = bullishDisplacement ? "Long" : "Short";
+    const tone = bullishDisplacement ? "up" : "down";
+    const gapLow = bullishDisplacement ? first.high : third.high;
+    const gapHigh = bullishDisplacement ? third.low : first.low;
+    const equilibrium = average([gapLow, gapHigh]);
+    const blockWindow = candles.slice(Math.max(0, index - 4), index);
+    const orderBlock = [...blockWindow]
+      .reverse()
+      .find((candle) => (bullishDisplacement ? candle.close < candle.open : candle.close > candle.open));
+    if (!orderBlock) continue;
+
+    let retestIndex = -1;
+    for (let cursor = index + 2; cursor < candles.length; cursor += 1) {
+      const retest = candles[cursor];
+      if (retest.low <= gapHigh && retest.high >= gapLow) {
+        retestIndex = cursor;
+      }
+    }
+    if (retestIndex === -1 || candles.length - 1 - retestIndex > 5) continue;
+
+    const currentPrice = candidate.currentPrice;
+    const zoneTolerance = Math.max(candidate.latestAtr * 0.1, currentPrice * 0.0012);
+    const priceNearZone =
+      currentPrice >= Math.min(gapLow, gapHigh) - zoneTolerance &&
+      currentPrice <= Math.max(gapLow, gapHigh) + zoneTolerance;
+    if (!priceNearZone) continue;
+
+    const stopLoss =
+      side === "Long"
+        ? Math.min(orderBlock.low, gapLow) - candidate.latestAtr * 0.16
+        : Math.max(orderBlock.high, gapHigh) + candidate.latestAtr * 0.16;
+    const targetReference =
+      side === "Long"
+        ? candidate.supportResistance?.resistanceLevels?.[0] || currentPrice + candidate.latestAtr * 2.2
+        : candidate.supportResistance?.supportLevels?.[0] || currentPrice - candidate.latestAtr * 2.2;
+    const takeProfit =
+      side === "Long"
+        ? Math.max(targetReference, equilibrium + candidate.latestAtr * 1.9)
+        : Math.min(targetReference, equilibrium - candidate.latestAtr * 1.9);
+    const rr = Math.abs(takeProfit - equilibrium) / Math.max(Math.abs(equilibrium - stopLoss), 0.0000001);
+    if (rr < 1.3) continue;
+
+    let qualityScore = 58;
+    qualityScore += candidate.alignedCount >= 2 ? 12 : -10;
+    qualityScore += candleBody(displacement) >= avgBody * 2.5 ? 10 : 6;
+    qualityScore += displacement.volume >= avgVolume * 1.5 ? 10 : 4;
+    qualityScore += candidate.bias.tone === tone ? 10 : -8;
+    qualityScore += candidate.entryQualityScore >= 16 ? 8 : -6;
+    qualityScore += side === "Long" ? (candidate.cvdSlope > 0 ? 6 : -6) : candidate.cvdSlope < 0 ? 6 : -6;
+    qualityScore += side === "Long" ? (candidate.takerRatio > 1 ? 4 : -4) : candidate.takerRatio < 1 ? 4 : -4;
+
+    const signal = buildStrategySignal({
+      strategyId: "obfvg",
+      side,
+      tone,
+      qualityScore,
+      detectedAt: candles[retestIndex].time * 1000,
+      entry: equilibrium,
+      stopLoss,
+      takeProfit,
+      leverage: 5,
+      note: "Displacement + fair value gap retest into the order-block equilibrium.",
+      reason: `${side === "Long" ? "Bullish" : "Bearish"} displacement with fresh FVG retest • RR ${rr.toFixed(2)}`,
+    });
+
+    if (!bestSignal || signal.qualityScore > bestSignal.qualityScore) bestSignal = signal;
+  }
+
+  return bestSignal;
+}
+
+function buildFundingMeanReversionSignal(candidate) {
+  const upper = latestDefinedValue(candidate.bollingerSeries?.upper || []);
+  const lower = latestDefinedValue(candidate.bollingerSeries?.lower || []);
+  const middle = latestDefinedValue(candidate.bollingerSeries?.middle || []);
+  if (!Number.isFinite(upper) || !Number.isFinite(lower) || !Number.isFinite(middle)) return null;
+
+  const currentCandle = candidate.candles?.[candidate.candles.length - 1];
+  if (!currentCandle) return null;
+
+  const longValid =
+    candidate.fundingRate <= -0.03 &&
+    candidate.currentPrice <= lower * 1.003 &&
+    candidate.rsi <= 40 &&
+    (currentCandle.close > currentCandle.open || lowerWickRatio(currentCandle) > 0.38);
+  const shortValid =
+    candidate.fundingRate >= 0.05 &&
+    candidate.currentPrice >= upper * 0.997 &&
+    candidate.rsi >= 60 &&
+    (currentCandle.close < currentCandle.open || upperWickRatio(currentCandle) > 0.38);
+
+  if (!longValid && !shortValid) return null;
+
+  const side = longValid ? "Long" : "Short";
+  const tone = longValid ? "up" : "down";
+  const entry = candidate.currentPrice;
+  const stopLoss =
+    side === "Long"
+      ? entry - candidate.latestAtr * 1.5
+      : entry + candidate.latestAtr * 1.5;
+  const takeProfit = middle;
+  const projectedMovePct = Math.abs(pctChange(entry, takeProfit));
+  if (projectedMovePct < 0.8) return null;
+
+  let qualityScore = 62;
+  qualityScore += Math.min(18, Math.round(Math.abs(candidate.fundingRate) * 180));
+  qualityScore += side === "Long" ? (candidate.rsi <= 34 ? 10 : 4) : candidate.rsi >= 66 ? 10 : 4;
+  qualityScore += side === "Long" ? (candidate.cvdSlope >= 0 ? 6 : -6) : candidate.cvdSlope <= 0 ? 6 : -6;
+  qualityScore += side === "Long" ? (candidate.takerRatio < 1 ? 4 : 0) : candidate.takerRatio > 1 ? 4 : 0;
+
+  return buildStrategySignal({
+    strategyId: "funding",
+    side,
+    tone,
+    qualityScore,
+    detectedAt: currentCandle.time * 1000,
+    entry,
+    stopLoss,
+    takeProfit,
+    leverage: 5,
+    note: "Extreme funding plus Bollinger band extension points to a mean-reversion setup.",
+    reason: `Funding ${formatPercent(candidate.fundingRate, 4)} • fade back to basis line`,
+  });
+}
+
+function attachStrategySignals(candidate) {
+  const strategySignals = {
+    core: buildCoreTrendStrategySignal(candidate),
+    liq: buildLiquidationMagnetStrategySignal(candidate),
+    obfvg: buildObFvgStrategySignal(candidate),
+    funding: buildFundingMeanReversionSignal(candidate),
+  };
+  const bestStrategyQuality = Math.max(
+    candidate.refinedQualityScore ?? candidate.qualityScore,
+    ...Object.values(strategySignals)
+      .filter(Boolean)
+      .map((signal) => signal.qualityScore)
+  );
+  return {
+    ...candidate,
+    strategySignals,
+    bestStrategyQuality,
+  };
+}
+
 function selectUniverseBatch(universe) {
   const ranked = [...universe].sort((left, right) => {
     const rightTicker = universeTickerMap.get(right.symbol);
@@ -1113,6 +1616,10 @@ function formatParameterLine(candidate, ticker) {
     return `${volumeNote} • queueing trend, flow, leverage, and entry plan`;
   }
 
+  const strategyTags = STRATEGY_SPECS.filter((spec) => candidate.strategySignals?.[spec.id])
+    .map((spec) => spec.shortLabel)
+    .join(" • ");
+
   return `
     <div class="monitor-parameter-stack">
       <div>Entry ${formatPrice(candidate.trade.entry, candidate.pricePrecision)} • TP ${formatPrice(
@@ -1128,7 +1635,9 @@ function formatParameterLine(candidate, ticker) {
       <div class="monitor-subtle">
         1H ${candidate.confirmation?.["1h"]?.label || "Queue"} • 4H ${
           candidate.confirmation?.["4h"]?.label || "Queue"
-        } • entry score ${candidate.entryQualityScore ?? "--"}
+        } • entry score ${candidate.entryQualityScore ?? "--"}${
+          strategyTags ? ` • signals ${strategyTags}` : ""
+        }
       </div>
     </div>
   `;
@@ -1139,7 +1648,7 @@ function buildMarketRows(universe) {
     .map((symbolInfo) => {
       const ticker = universeTickerMap.get(symbolInfo.symbol) || null;
       const analysis = analysisCache.get(symbolInfo.symbol) || null;
-      const qualityScore = analysis?.refinedQualityScore ?? analysis?.qualityScore ?? -1;
+      const qualityScore = analysis?.bestStrategyQuality ?? analysis?.refinedQualityScore ?? analysis?.qualityScore ?? -1;
       return {
         symbol: symbolInfo.symbol,
         baseAsset: symbolInfo.baseAsset,
@@ -1147,6 +1656,7 @@ function buildMarketRows(universe) {
         changePct: ticker?.changePct ?? 0,
         biasLabel: analysis?.bias.label ?? "Monitoring",
         biasTone: analysis?.bias.tone ?? "neutral",
+        strategySignals: analysis?.strategySignals || {},
         parameters: formatParameterLine(analysis, ticker),
         qualityScore,
         updatedAt: analysis?.analyzedAt ?? 0,
@@ -1159,6 +1669,25 @@ function buildMarketRows(universe) {
       if (rightQuality !== leftQuality) return rightQuality - leftQuality;
       return right.volumeRank - left.volumeRank;
     });
+}
+
+function renderStrategySignalCell(signal) {
+  if (!signal) return `<span class="monitor-subtle">-</span>`;
+  const quality = signal.qualityScore;
+  const toneClass =
+    quality >= 100
+      ? "quality-tier-gold"
+      : quality >= 80
+        ? "quality-tier-green"
+        : quality >= 60
+          ? "quality-tier-light-orange"
+          : "quality-tier-red";
+  return `
+    <div class="strategy-cell-stack">
+      <span class="quality-chip ${toneClass}">${signal.side === "Long" ? "L" : "S"} • Q${quality}</span>
+      <div class="monitor-subtle">${new Date(signal.detectedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
+    </div>
+  `;
 }
 
 function renderMarketTable(universe) {
@@ -1191,6 +1720,10 @@ function renderMarketTable(universe) {
           <td>${price}</td>
           <td class="${toneFromNumber(row.changePct, 0.15)}">${formatPercent(row.changePct)}</td>
           <td class="${row.biasTone}">${row.biasLabel}</td>
+          <td class="strategy-column">${renderStrategySignalCell(row.strategySignals.core)}</td>
+          <td class="strategy-column">${renderStrategySignalCell(row.strategySignals.liq)}</td>
+          <td class="strategy-column">${renderStrategySignalCell(row.strategySignals.obfvg)}</td>
+          <td class="strategy-column">${renderStrategySignalCell(row.strategySignals.funding)}</td>
           <td>${row.parameters}</td>
           <td class="monitor-quality ${qualityQualified ? "qualified" : ""}">${qualityLabel}</td>
         </tr>
@@ -1207,6 +1740,10 @@ function renderMarketTable(universe) {
             <th>Price</th>
             <th>24H</th>
             <th>Bias</th>
+            <th>Core</th>
+            <th>Liq</th>
+            <th>OB/FVG</th>
+            <th>Funding</th>
             <th>Parameters</th>
             <th>Quality</th>
           </tr>
@@ -1228,27 +1765,45 @@ function logActivity(message, tone = "neutral") {
 
 function applyStrategyUpgradeNotice() {
   if (state.strategyVersion >= STRATEGY_VERSION) return;
-  if (state.closedTrades.length || state.openTrades.length) {
-    logActivity(
-      "Strategy model upgraded. Existing journal rows may include legacy trades; reset the simulation to evaluate the refined model cleanly.",
-      "neutral"
-    );
-  }
+  state.strategyBalances = buildDefaultStrategyBalances();
+  state.balance = START_BALANCE;
+  state.openTrades = [];
+  state.closedTrades = [];
+  state.lastCandidates = [];
+  state.lastScanAt = 0;
+  analysisCache = new Map();
+  universeTickerMap = new Map();
+  scanCursor = 0;
+  logActivity(
+    "Multi-strategy sleeves activated. The simulator has been reset to four independent $100 books to keep the new journals clean.",
+    "neutral"
+  );
   state.strategyVersion = STRATEGY_VERSION;
   persistState();
 }
 
-function reservedMargin() {
-  return state.openTrades.reduce((sum, trade) => sum + (Number(trade.marginUsed) || 0), 0);
+function reservedMargin(strategyId = null) {
+  return state.openTrades
+    .filter((trade) => !strategyId || trade.strategyId === strategyId)
+    .reduce((sum, trade) => sum + (Number(trade.marginUsed) || 0), 0);
 }
 
-function symbolHasOpenTrade(symbol) {
-  return state.openTrades.some((trade) => trade.symbol === symbol);
+function strategyOpenTrades(strategyId) {
+  return state.openTrades.filter((trade) => trade.strategyId === strategyId);
 }
 
-function recentlyClosed(symbol) {
+function strategyHasOpenTrade(strategyId, symbol = null) {
+  return state.openTrades.some(
+    (trade) => trade.strategyId === strategyId && (!symbol || trade.symbol === symbol)
+  );
+}
+
+function recentlyClosed(symbol, strategyId) {
   return state.closedTrades.some(
-    (trade) => trade.symbol === symbol && Date.now() - Number(trade.closedAt || 0) < TRADE_COOLDOWN_MS
+    (trade) =>
+      trade.symbol === symbol &&
+      trade.strategyId === strategyId &&
+      Date.now() - Number(trade.closedAt || 0) < TRADE_COOLDOWN_MS
   );
 }
 
@@ -1257,63 +1812,70 @@ function tradeReturnPct(trade, exitPrice) {
   return pctChange(trade.entryPrice, exitPrice) * direction * (trade.leverage || DEFAULT_LEVERAGE);
 }
 
-function openTradeFromCandidate(candidate) {
-  if (symbolHasOpenTrade(candidate.symbol)) return false;
+function openTradeFromStrategySignal(candidate, strategyId) {
+  const spec = strategySpec(strategyId);
+  const signal = candidate.strategySignals?.[strategyId];
+  if (!signal) return false;
+  if (strategyHasOpenTrade(strategyId, candidate.symbol)) return false;
+  if (strategyOpenTrades(strategyId).length >= spec.maxOpenTrades) return false;
   if (state.openTrades.length >= MAX_CONCURRENT_TRADES) return false;
 
-  const balanceBefore = state.balance;
-  const freeCapital = Math.max(balanceBefore - reservedMargin(), 0);
+  const strategyBalanceBefore = Number(state.strategyBalances?.[strategyId]) || STRATEGY_START_BALANCE;
+  const freeCapital = Math.max(strategyBalanceBefore - reservedMargin(strategyId), 0);
   if (freeCapital < 10) return false;
 
-  const slotsRemaining = Math.max(1, MAX_CONCURRENT_TRADES - state.openTrades.length);
-  const leverage = candidate.trade.leverage || DEFAULT_LEVERAGE;
+  const leverage = signal.leverage || DEFAULT_LEVERAGE;
   const marginBudget = Math.min(
     freeCapital,
-    Math.max(balanceBefore * 0.16, freeCapital / slotsRemaining)
+    Math.max(strategyBalanceBefore * 0.24, freeCapital / Math.max(1, spec.maxOpenTrades))
   );
   const riskCapital = Math.max(marginBudget * 0.12, 2);
-  const stopDistance = Math.abs(candidate.trade.entry - candidate.trade.stopLoss);
+  const stopDistance = Math.abs(signal.entry - signal.stopLoss);
   const quantityByRisk = stopDistance > 0 ? riskCapital / stopDistance : 0;
-  const quantityByCapital = (marginBudget * leverage) / candidate.trade.entry;
+  const quantityByCapital = (marginBudget * leverage) / signal.entry;
   const quantity = Math.max(0, Math.min(quantityByRisk, quantityByCapital));
 
   if (!Number.isFinite(quantity) || quantity <= 0) return false;
 
   state.openTrades.push({
-    id: `${Date.now()}-${candidate.symbol}`,
+    id: `${Date.now()}-${strategyId}-${candidate.symbol}`,
+    strategyId,
+    strategyLabel: spec.label,
     symbol: candidate.symbol,
     token: candidate.token,
     interval: state.interval,
-    side: candidate.trade.stance,
-    entryPrice: candidate.trade.entry,
-    stopLoss: candidate.trade.stopLoss,
-    takeProfit: candidate.trade.takeProfit,
+    side: signal.side,
+    entryPrice: signal.entry,
+    stopLoss: signal.stopLoss,
+    takeProfit: signal.takeProfit,
     quantity,
     leverage,
     marginUsed: marginBudget,
-    qualityScore: candidate.refinedQualityScore ?? candidate.qualityScore,
+    qualityScore: signal.qualityScore,
     biasScore: candidate.biasScore,
-    targetReturnPct: candidate.trade.targetReturnPct,
-    stopReturnPct: candidate.trade.stopReturnPct,
+    targetReturnPct: signal.targetReturnPct,
+    stopReturnPct: signal.stopReturnPct,
     pricePrecision: candidate.pricePrecision,
     breakEvenArmed: false,
     profitLockArmed: false,
     openedAt: Date.now(),
-    balanceBefore,
+    detectedAt: signal.detectedAt,
+    balanceBefore: state.balance,
+    strategyBalanceBefore,
     lastPrice: candidate.currentPrice,
   });
 
   logActivity(
-    `Opened ${candidate.trade.stance} ${candidate.symbol} • entry ${formatPrice(
-      candidate.trade.entry,
+    `Opened ${spec.label} ${signal.side} ${candidate.symbol} • entry ${formatPrice(
+      signal.entry,
       candidate.pricePrecision
-    )} • TP ${formatPrice(candidate.trade.takeProfit, candidate.pricePrecision)} • SL ${formatPrice(
-      candidate.trade.stopLoss,
+    )} • TP ${formatPrice(signal.takeProfit, candidate.pricePrecision)} • SL ${formatPrice(
+      signal.stopLoss,
       candidate.pricePrecision
-    )} • refined quality ${candidate.refinedQualityScore ?? candidate.qualityScore} • target ${candidate.trade.targetReturnPct}% on margin (${formatPercent(
-      candidate.trade.projectedMovePct
+    )} • quality ${signal.qualityScore} • target ${signal.targetReturnPct.toFixed(1)}% on margin (${formatPercent(
+      signal.projectedMovePct
     )} price move).`,
-    candidate.trade.tone
+    signal.tone
   );
 
   return true;
@@ -1332,12 +1894,15 @@ function closeTrade(tradeId, reason, exitPrice, precisionHint) {
 
   state.closedTrades.unshift({
     id: trade.id,
+    strategyId: trade.strategyId,
+    strategyLabel: trade.strategyLabel,
     symbol: trade.symbol,
     side: trade.side,
     entryPrice: trade.entryPrice,
     exitPrice,
     stopLoss: trade.stopLoss,
     takeProfit: trade.takeProfit,
+    detectedAt: trade.detectedAt,
     openedAt: trade.openedAt,
     closedAt: Date.now(),
     reason,
@@ -1346,15 +1911,19 @@ function closeTrade(tradeId, reason, exitPrice, precisionHint) {
     returnPct,
     balanceBefore: trade.balanceBefore,
     balanceAfter,
+    strategyBalanceBefore: trade.strategyBalanceBefore,
+    strategyBalanceAfter: trade.strategyBalanceBefore + pnlUsd,
     quantity: trade.quantity,
     pricePrecision: trade.pricePrecision,
   });
   state.closedTrades = state.closedTrades.slice(0, 90);
-  state.balance = balanceAfter;
+  state.strategyBalances[trade.strategyId] =
+    (Number(state.strategyBalances[trade.strategyId]) || STRATEGY_START_BALANCE) + pnlUsd;
+  recomputeTotalBalance();
   state.openTrades.splice(tradeIndex, 1);
 
   logActivity(
-    `${reason} closed ${trade.side} ${trade.symbol} • entry ${formatPrice(
+    `${reason} closed ${trade.strategyLabel} ${trade.side} ${trade.symbol} • entry ${formatPrice(
       trade.entryPrice,
       precisionHint
     )} • exit ${formatPrice(exitPrice, precisionHint)} • ${formatPercent(
@@ -1421,26 +1990,53 @@ function refreshOpenTrades(candidates) {
   });
 }
 
+function qualifiedStrategyCandidates(candidates, strategyId, threshold) {
+  return candidates
+    .filter((candidate) => {
+      const signal = candidate.strategySignals?.[strategyId];
+      return signal && signal.qualityScore >= threshold;
+    })
+    .sort(
+      (left, right) =>
+        (right.strategySignals?.[strategyId]?.qualityScore || 0) -
+        (left.strategySignals?.[strategyId]?.qualityScore || 0)
+    );
+}
+
 function openQualifiedTrades(candidates) {
   const opened = [];
-  const availableSlots = MAX_CONCURRENT_TRADES - state.openTrades.length;
-  if (availableSlots <= 0) return opened;
+  STRATEGY_SPECS.forEach((spec) => {
+    if (opened.length >= MAX_NEW_TRADES_PER_SCAN) return;
+    if (strategyOpenTrades(spec.id).length >= spec.maxOpenTrades) return;
 
-  const eligible = candidates.filter(
-    (candidate) => !symbolHasOpenTrade(candidate.symbol) && !recentlyClosed(candidate.symbol)
-  );
+    const candidate = qualifiedStrategyCandidates(candidates, spec.id, state.qualityThreshold).find(
+      (entry) => !strategyHasOpenTrade(spec.id, entry.symbol) && !recentlyClosed(entry.symbol, spec.id)
+    );
 
-  eligible
-    .slice(0, Math.min(availableSlots, MAX_NEW_TRADES_PER_SCAN))
-    .forEach((candidate) => {
-      if (openTradeFromCandidate(candidate)) opened.push(candidate);
-    });
+    if (candidate && openTradeFromStrategySignal(candidate, spec.id)) {
+      opened.push({
+        strategyId: spec.id,
+        strategyLabel: spec.label,
+        symbol: candidate.symbol,
+        signal: candidate.strategySignals[spec.id],
+        bias: candidate.bias,
+        pricePrecision: candidate.pricePrecision,
+      });
+    }
+  });
 
   return opened;
 }
 
 function summarizeEngine(candidates, threshold) {
-  const qualified = highQualityCandidates(candidates, threshold);
+  const qualified = STRATEGY_SPECS.flatMap((spec) =>
+    qualifiedStrategyCandidates(candidates, spec.id, threshold).map((candidate) => ({
+      strategyId: spec.id,
+      strategyLabel: spec.label,
+      candidate,
+      signal: candidate.strategySignals[spec.id],
+    }))
+  ).sort((left, right) => right.signal.qualityScore - left.signal.qualityScore);
   if (!qualified.length) {
     if (state.openTrades.length) {
       return `${state.openTrades.length}/${MAX_CONCURRENT_TRADES} paper positions are active. No fresh setup currently clears quality ${threshold}, so the engine is focused on managing existing TP and SL levels.`;
@@ -1450,26 +2046,60 @@ function summarizeEngine(candidates, threshold) {
 
   const best = qualified[0];
   if (state.openTrades.length) {
-    return `${state.openTrades.length}/${MAX_CONCURRENT_TRADES} paper positions are active. ${qualified.length} fresh candidates still meet the filter, and ${best.symbol} leads with entry ${formatPrice(
-      best.trade.entry,
-      best.pricePrecision
-    )}, TP ${formatPrice(best.trade.takeProfit, best.pricePrecision)}, and SL ${formatPrice(
-      best.trade.stopLoss,
-      best.pricePrecision
+    return `${state.openTrades.length}/${MAX_CONCURRENT_TRADES} paper positions are active. ${qualified.length} fresh strategy signals still meet the filter, and ${best.strategyLabel} on ${best.candidate.symbol} leads with entry ${formatPrice(
+      best.signal.entry,
+      best.candidate.pricePrecision
+    )}, TP ${formatPrice(best.signal.takeProfit, best.candidate.pricePrecision)}, and SL ${formatPrice(
+      best.signal.stopLoss,
+      best.candidate.pricePrecision
     )}. Higher-timeframe confirmation is now required before a new trade opens.`;
   }
 
-  return `${qualified.length} high-quality setups are live across the perp universe. ${best.symbol} leads with entry ${formatPrice(
-    best.trade.entry,
-    best.pricePrecision
-  )}, TP ${formatPrice(best.trade.takeProfit, best.pricePrecision)}, SL ${formatPrice(
-    best.trade.stopLoss,
-    best.pricePrecision
-  )}, refined quality ${best.refinedQualityScore ?? best.qualityScore}, and ${
-    best.trade.targetReturnPct
+  return `${qualified.length} high-quality strategy signals are live across the perp universe. ${best.strategyLabel} on ${best.candidate.symbol} leads with entry ${formatPrice(
+    best.signal.entry,
+    best.candidate.pricePrecision
+  )}, TP ${formatPrice(best.signal.takeProfit, best.candidate.pricePrecision)}, SL ${formatPrice(
+    best.signal.stopLoss,
+    best.candidate.pricePrecision
+  )}, quality ${best.signal.qualityScore}, and ${
+    best.signal.targetReturnPct.toFixed(1)
   }% target return on margin (${formatPercent(
-    best.trade.projectedMovePct
+    best.signal.projectedMovePct
   )} price move).`;
+}
+
+function renderStrategySleeves(candidates) {
+  if (!dom.strategySleeveGrid) return;
+
+  const cards = STRATEGY_SPECS.map((spec) => {
+    const realizedBalance = Number(state.strategyBalances?.[spec.id]) || STRATEGY_START_BALANCE;
+    const openTrades = strategyOpenTrades(spec.id);
+    const unrealizedUsd = openTrades.reduce((sum, trade) => {
+      const direction = trade.side === "Short" ? -1 : 1;
+      if (!Number.isFinite(trade.lastPrice)) return sum;
+      return sum + (trade.lastPrice - trade.entryPrice) * trade.quantity * direction;
+    }, 0);
+    const equity = realizedBalance + unrealizedUsd;
+    const closed = state.closedTrades.filter((trade) => trade.strategyId === spec.id);
+    const wins = closed.filter((trade) => trade.reason === "TP").length;
+    const winRate = closed.length ? (wins / closed.length) * 100 : 0;
+    const lead = qualifiedStrategyCandidates(candidates, spec.id, state.qualityThreshold)[0] || null;
+    return {
+      label: spec.label,
+      value: `${formatPrice(equity, 2)} • ${openTrades.length} open`,
+      note: lead
+        ? `${lead.symbol} ${lead.strategySignals[spec.id].side} • Q${lead.strategySignals[spec.id].qualityScore} • ${formatPercent(lead.strategySignals[spec.id].projectedMovePct)} move • ${wins}/${closed.length} wins`
+        : `${wins}/${closed.length} wins • no live ${spec.shortLabel.toLowerCase()} signal above Q${state.qualityThreshold}`,
+      tone:
+        equity > STRATEGY_START_BALANCE + 0.5
+          ? "up"
+          : equity < STRATEGY_START_BALANCE - 0.5
+            ? "down"
+            : spec.tone,
+    };
+  });
+
+  renderAnalysisGrid(dom.strategySleeveGrid, cards);
 }
 
 function renderDashboard(universe = []) {
@@ -1505,7 +2135,7 @@ function renderDashboard(universe = []) {
     ? toneFromNumber(unrealizedUsd, 0.01)
     : "neutral";
   dom.metricOpenNote.textContent = leadOpenTrade
-    ? `${leadOpenTrade.symbol} ${leadOpenTrade.side} • entry ${formatPrice(
+    ? `${leadOpenTrade.strategyLabel} • ${leadOpenTrade.symbol} ${leadOpenTrade.side} • entry ${formatPrice(
         leadOpenTrade.entryPrice,
         leadOpenTrade.pricePrecision || 2
       )} • TP ${formatPrice(leadOpenTrade.takeProfit, leadOpenTrade.pricePrecision || 2)} • SL ${formatPrice(
@@ -1525,35 +2155,7 @@ function renderDashboard(universe = []) {
   }
   if (dom.universeInput) dom.universeInput.value = "All Binance USDT Perps";
   if (dom.universeCount) dom.universeCount.value = universe.length ? `${universe.length} contracts` : "Loading...";
-
-  const candidateCards = state.lastCandidates.slice(0, 6).map((candidate) => ({
-    label: candidate.symbol,
-    value: `${candidate.bias.label} • Q${candidate.refinedQualityScore ?? candidate.qualityScore}`,
-    note: `Entry ${formatPrice(candidate.trade.entry, candidate.pricePrecision)} • TP ${formatPrice(
-      candidate.trade.takeProfit,
-      candidate.pricePrecision
-    )} • SL ${formatPrice(candidate.trade.stopLoss, candidate.pricePrecision)} • target ${
-      candidate.trade.targetReturnPct
-    }% • move ${formatPercent(candidate.trade.projectedMovePct)} • RR ${
-      candidate.rr.toFixed(2)
-    } • 1H ${candidate.confirmation?.["1h"]?.label || "Queue"} • 4H ${
-      candidate.confirmation?.["4h"]?.label || "Queue"
-    }`,
-    tone: candidate.bias.tone,
-  }));
-  renderAnalysisGrid(
-    dom.candidateGrid,
-    candidateCards.length
-      ? candidateCards
-      : [
-          {
-            label: "Scanner",
-            value: "Waiting",
-            note: "No candidate snapshot is available yet.",
-            tone: "neutral",
-          },
-        ]
-  );
+  renderStrategySleeves(state.lastCandidates);
 
   renderMarketTable(universe);
 
@@ -1561,7 +2163,7 @@ function renderDashboard(universe = []) {
     dom.openPositionGrid,
     openTrades.length
       ? openTrades.slice(0, 6).map((trade) => ({
-          label: `${trade.symbol} ${trade.side}`,
+          label: `${trade.strategyLabel} • ${trade.symbol} ${trade.side}`,
           value: `${formatPercent(
             tradeReturnPct(trade, trade.lastPrice || trade.entryPrice)
           )} live`,
@@ -1587,7 +2189,7 @@ function renderDashboard(universe = []) {
   renderTable(
     dom.tradeLogTable,
     state.closedTrades.slice(0, 12).map((trade) => ({
-      label: `${trade.symbol} ${trade.side} • ${trade.reason}`,
+      label: `${trade.strategyLabel} • ${trade.symbol} ${trade.side} • ${trade.reason}`,
       primary: `Entry ${formatPrice(trade.entryPrice, trade.pricePrecision || 2)} • Exit ${formatPrice(
         trade.exitPrice,
         trade.pricePrecision || 2
@@ -1596,12 +2198,17 @@ function renderDashboard(universe = []) {
       secondary: `TP ${formatPrice(trade.takeProfit, trade.pricePrecision || 2)} • SL ${formatPrice(
         trade.stopLoss,
         trade.pricePrecision || 2
-      )}`,
+      )} • ${new Date(trade.detectedAt || trade.openedAt).toLocaleString([], {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })}`,
       tertiaryLabel: "Result",
       tertiary: `${formatPercent(trade.returnPct || 0)} on margin • ${formatCompactUsd(
         trade.pnlUsd,
         2
-      )} • Bal ${formatPrice(trade.balanceAfter, 2)}`,
+      )} • Sleeve ${formatPrice(trade.strategyBalanceAfter || trade.balanceAfter, 2)}`,
       tone: trade.reason === "TP" ? "up" : "down",
     })),
     "No closed trades yet"
@@ -1627,7 +2234,7 @@ function renderDashboard(universe = []) {
 
   dom.autoToggleButton.textContent = state.autoEnabled ? "Pause Auto" : "Resume Auto";
   dom.autoRunNote.textContent = state.autoEnabled
-    ? `Auto-scans every 90 seconds and can hold up to ${MAX_CONCURRENT_TRADES} quality positions.`
+    ? `Auto-scans every 90 seconds across four $100 strategy sleeves and can hold up to ${MAX_CONCURRENT_TRADES} total positions.`
     : "Auto engine paused. Manual scans still work.";
   renderPaperTabs();
 }
@@ -1694,10 +2301,11 @@ async function scanUniverse({ manual = false } = {}) {
           confirmationMap.get(candidate.symbol) || {}
         )
       )
+      .map((candidate) => attachStrategySignals(candidate))
       .sort(
         (left, right) =>
-          (right.refinedQualityScore ?? right.qualityScore) -
-          (left.refinedQualityScore ?? left.qualityScore)
+          (right.bestStrategyQuality ?? right.refinedQualityScore ?? right.qualityScore) -
+          (left.bestStrategyQuality ?? left.refinedQualityScore ?? left.qualityScore)
       );
 
     candidates.forEach((candidate) => {
@@ -1710,22 +2318,22 @@ async function scanUniverse({ manual = false } = {}) {
     state.lastCandidates = Array.from(analysisCache.values())
       .sort(
         (left, right) =>
-          (right.refinedQualityScore ?? right.qualityScore) -
-          (left.refinedQualityScore ?? left.qualityScore)
+          (right.bestStrategyQuality ?? right.refinedQualityScore ?? right.qualityScore) -
+          (left.bestStrategyQuality ?? left.refinedQualityScore ?? left.qualityScore)
       )
       .slice(0, 48);
     state.lastScanAt = Date.now();
 
     refreshOpenTrades(candidates);
 
-    const qualified = highQualityCandidates(candidates, state.qualityThreshold);
-    const opened = openQualifiedTrades(qualified);
+    const qualified = STRATEGY_SPECS.flatMap((spec) => qualifiedStrategyCandidates(candidates, spec.id, state.qualityThreshold));
+    const opened = openQualifiedTrades(candidates);
 
     if (opened.length) {
       const lead = opened[0];
       setStatus(
-        `Opened ${opened.length} new paper trade${opened.length > 1 ? "s" : ""}. ${state.openTrades.length}/${MAX_CONCURRENT_TRADES} positions active, led by ${lead.symbol}.`,
-        lead.bias.tone
+        `Opened ${opened.length} new strategy trade${opened.length > 1 ? "s" : ""}. ${state.openTrades.length}/${MAX_CONCURRENT_TRADES} positions active, led by ${lead.strategyLabel} on ${lead.symbol}.`,
+        lead.signal.tone
       );
     } else if (state.openTrades.length) {
       setStatus(
@@ -1793,6 +2401,7 @@ dom.autoToggleButton.addEventListener("click", () => {
 });
 
 dom.resetSimButton.addEventListener("click", () => {
+  state.strategyBalances = buildDefaultStrategyBalances();
   state.balance = START_BALANCE;
   state.openTrades = [];
   state.closedTrades = [];
@@ -1802,10 +2411,10 @@ dom.resetSimButton.addEventListener("click", () => {
   analysisCache = new Map();
   universeTickerMap = new Map();
   scanCursor = 0;
-  logActivity("Simulation reset to $200.", "neutral");
+  logActivity("Simulation reset to four independent $100 strategy sleeves.", "neutral");
   persistState();
   renderDashboard(perpUniverseCache || []);
-  setStatus("Simulation reset to $200.", "neutral");
+  setStatus("Simulation reset to four independent $100 strategy sleeves.", "neutral");
 });
 
 if (dom.paperTabPositions) {

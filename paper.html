@@ -44,7 +44,7 @@
             <p class="subtitle">
               Automated paper-trading simulator. It scans the full Binance USDT
               perp universe, can hold multiple high-quality paper positions,
-              starts at $200, and logs every TP or SL outcome.
+              runs four independent $100 strategy sleeves, and logs every TP or SL outcome.
             </p>
           </div>
 
@@ -85,7 +85,7 @@
 
       <div class="control-row">
         <button id="auto-toggle-button" class="mini-button" type="button">Pause Auto</button>
-        <button id="reset-sim-button" class="mini-button" type="button">Reset to $200</button>
+        <button id="reset-sim-button" class="mini-button" type="button">Reset to $400</button>
         <span id="auto-run-note" class="subsection-meta">Auto-scans every 90 seconds.</span>
       </div>
 
@@ -93,8 +93,8 @@
         <section class="metric-strip">
           <article class="metric-card">
             <span class="metric-label">Starting Balance</span>
-            <strong id="metric-start-balance">$200.00</strong>
-            <small>Simulation resets to this value</small>
+            <strong id="metric-start-balance">$400.00</strong>
+            <small>4 strategy sleeves x $100 each</small>
           </article>
           <article class="metric-card">
             <span class="metric-label">Current Equity</span>
@@ -137,14 +137,16 @@
         <section class="panel panel-engine-compact">
           <div class="panel-head">
             <div>
-              <p class="panel-label">Trading Arena</p>
-              <h2>Signal board moved</h2>
+              <p class="panel-label">Strategy Sleeves</p>
+              <h2>Independent $100 books</h2>
             </div>
           </div>
 
+          <div id="strategy-sleeve-grid" class="analysis-grid strategy-sleeve-grid"></div>
+
           <div class="outlook-copy">
-            High-quality signal selection, conviction plays, and hot-pair scanning now live in the
-            dedicated Trading Arena page.
+            Each sleeve trades its own rule set and keeps its own $100 virtual balance so we can compare
+            strategy quality cleanly instead of mixing all trades together.
           </div>
 
           <div class="nav-links">

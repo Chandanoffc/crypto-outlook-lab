@@ -102,6 +102,11 @@ body.paper-trader-page .panel-engine-compact .analysis-grid {
   grid-template-columns: 1fr;
 }
 
+body.paper-trader-page .strategy-sleeve-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  margin-bottom: 12px;
+}
+
 body.paper-trader-page .panel-engine-compact .analysis-card {
   padding: 12px 13px;
 }
@@ -1213,7 +1218,7 @@ body.dashboard-home .mini-button {
 }
 
 body.paper-trader-page .panel-monitor-large .monitor-table table {
-  min-width: 980px;
+  min-width: 1520px;
 }
 
 body.paper-trader-page .panel-monitor-large .monitor-table th,
@@ -1221,12 +1226,30 @@ body.paper-trader-page .panel-monitor-large .monitor-table td {
   padding: 13px 15px;
 }
 
-body.paper-trader-page .panel-monitor-large .monitor-table td:nth-child(5) {
+body.paper-trader-page .panel-monitor-large .monitor-table td:nth-child(9) {
   min-width: 420px;
 }
 
 body.paper-trader-page .panel-monitor-large .monitor-symbol {
   font-size: 0.88rem;
+}
+
+.strategy-column {
+  text-align: center;
+  vertical-align: middle;
+}
+
+.strategy-cell-stack {
+  display: inline-grid;
+  gap: 5px;
+  justify-items: center;
+}
+
+.strategy-column .quality-chip {
+  min-width: 72px;
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 0.74rem;
 }
 
 .monitor-table thead {
