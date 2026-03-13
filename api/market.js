@@ -1,3 +1,5 @@
+const fallbackExchangeInfo = require("../fallback-perps.js");
+
 const DEFAULT_TOKEN = "BTC";
 const DEFAULT_INTERVAL = "15m";
 const QUOTE_ASSET = "USDT";
@@ -58,10 +60,18 @@ async function getExchangeInfo() {
     return exchangeInfoCache.data;
   }
 
-  const data = await fetchJson(
-    "https://fapi.binance.com/fapi/v1/exchangeInfo",
-    "Futures exchange info"
-  );
+  let data;
+  try {
+    data = await fetchJson(
+      "https://fapi.binance.com/fapi/v1/exchangeInfo",
+      "Futures exchange info"
+    );
+  } catch (error) {
+    if (!Array.isArray(fallbackExchangeInfo.symbols) || !fallbackExchangeInfo.symbols.length) {
+      throw error;
+    }
+    data = fallbackExchangeInfo;
+  }
 
   exchangeInfoCache = {
     data,

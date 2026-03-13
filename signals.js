@@ -128,6 +128,12 @@ function writeStoredJson(key, value) {
   }
 }
 
+function getFallbackExchangeInfo() {
+  const fallback = window.APEX_FALLBACK_PERPS;
+  if (!fallback || !Array.isArray(fallback.symbols) || !fallback.symbols.length) return null;
+  return fallback;
+}
+
 function normalizeToken(rawToken) {
   const cleaned = String(rawToken || "")
     .toUpperCase()
@@ -610,7 +616,13 @@ async function fetchDirectJson(url, label) {
 
 async function getExchangeInfo() {
   if (exchangeInfoCache) return exchangeInfoCache;
-  exchangeInfoCache = await fetchJson("https://fapi.binance.com/fapi/v1/exchangeInfo", "Exchange info");
+  try {
+    exchangeInfoCache = await fetchJson("https://fapi.binance.com/fapi/v1/exchangeInfo", "Exchange info");
+  } catch (error) {
+    const fallback = getFallbackExchangeInfo();
+    if (!fallback) throw error;
+    exchangeInfoCache = fallback;
+  }
   return exchangeInfoCache;
 }
 

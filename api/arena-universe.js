@@ -1,3 +1,5 @@
+const fallbackExchangeInfo = require("../fallback-perps.js");
+
 const QUOTE_ASSET = "USDT";
 const EXCHANGE_CACHE_TTL_MS = 10 * 60 * 1000;
 const TICKER_CACHE_TTL_MS = 20 * 1000;
@@ -38,10 +40,18 @@ async function getExchangeInfo() {
     return exchangeInfoCache.data;
   }
 
-  const data = await fetchJson(
-    "https://fapi.binance.com/fapi/v1/exchangeInfo",
-    "Futures exchange info"
-  );
+  let data;
+  try {
+    data = await fetchJson(
+      "https://fapi.binance.com/fapi/v1/exchangeInfo",
+      "Futures exchange info"
+    );
+  } catch (error) {
+    if (!Array.isArray(fallbackExchangeInfo.symbols) || !fallbackExchangeInfo.symbols.length) {
+      throw error;
+    }
+    data = fallbackExchangeInfo;
+  }
 
   exchangeInfoCache = {
     data,

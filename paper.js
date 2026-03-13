@@ -129,6 +129,12 @@ function persistState() {
   );
 }
 
+function getFallbackExchangeInfo() {
+  const fallback = window.APEX_FALLBACK_PERPS;
+  if (!fallback || !Array.isArray(fallback.symbols) || !fallback.symbols.length) return null;
+  return fallback;
+}
+
 function setStatus(message, tone = "neutral") {
   dom.statusBanner.textContent = message;
   dom.statusBanner.className = `status-banner ${tone}`;
@@ -832,7 +838,13 @@ async function fetchServerSnapshot(token, interval) {
 
 async function getExchangeInfo() {
   if (exchangeInfoCache) return exchangeInfoCache;
-  exchangeInfoCache = await fetchJson("https://fapi.binance.com/fapi/v1/exchangeInfo", "Exchange info");
+  try {
+    exchangeInfoCache = await fetchJson("https://fapi.binance.com/fapi/v1/exchangeInfo", "Exchange info");
+  } catch (error) {
+    const fallback = getFallbackExchangeInfo();
+    if (!fallback) throw error;
+    exchangeInfoCache = fallback;
+  }
   return exchangeInfoCache;
 }
 
@@ -848,16 +860,56 @@ async function getPerpUniverse() {
 async function fetchUniverseTickers() {
   const universe = await getPerpUniverse();
   const activeSymbols = new Set(universe.map((item) => item.symbol));
-  const tickers = await fetchJson("https://fapi.binance.com/fapi/v1/ticker/24hr", "24H tickers");
-  return tickers
-    .filter((entry) => activeSymbols.has(entry.symbol))
-    .map((entry) => ({
-      symbol: entry.symbol,
-      lastPrice: Number(entry.lastPrice),
-      changePct: Number(entry.priceChangePercent),
-      quoteVolume: Number(entry.quoteVolume),
-      volume: Number(entry.volume),
-    }));
+  try {
+    const tickers = await fetchJson("https://fapi.binance.com/fapi/v1/ticker/24hr", "24H tickers");
+    return tickers
+      .filter((entry) => activeSymbols.has(entry.symbol))
+      .map((entry) => ({
+        symbol: entry.symbol,
+        lastPrice: Number(entry.lastPrice),
+        changePct: Number(entry.priceChangePercent),
+        quoteVolume: Number(entry.quoteVolume),
+        volume: Number(entry.volume),
+      }));
+  } catch (directError) {
+    try {
+      const response = await fetch(new URL("/api/arena-universe", window.location.origin));
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || `Arena universe proxy failed (${response.status})`);
+      }
+      return (payload.tickers || [])
+        .filter((entry) => activeSymbols.has(entry.symbol))
+        .map((entry) => ({
+          symbol: entry.symbol,
+          lastPrice: Number(entry.lastPrice ?? entry.price ?? entry.markPrice),
+          changePct: Number(entry.changePct ?? entry.priceChangePercent) || 0,
+          quoteVolume: Number(entry.quoteVolume) || 0,
+          volume: Number(entry.volume) || 0,
+        }));
+    } catch (serverError) {
+      try {
+        const prices = await fetchJson("https://fapi.binance.com/fapi/v1/ticker/price", "Ticker prices");
+        return prices
+          .filter((entry) => activeSymbols.has(entry.symbol))
+          .map((entry) => ({
+            symbol: entry.symbol,
+            lastPrice: Number(entry.lastPrice ?? entry.price ?? entry.markPrice),
+            changePct: 0,
+            quoteVolume: 0,
+            volume: 0,
+          }));
+      } catch (priceError) {
+        return Array.from(activeSymbols).map((symbol) => ({
+          symbol,
+          lastPrice: 0,
+          changePct: 0,
+          quoteVolume: 0,
+          volume: 0,
+        }));
+      }
+    }
+  }
 }
 
 async function fetchDirectSnapshot(token, interval) {

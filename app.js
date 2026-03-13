@@ -217,6 +217,12 @@ function writeStoredJson(key, value) {
   }
 }
 
+function getFallbackExchangeInfo() {
+  const fallback = window.APEX_FALLBACK_PERPS;
+  if (!fallback || !Array.isArray(fallback.symbols) || !fallback.symbols.length) return null;
+  return fallback;
+}
+
 function loadPaperState() {
   const stored = readStoredJson(PAPER_STORAGE_KEY, {});
   return {
@@ -3152,10 +3158,17 @@ async function buildVenueMatrixDirect(resolved, ticker, premiumIndex, openIntere
 }
 
 async function fetchDirectSnapshot(token, interval) {
-  const exchangeInfo = await fetchDirectJson(
-    "https://fapi.binance.com/fapi/v1/exchangeInfo",
-    "Futures exchange info"
-  );
+  let exchangeInfo;
+  try {
+    exchangeInfo = await fetchDirectJson(
+      "https://fapi.binance.com/fapi/v1/exchangeInfo",
+      "Futures exchange info"
+    );
+  } catch (error) {
+    const fallback = getFallbackExchangeInfo();
+    if (!fallback) throw error;
+    exchangeInfo = fallback;
+  }
 
   const resolved = resolvePerpSymbolFromExchangeInfo(token, exchangeInfo);
   const newsCategories = Array.from(
