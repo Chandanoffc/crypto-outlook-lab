@@ -365,13 +365,62 @@ function computeSupportResistance(candles, currentPrice, latestAtr) {
       }, [])
       .map((group) => group.center);
 
+  function uniqueDirectionalLevels(baseLevels, fallbackLevels, direction) {
+    const sorted = [...baseLevels];
+    const orderedFallback = [...fallbackLevels].sort((left, right) =>
+      direction === "support" ? right - left : left - right
+    );
+
+    orderedFallback.forEach((level) => {
+      if (
+        !sorted.some((existing) => Math.abs(existing - level) <= Math.max(clusterThreshold * 0.65, 0.0000001))
+      ) {
+        sorted.push(level);
+      }
+    });
+
+    return sorted
+      .filter((level) => (direction === "support" ? level < currentPrice : level > currentPrice))
+      .sort((left, right) => (direction === "support" ? right - left : left - right))
+      .slice(0, 2);
+  }
+
+  const recentWindow = candles.slice(-Math.min(candles.length, 90));
+  const clusteredSupports = clusterLevels(supports).filter((level) => level < currentPrice);
+  const clusteredResistances = clusterLevels(resistances).filter((level) => level > currentPrice);
+  const fallbackSupports = clusterLevels(recentWindow.map((candle) => candle.low)).filter(
+    (level) => level < currentPrice
+  );
+  const fallbackResistances = clusterLevels(recentWindow.map((candle) => candle.high)).filter(
+    (level) => level > currentPrice
+  );
+
+  const recentHigh = recentWindow.length ? Math.max(...recentWindow.map((candle) => candle.high)) : currentPrice;
+  const recentLow = recentWindow.length ? Math.min(...recentWindow.map((candle) => candle.low)) : currentPrice;
+  const projectionUnit = Math.max(
+    clusterThreshold * 1.2,
+    latestAtr * 0.9,
+    Math.abs(recentHigh - recentLow) * 0.16
+  );
+
+  let supportLevels = uniqueDirectionalLevels(clusteredSupports, fallbackSupports, "support");
+  let resistanceLevels = uniqueDirectionalLevels(clusteredResistances, fallbackResistances, "resistance");
+
+  while (supportLevels.length < 2) {
+    const anchor = supportLevels[supportLevels.length - 1] ?? currentPrice;
+    supportLevels.push(anchor - projectionUnit * (supportLevels.length === 0 ? 1 : 0.9));
+  }
+
+  while (resistanceLevels.length < 2) {
+    const anchor = resistanceLevels[resistanceLevels.length - 1] ?? currentPrice;
+    resistanceLevels.push(anchor + projectionUnit * (resistanceLevels.length === 0 ? 1 : 0.9));
+  }
+
   return {
-    supportLevels: clusterLevels(supports)
-      .filter((level) => level < currentPrice)
+    supportLevels: supportLevels
       .sort((left, right) => right - left)
       .slice(0, 2),
-    resistanceLevels: clusterLevels(resistances)
-      .filter((level) => level > currentPrice)
+    resistanceLevels: resistanceLevels
       .sort((left, right) => left - right)
       .slice(0, 2),
     bandWidth: clusterThreshold / 2,

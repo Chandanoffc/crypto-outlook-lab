@@ -78,6 +78,10 @@ body.arena-page {
   --body-font: var(--font-stack);
 }
 
+body.tradez-page {
+  --body-font: var(--ui-font);
+}
+
 body.paper-trader-page .dashboard-grid {
   grid-template-columns: minmax(0, 2.3fr) minmax(280px, 0.78fr);
 }
@@ -1350,6 +1354,15 @@ body.paper-trader-page .panel-monitor-large .monitor-symbol {
   animation: quality-shimmer 2.6s ease-in-out infinite;
 }
 
+.quality-tier-neutral {
+  color: #c8d8f5;
+  border-color: rgba(152, 179, 227, 0.26);
+  background: linear-gradient(180deg, rgba(152, 179, 227, 0.16), rgba(19, 29, 49, 0.94));
+  box-shadow:
+    inset 0 0 0 1px rgba(152, 179, 227, 0.06),
+    0 0 16px rgba(152, 179, 227, 0.08);
+}
+
 @keyframes quality-shimmer {
   0%,
   100% {
@@ -1371,6 +1384,39 @@ body.paper-trader-page .panel-monitor-large .monitor-symbol {
   border-radius: 18px;
   color: var(--text-soft);
   background: rgba(9, 8, 6, 0.6);
+}
+
+.tradez-grid {
+  grid-template-columns: minmax(0, 1.7fr) minmax(320px, 0.92fr);
+}
+
+.tradez-chart-panel {
+  min-height: 0;
+}
+
+.tradez-trade-card {
+  margin-top: 18px;
+}
+
+.tradez-feed-panel {
+  grid-column: 1 / -1;
+}
+
+.tradez-notes-grid {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.tradez-symbol-button {
+  min-width: 112px;
+  justify-content: center;
+}
+
+body.tradez-page .monitor-table td:nth-child(8) {
+  min-width: 240px;
+}
+
+body.tradez-page .quality-chip {
+  min-width: 78px;
 }
 
 .table-row {
@@ -1671,6 +1717,10 @@ body.paper-trader-page .panel-monitor-large .monitor-symbol {
   }
 
   .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tradez-grid {
     grid-template-columns: 1fr;
   }
 

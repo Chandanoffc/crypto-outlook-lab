@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Apex Signals Tradez</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+    <script src="./tradez.js" defer></script>
+  </head>
+  <body class="dashboard-home tradez-page">
+    <div class="page-shell">
+      <header class="app-header">
+        <div class="app-bar">
+          <a class="brand-block" href="./index.html">
+            <span class="brand-mark">AS</span>
+            <span class="brand-copy">
+              <strong>Apex Signals</strong>
+              <small>Perps Strategy Suite</small>
+            </span>
+          </a>
+
+          <nav class="page-tabs" aria-label="Primary pages">
+            <a class="page-tab" href="./index.html">Main Dashboard</a>
+            <a class="page-tab" href="./paper.html">Auto Paper Trader</a>
+            <a class="page-tab" href="./arena.html">Trading Arena</a>
+            <a class="page-tab is-current" href="./tradez.html">Tradez</a>
+          </nav>
+
+          <div class="app-pill">EMA Pullback</div>
+        </div>
+
+        <div class="hero-shell">
+          <div class="hero-copy">
+            <p class="eyebrow">Tradez</p>
+            <h1>1H EMA 20/50 pullback engine</h1>
+            <p class="subtitle">
+              Focused strategy desk for 1-hour pullback continuations, EMA touch alerts, and a
+              filtered feed of higher-quality long and short candidates.
+            </p>
+          </div>
+
+          <form id="tradez-form" class="token-form token-form-wide hero-form">
+            <label>
+              Token
+              <input
+                id="tradez-token-input"
+                name="token"
+                type="text"
+                placeholder="BTC"
+                value="BTC"
+                autocomplete="off"
+                spellcheck="false"
+              />
+            </label>
+
+            <label>
+              Strategy Timeframe
+              <input id="tradez-interval" type="text" value="1H locked" readonly />
+            </label>
+
+            <label>
+              Min Quality
+              <input id="tradez-quality-threshold" type="number" min="50" max="160" step="1" value="78" />
+            </label>
+
+            <button id="tradez-refresh-submit" type="submit">Refresh Tradez</button>
+          </form>
+        </div>
+      </header>
+
+      <div id="tradez-status-banner" class="status-banner">
+        Initializing Tradez...
+      </div>
+
+      <div class="control-row">
+        <button id="tradez-alert-permission" class="mini-button" type="button">
+          Enable Browser Alerts
+        </button>
+        <button id="tradez-scan-button" class="mini-button" type="button">
+          Scan Universe Now
+        </button>
+        <span id="tradez-auto-note" class="subsection-meta">
+          Universe scan refreshes every 5 minutes.
+        </span>
+      </div>
+
+      <main class="dashboard-grid tradez-grid">
+        <section class="metric-strip">
+          <article class="metric-card">
+            <span class="metric-label">Selected Pair</span>
+            <strong id="tradez-metric-selected">BTCUSDT</strong>
+            <small id="tradez-metric-selected-note">1H EMA pullback map</small>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">Qualified Now</span>
+            <strong id="tradez-metric-qualified">-</strong>
+            <small id="tradez-metric-qualified-note">Signals above quality bar</small>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">Bullish Pullbacks</span>
+            <strong id="tradez-metric-bullish">-</strong>
+            <small id="tradez-metric-bullish-note">EMA20/50 retest longs</small>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">Bearish Pullbacks</span>
+            <strong id="tradez-metric-bearish">-</strong>
+            <small id="tradez-metric-bearish-note">EMA20/50 retest shorts</small>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">Alert Events</span>
+            <strong id="tradez-metric-alerts">-</strong>
+            <small id="tradez-metric-alerts-note">New qualified setups seen</small>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">Last Scan</span>
+            <strong id="tradez-metric-last-scan">-</strong>
+            <small id="tradez-metric-last-scan-note">Waiting for first scan</small>
+          </article>
+        </section>
+
+        <section class="panel panel-hero tradez-chart-panel">
+          <div class="panel-head">
+            <div>
+              <p class="panel-label">Tradez Chart</p>
+              <h2 id="tradez-asset-title">BTCUSDT 1H Pullback</h2>
+              <p id="tradez-asset-subtitle" class="subtitle-inline">
+                EMA20/50 pullback map, signal markers, and support/resistance zones
+              </p>
+            </div>
+
+            <div class="headline-metrics">
+              <div class="headline-chip">
+                <span>Mark Price</span>
+                <strong id="tradez-headline-price">-</strong>
+              </div>
+              <div class="headline-chip">
+                <span>24H Change</span>
+                <strong id="tradez-headline-change">-</strong>
+              </div>
+              <div class="headline-chip">
+                <span>Setup Bias</span>
+                <strong id="tradez-headline-bias">-</strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="chart-shell">
+            <div id="tradez-chart" class="chart-frame"></div>
+            <div class="chart-series-labels" aria-hidden="true">
+              <div
+                id="tradez-chart-line-label-ema20"
+                class="chart-series-label chart-series-label-ema20"
+              >
+                20
+              </div>
+              <div
+                id="tradez-chart-line-label-ema50"
+                class="chart-series-label chart-series-label-ema50"
+              >
+                50
+              </div>
+            </div>
+            <div class="chart-hud">
+              <div class="chart-hud-item">
+                <span>EMA20</span>
+                <strong id="tradez-chart-ema20">-</strong>
+              </div>
+              <div class="chart-hud-item">
+                <span>EMA50</span>
+                <strong id="tradez-chart-ema50">-</strong>
+              </div>
+              <div class="chart-hud-item">
+                <span>RSI</span>
+                <strong id="tradez-chart-rsi">-</strong>
+              </div>
+              <div class="chart-hud-item">
+                <span>Volume</span>
+                <strong id="tradez-chart-volume">-</strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="level-badges">
+            <div class="level-stack">
+              <span class="stack-label">Support Fields</span>
+              <div id="tradez-support-fields" class="stack-values"></div>
+            </div>
+            <div class="level-stack">
+              <span class="stack-label">Resistance Fields</span>
+              <div id="tradez-resistance-fields" class="stack-values"></div>
+            </div>
+          </div>
+        </section>
+
+        <aside class="panel panel-outlook tradez-side-panel">
+          <div class="panel-head">
+            <div>
+              <p class="panel-label">Strategy Pulse</p>
+              <h2>Current best pullback</h2>
+            </div>
+            <div id="tradez-quality-badge" class="score-badge neutral">0</div>
+          </div>
+
+          <div id="tradez-stream-status" class="stream-status neutral">
+            Waiting for the first qualified pullback...
+          </div>
+
+          <div id="tradez-summary-copy" class="outlook-copy">
+            Tradez will summarize the active pullback quality, touch location, and risk context
+            here.
+          </div>
+
+          <div class="trade-idea-card tradez-trade-card">
+            <div class="trade-idea-head">
+              <div>
+                <span class="stack-label">Active Trade Plan</span>
+                <small id="tradez-plan-note" class="trade-refresh-note">1H EMA continuation ruleset</small>
+              </div>
+              <div id="tradez-stance-pill" class="pill neutral">Waiting</div>
+            </div>
+
+            <div class="trade-idea-grid">
+              <div class="trade-idea-stat">
+                <span>Entry Zone</span>
+                <strong id="tradez-entry-zone">-</strong>
+              </div>
+              <div class="trade-idea-stat">
+                <span>Stop</span>
+                <strong id="tradez-stop">-</strong>
+              </div>
+              <div class="trade-idea-stat">
+                <span>TP1</span>
+                <strong id="tradez-tp1">-</strong>
+              </div>
+              <div class="trade-idea-stat">
+                <span>TP2</span>
+                <strong id="tradez-tp2">-</strong>
+              </div>
+            </div>
+
+            <p id="tradez-trade-summary" class="trade-copy">
+              No active Tradez setup yet.
+            </p>
+          </div>
+
+          <div id="tradez-signal-list" class="signal-list"></div>
+        </aside>
+
+        <section class="panel workspace-panel tradez-feed-panel">
+          <div class="panel-head">
+            <div>
+              <p class="panel-label">Tradez Feed</p>
+              <h2>EMA touch setups, alert events, and strategy guardrails</h2>
+            </div>
+
+            <div class="feed-tabs">
+              <button id="tradez-tab-signals" class="mini-button feed-tab is-active" type="button">
+                Signal Feed
+              </button>
+              <button id="tradez-tab-alerts" class="mini-button feed-tab" type="button">
+                Alert Events
+              </button>
+              <button id="tradez-tab-notes" class="mini-button feed-tab" type="button">
+                Strategy Notes
+              </button>
+            </div>
+          </div>
+
+          <div id="tradez-tab-note" class="subsection-meta">
+            The feed only promotes 1H EMA pullbacks that still have room, confirmation, and cleaner
+            risk structure.
+          </div>
+
+          <div id="tradez-panel-signals">
+            <div id="tradez-signal-table" class="monitor-table"></div>
+          </div>
+
+          <div id="tradez-panel-alerts" hidden>
+            <div id="tradez-alert-table" class="table-card"></div>
+          </div>
+
+          <div id="tradez-panel-notes" hidden>
+            <div id="tradez-notes-grid" class="analysis-grid tradez-notes-grid"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>
