@@ -82,6 +82,10 @@ body.tradez-page {
   --body-font: var(--ui-font);
 }
 
+body.signals-page {
+  --body-font: var(--ui-font);
+}
+
 body.paper-trader-page .dashboard-grid {
   grid-template-columns: minmax(0, 2.3fr) minmax(280px, 0.78fr);
 }
@@ -1419,6 +1423,46 @@ body.tradez-page .quality-chip {
   min-width: 78px;
 }
 
+.signals-grid {
+  grid-template-columns: minmax(0, 1.7fr) minmax(320px, 0.92fr);
+}
+
+.signals-chart-panel {
+  min-height: 0;
+}
+
+.signals-trade-card {
+  margin-top: 18px;
+}
+
+.signals-feed-panel {
+  grid-column: 1 / -1;
+}
+
+.signals-notes-grid {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.signals-actions-cell {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.signals-inline-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+body.signals-page .monitor-table td:nth-child(8) {
+  min-width: 220px;
+}
+
+body.signals-page .quality-chip {
+  min-width: 78px;
+}
+
 .table-row {
   display: grid;
   grid-template-columns: 1.2fr 1fr 1fr;
@@ -1721,6 +1765,10 @@ body.tradez-page .quality-chip {
   }
 
   .tradez-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .signals-grid {
     grid-template-columns: 1fr;
   }
 
