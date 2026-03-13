@@ -562,6 +562,30 @@ body.dashboard-home .mini-button {
   color: var(--text-soft);
 }
 
+.status-banner.status-banner-flash {
+  border-color: rgba(130, 233, 255, 0.68);
+  color: #dffaff;
+  background:
+    linear-gradient(90deg, rgba(103, 213, 255, 0.24), transparent 52%),
+    rgba(8, 12, 18, 0.92);
+  box-shadow:
+    inset 0 0 0 1px rgba(103, 213, 255, 0.09),
+    0 0 24px rgba(103, 213, 255, 0.18),
+    0 0 42px rgba(103, 213, 255, 0.09);
+  animation: status-prime-pulse 1.5s ease-in-out 3;
+}
+
+@keyframes status-prime-pulse {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+
+  50% {
+    filter: brightness(1.08);
+  }
+}
+
 .dashboard-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.8fr) minmax(320px, 0.9fr);
@@ -755,21 +779,23 @@ body.dashboard-home .mini-button {
 .chart-series-label {
   position: absolute;
   left: 0;
-  transform: translate(-50%, -100%);
-  min-width: 44px;
-  padding: 4px 8px;
-  border-radius: 999px;
-  border: 1px solid transparent;
-  font-family: var(--ui-font);
-  font-size: 0.66rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-align: center;
+  transform: translate(-100%, -118%);
+  min-width: auto;
+  padding: 0;
+  border: none;
+  font-family: var(--font-stack);
+  font-size: 0.56rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-align: right;
   color: var(--text-main);
-  backdrop-filter: blur(12px);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.02),
-    0 10px 18px rgba(0, 0, 0, 0.2);
+  background: transparent;
+  backdrop-filter: none;
+  box-shadow: none;
+  opacity: 0.74;
+  text-shadow:
+    0 0 8px rgba(3, 6, 12, 0.95),
+    0 0 18px rgba(3, 6, 12, 0.92);
 }
 
 .chart-series-label[hidden] {
@@ -777,23 +803,11 @@ body.dashboard-home .mini-button {
 }
 
 .chart-series-label-ema20 {
-  border-color: rgba(103, 213, 255, 0.34);
-  background:
-    linear-gradient(180deg, rgba(103, 213, 255, 0.16), rgba(10, 19, 34, 0.94));
-  color: #dff9ff;
-  box-shadow:
-    inset 0 0 0 1px rgba(103, 213, 255, 0.06),
-    0 0 16px rgba(103, 213, 255, 0.12);
+  color: rgba(154, 236, 255, 0.9);
 }
 
 .chart-series-label-ema50 {
-  border-color: rgba(126, 156, 255, 0.34);
-  background:
-    linear-gradient(180deg, rgba(126, 156, 255, 0.16), rgba(12, 17, 36, 0.94));
-  color: #e8eeff;
-  box-shadow:
-    inset 0 0 0 1px rgba(126, 156, 255, 0.06),
-    0 0 16px rgba(126, 156, 255, 0.12);
+  color: rgba(187, 201, 255, 0.88);
 }
 
 .chart-hud {
@@ -1443,6 +1457,32 @@ body.tradez-page .quality-chip {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
+.signals-side-tabs {
+  width: 100%;
+  justify-content: stretch;
+}
+
+.signals-side-tabs .feed-tab {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.signals-side-feed {
+  gap: 12px;
+}
+
+.signals-side-feed .table-row {
+  grid-template-columns: 1.05fr 1.1fr 0.88fr;
+}
+
+.signals-side-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .signals-actions-cell {
   display: flex;
   gap: 8px;
@@ -1855,9 +1895,9 @@ body.signals-page .quality-chip {
   }
 
   .chart-series-label {
-    min-width: 40px;
-    padding: 4px 7px;
-    font-size: 0.62rem;
+    min-width: auto;
+    padding: 0;
+    font-size: 0.52rem;
   }
 
   .table-row {

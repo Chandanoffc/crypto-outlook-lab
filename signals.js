@@ -5,6 +5,11 @@ const DEFAULT_QUALITY_THRESHOLD = 78;
 const DEFAULT_WATCHLIST = ["BTC", "ETH", "SOL", "XRP", "DOGE"];
 const AUTO_SCAN_MS = 5 * 60 * 1000;
 const ANALYSIS_CONCURRENCY = 4;
+const PRIORITY_SCAN_COUNT = 14;
+const ROTATION_SCAN_COUNT = 32;
+const FULL_SCAN_MAX_SYMBOLS = 180;
+const TICKER_STORAGE_KEY = "apex-signals-my-signals-tickers";
+const TICKER_CACHE_MAX_AGE_MS = 30 * 60 * 1000;
 const STORAGE_KEY = "apex-signals-my-signals-state";
 
 const dom = {
@@ -46,6 +51,15 @@ const dom = {
   resistanceFields: document.getElementById("signals-resistance-fields"),
   qualityBadge: document.getElementById("signals-quality-badge"),
   streamStatus: document.getElementById("signals-stream-status"),
+  sideTabSelected: document.getElementById("signals-side-tab-selected"),
+  sideTabQuality: document.getElementById("signals-side-tab-quality"),
+  sideTabPrime: document.getElementById("signals-side-tab-prime"),
+  sideNote: document.getElementById("signals-side-note"),
+  sidePanelSelected: document.getElementById("signals-side-panel-selected"),
+  sidePanelQuality: document.getElementById("signals-side-panel-quality"),
+  sidePanelPrime: document.getElementById("signals-side-panel-prime"),
+  qualityFeed: document.getElementById("signals-quality-feed"),
+  primeFeed: document.getElementById("signals-prime-feed"),
   summaryCopy: document.getElementById("signals-summary-copy"),
   stancePill: document.getElementById("signals-stance-pill"),
   entryZone: document.getElementById("signals-entry-zone"),
@@ -77,8 +91,13 @@ let ema50LineSeries;
 let priceLines = [];
 let chartResizeBound = false;
 let exchangeInfoCache = null;
+let perpUniverseCache = null;
 let scanTimer = null;
 let lastSignalMap = new Map();
+let universeTickerMap = new Map();
+let universeSignalMap = new Map();
+let scanCursor = 0;
+let flashTimer = null;
 
 function loadState() {
   const stored = readStoredJson(STORAGE_KEY, {});
@@ -88,10 +107,12 @@ function loadState() {
     watchlist: Array.isArray(stored.watchlist) && stored.watchlist.length ? stored.watchlist : DEFAULT_WATCHLIST,
     qualityThreshold: Number(stored.qualityThreshold) || DEFAULT_QUALITY_THRESHOLD,
     activeTab: stored.activeTab || "live",
+    sideTab: stored.sideTab || "selected",
     lastScanAt: Number(stored.lastScanAt) || 0,
     pinnedSignals: Array.isArray(stored.pinnedSignals) ? stored.pinnedSignals : [],
     seenSignalIds: new Set(Array.isArray(stored.seenSignalIds) ? stored.seenSignalIds : []),
     alertPermission: typeof Notification === "undefined" ? "unsupported" : Notification.permission,
+    primeSignals: Array.isArray(stored.primeSignals) ? stored.primeSignals : [],
     liveSignals: [],
     selectedAnalysis: null,
     selectedSnapshot: null,
@@ -105,9 +126,11 @@ function persistState() {
     watchlist: state.watchlist,
     qualityThreshold: state.qualityThreshold,
     activeTab: state.activeTab,
+    sideTab: state.sideTab,
     lastScanAt: state.lastScanAt,
     pinnedSignals: state.pinnedSignals.slice(0, 32),
     seenSignalIds: Array.from(state.seenSignalIds).slice(-200),
+    primeSignals: state.primeSignals.slice(0, 24),
   });
 }
 
@@ -626,6 +649,15 @@ async function getExchangeInfo() {
   return exchangeInfoCache;
 }
 
+function perpUniverseSymbols(exchangeInfo) {
+  return (exchangeInfo.symbols || []).filter(
+    (symbolInfo) =>
+      symbolInfo.quoteAsset === QUOTE_ASSET &&
+      symbolInfo.contractType === "PERPETUAL" &&
+      symbolInfo.status === "TRADING"
+  );
+}
+
 function scoreSymbolCandidate(symbolInfo, cleanedToken) {
   const inputWithQuote = `${cleanedToken}${QUOTE_ASSET}`;
   let score = 0;
@@ -641,13 +673,7 @@ function scoreSymbolCandidate(symbolInfo, cleanedToken) {
 
 function resolvePerpSymbol(rawToken, exchangeInfo) {
   const cleanedToken = normalizeToken(rawToken);
-  const ranked = (exchangeInfo.symbols || [])
-    .filter(
-      (symbolInfo) =>
-        symbolInfo.quoteAsset === QUOTE_ASSET &&
-        symbolInfo.contractType === "PERPETUAL" &&
-        symbolInfo.status === "TRADING"
-    )
+  const ranked = perpUniverseSymbols(exchangeInfo)
     .map((symbolInfo) => ({
       symbolInfo,
       score: scoreSymbolCandidate(symbolInfo, cleanedToken),
@@ -667,6 +693,121 @@ function resolvePerpSymbol(rawToken, exchangeInfo) {
     baseAsset: resolved.baseAsset,
     pricePrecision: resolved.pricePrecision,
   };
+}
+
+async function getPerpUniverse() {
+  if (perpUniverseCache) return perpUniverseCache;
+  const exchangeInfo = await getExchangeInfo();
+  perpUniverseCache = perpUniverseSymbols(exchangeInfo).sort((left, right) => left.symbol.localeCompare(right.symbol));
+  return perpUniverseCache;
+}
+
+function mapUniverseTickers(entries, activeSymbols) {
+  return (entries || [])
+    .filter((entry) => activeSymbols.has(entry.symbol))
+    .map((entry) => ({
+      symbol: entry.symbol,
+      lastPrice: Number(entry.lastPrice ?? entry.price ?? entry.markPrice),
+      changePct: Number(entry.priceChangePercent ?? entry.changePct) || 0,
+      quoteVolume: Number(entry.quoteVolume) || 0,
+      volume: Number(entry.volume) || 0,
+    }));
+}
+
+function loadStoredTickers(activeSymbols) {
+  const stored = readStoredJson(TICKER_STORAGE_KEY, null);
+  if (!stored || !Array.isArray(stored.tickers) || !stored.savedAt) return null;
+  if (Date.now() - Number(stored.savedAt) > TICKER_CACHE_MAX_AGE_MS) return null;
+  return mapUniverseTickers(stored.tickers, activeSymbols);
+}
+
+function persistTickers(tickers) {
+  writeStoredJson(TICKER_STORAGE_KEY, {
+    savedAt: Date.now(),
+    tickers,
+  });
+}
+
+async function fetchUniverseTickersDirect(activeSymbols) {
+  const tickers = await fetchJson("https://fapi.binance.com/fapi/v1/ticker/24hr", "24H tickers");
+  return mapUniverseTickers(tickers, activeSymbols);
+}
+
+async function fetchUniverseTickersServer(activeSymbols) {
+  const response = await fetch(new URL("/api/arena-universe", window.location.origin));
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error || `Arena ticker proxy failed (${response.status})`);
+  return mapUniverseTickers(payload.tickers || [], activeSymbols);
+}
+
+async function fetchUniversePricesFallback(activeSymbols) {
+  const prices = await fetchJson("https://fapi.binance.com/fapi/v1/ticker/price", "Ticker prices");
+  return mapUniverseTickers(prices, activeSymbols);
+}
+
+function buildShellTickers(activeSymbols) {
+  return Array.from(activeSymbols).map((symbol) => ({
+    symbol,
+    lastPrice: 0,
+    changePct: 0,
+    quoteVolume: 0,
+    volume: 0,
+  }));
+}
+
+async function fetchUniverseTickers() {
+  const universe = await getPerpUniverse();
+  const activeSymbols = new Set(universe.map((item) => item.symbol));
+  const cachedTickers = loadStoredTickers(activeSymbols);
+
+  try {
+    const tickers = await fetchUniverseTickersDirect(activeSymbols);
+    persistTickers(tickers);
+    return tickers;
+  } catch (directError) {
+    try {
+      const tickers = await fetchUniverseTickersServer(activeSymbols);
+      if (tickers.length) persistTickers(tickers);
+      return tickers;
+    } catch (serverError) {
+      if (cachedTickers?.length) return cachedTickers;
+      try {
+        return await fetchUniversePricesFallback(activeSymbols);
+      } catch (priceError) {
+        return buildShellTickers(activeSymbols);
+      }
+    }
+  }
+}
+
+function buildTickerLookup(tickers) {
+  return new Map((tickers || []).map((ticker) => [ticker.symbol, ticker]));
+}
+
+function selectUniverseBatch(universe) {
+  if (universe.length <= FULL_SCAN_MAX_SYMBOLS) {
+    return [...universe];
+  }
+
+  const ranked = [...universe].sort((left, right) => {
+    const leftTicker = universeTickerMap.get(left.symbol);
+    const rightTicker = universeTickerMap.get(right.symbol);
+    return (rightTicker?.quoteVolume || 0) - (leftTicker?.quoteVolume || 0);
+  });
+
+  const priority = ranked.slice(0, PRIORITY_SCAN_COUNT);
+  const rotationPool = ranked.slice(PRIORITY_SCAN_COUNT);
+  const rotationBatch = [];
+
+  if (rotationPool.length) {
+    const start = scanCursor % rotationPool.length;
+    for (let index = 0; index < Math.min(ROTATION_SCAN_COUNT, rotationPool.length); index += 1) {
+      rotationBatch.push(rotationPool[(start + index) % rotationPool.length]);
+    }
+    scanCursor = (start + ROTATION_SCAN_COUNT) % rotationPool.length;
+  }
+
+  return Array.from(new Map([...priority, ...rotationBatch].map((item) => [item.symbol, item])).values());
 }
 
 async function fetchServerSnapshot(token) {
@@ -902,6 +1043,7 @@ function buildPullbackSignals(snapshot) {
     const signal = {
       id: `${snapshot.symbol}:${side}:${touchLabel(touch20, touch50)}:${candle.time}`,
       time: candle.time,
+      detectedAt: candle.time * 1000,
       side,
       tone,
       touch: touchLabel(touch20, touch50),
@@ -1004,7 +1146,7 @@ function buildSelectedSignalCards(candidate) {
     {
       label: "Touch zone",
       value: active.touch,
-      note: `${active.sinceTouchBars} bars since touch • ${active.reasonParts[0]}`,
+      note: `${formatDateTime(active.detectedAt)} • ${active.sinceTouchBars} bars since touch • ${active.reasonParts[0]}`,
       tone: active.tone,
     },
     {
@@ -1132,7 +1274,9 @@ function renderChartSeriesLabels(ema20Value, ema50Value, anchorTime) {
   window.requestAnimationFrame(() => {
     const xCoordinate = Number.isFinite(anchorTime) ? chart.timeScale().timeToCoordinate(anchorTime) : null;
     const chartWidth = dom.chart.clientWidth;
-    const labelX = Number.isFinite(xCoordinate) ? Math.max(40, Math.min(chartWidth - 74, xCoordinate - 28)) : chartWidth - 84;
+    const labelX = Number.isFinite(xCoordinate)
+      ? Math.max(72, Math.min(chartWidth - 148, xCoordinate - 64))
+      : Math.max(72, chartWidth - 180);
     const entries = [
       { element: dom.chartLineLabelEma20, series: ema20LineSeries, value: ema20Value },
       { element: dom.chartLineLabelEma50, series: ema50LineSeries, value: ema50Value },
@@ -1155,14 +1299,14 @@ function renderChartSeriesLabels(ema20Value, ema50Value, anchorTime) {
       return;
     }
 
-    const topPadding = 20;
-    const bottomPadding = 14;
-    const minGap = 22;
+    const topPadding = 18;
+    const bottomPadding = 10;
+    const minGap = 18;
     const chartHeight = dom.chart.clientHeight;
     const positioned = [];
 
     active.forEach((entry, index) => {
-      let y = Math.max(topPadding, Math.min(chartHeight - bottomPadding, entry.y - 10));
+      let y = Math.max(topPadding, Math.min(chartHeight - bottomPadding, entry.y - 12));
       if (index > 0 && y - positioned[index - 1].y < minGap) {
         y = positioned[index - 1].y + minGap;
       }
@@ -1254,8 +1398,8 @@ function renderSelectedCandidate(candidate) {
   );
 
   dom.summaryCopy.textContent = candidate.activeSignal
-    ? `${candidate.symbol} currently shows a ${candidate.activeSignal.side.toLowerCase()} continuation idea. Quality ${candidate.qualityScore} reflects the trend stack, touch quality, liquidity, flow confirmation, and room to target.`
-    : `${candidate.symbol} is loaded because it is on your watchlist or pinned board, but there is no fresh 1H EMA pullback worth acting on right now.`;
+    ? `${candidate.symbol} currently shows a ${candidate.activeSignal.side.toLowerCase()} continuation idea. Quality ${candidate.qualityScore} reflects the trend stack, touch quality, liquidity, flow confirmation, room to target, and the signal was detected at ${formatDateTime(candidate.activeSignal.detectedAt)}.`
+    : `${candidate.symbol} is loaded because it is on your focus list or pinned board, but there is no fresh 1H EMA pullback worth acting on right now.`;
 
   dom.stancePill.textContent = candidate.activeSignal ? candidate.activeSignal.side : "Waiting";
   dom.stancePill.className = `pill ${candidate.activeSignal ? candidate.activeSignal.tone : "neutral"}`;
@@ -1266,11 +1410,11 @@ function renderSelectedCandidate(candidate) {
   dom.tp1.textContent = candidate.activeSignal ? formatPrice(candidate.activeSignal.tp1, candidate.pricePrecision) : "-";
   dom.tp2.textContent = candidate.activeSignal ? formatPrice(candidate.activeSignal.tp2, candidate.pricePrecision) : "-";
   dom.planNote.textContent = candidate.activeSignal
-    ? `${candidate.activeSignal.touch} • ${candidate.activeSignal.sinceTouchBars} bars since touch`
+    ? `${candidate.activeSignal.touch} • detected ${formatDateTime(candidate.activeSignal.detectedAt)} • ${candidate.activeSignal.sinceTouchBars} bars since touch`
     : "Need a fresh EMA pullback confirmation";
   dom.tradeSummary.textContent = candidate.activeSignal
     ? `${candidate.activeSignal.note} The entry zone sits around the EMA stack, while invalidation stays beyond the touch candle plus ATR buffer.`
-    : "No active personal setup selected yet. Scan the watchlist or load a pinned signal.";
+    : "No active personal setup selected yet. Scan the perp universe or load a pinned signal.";
 
   renderLevelBands(
     dom.supportFields,
@@ -1346,6 +1490,7 @@ function signalToPin(candidate) {
     tp1: signal.tp1,
     tp2: signal.tp2,
     summary: signal.note,
+    detectedAt: signal.detectedAt,
     pinnedAt: Date.now(),
     pricePrecision: candidate.pricePrecision,
   };
@@ -1394,19 +1539,61 @@ function updateAlertButton() {
     state.alertPermission === "unsupported" || state.alertPermission === "denied";
 }
 
+function flashPrimeSignal(message) {
+  setStatus(message, "up");
+  dom.statusBanner.classList.add("status-banner-flash");
+  if (flashTimer) window.clearTimeout(flashTimer);
+  flashTimer = window.setTimeout(() => {
+    dom.statusBanner.classList.remove("status-banner-flash");
+  }, 7000);
+}
+
+function pushPrimeSignal(candidate) {
+  const signal = candidate.activeSignal;
+  if (!signal || signal.qualityScore < 100) return;
+  if (state.primeSignals.some((item) => item.id === signal.id)) return;
+
+  state.primeSignals.unshift({
+    id: signal.id,
+    symbol: candidate.symbol,
+    side: signal.side,
+    tone: signal.tone,
+    touch: signal.touch,
+    qualityScore: signal.qualityScore,
+    detectedAt: signal.detectedAt,
+    entryLow: signal.entryLow,
+    entryHigh: signal.entryHigh,
+    tp1: signal.tp1,
+    tp2: signal.tp2,
+    pricePrecision: candidate.pricePrecision,
+  });
+  state.primeSignals = state.primeSignals.slice(0, 24);
+  persistState();
+  renderPrimeFeed();
+}
+
 function notifyForCandidate(candidate) {
   const signal = candidate.activeSignal;
-  if (!signal || signal.qualityScore < state.qualityThreshold) return;
+  if (!signal) return;
+  const isPrime = signal.qualityScore >= 100;
+  if (!isPrime && signal.qualityScore < state.qualityThreshold) return;
   if (state.seenSignalIds.has(signal.id)) return;
   state.seenSignalIds.add(signal.id);
+  pushPrimeSignal(candidate);
   persistState();
 
+  const primeMessage = isPrime
+    ? `Prime signal flashed: ${candidate.symbol} ${signal.side} ${signal.touch} at ${formatDateTime(signal.detectedAt)} • Q${signal.qualityScore}`
+    : "";
+
   if (state.alertPermission === "granted" && typeof Notification !== "undefined") {
-    const notification = new Notification(`${candidate.symbol} ${signal.side} setup`, {
-      body: `${signal.touch} retest qualified at Q${signal.qualityScore}.`,
+    const notification = new Notification(`${isPrime ? "Prime" : "New"} ${candidate.symbol} ${signal.side} setup`, {
+      body: `${signal.touch} retest qualified at Q${signal.qualityScore} • ${formatDateTime(signal.detectedAt)}.`,
     });
-    window.setTimeout(() => notification.close(), 7000);
+    window.setTimeout(() => notification.close(), isPrime ? 10000 : 7000);
   }
+
+  return primeMessage;
 }
 
 function renderLiveTable() {
@@ -1418,6 +1605,7 @@ function renderLiveTable() {
       return `
         <tr>
           <td class="monitor-symbol">${candidate.symbol}<div class="monitor-subtle">${volumeTier(Number(candidate.snapshot.ticker?.quoteVolume) || 0).label}</div></td>
+          <td>${formatDateTime(signal.detectedAt)}</td>
           <td><strong class="${signal.tone}">${signal.side}</strong></td>
           <td>${signal.touch}</td>
           <td>${formatPrice(candidate.currentPrice, candidate.pricePrecision)}</td>
@@ -1440,6 +1628,7 @@ function renderLiveTable() {
     dom.liveTable,
     [
       "Pair",
+      "Detected",
       "Side",
       "Touch",
       "Price",
@@ -1451,7 +1640,7 @@ function renderLiveTable() {
       "Actions",
     ],
     rows,
-    "No watchlist token currently clears the active EMA pullback quality threshold."
+    "No rotating universe token currently clears the active EMA pullback quality threshold."
   );
 
   dom.liveTable.querySelectorAll("[data-symbol]").forEach((button) => {
@@ -1504,7 +1693,7 @@ function renderPinnedTable() {
           </div>
           <div>
             <span>Plan</span>
-            <strong>${formatPrice(item.entryLow, item.pricePrecision)} - ${formatPrice(item.entryHigh, item.pricePrecision)} • TP ${formatPrice(item.tp1, item.pricePrecision)}</strong>
+            <strong>${formatPrice(item.entryLow, item.pricePrecision)} - ${formatPrice(item.entryHigh, item.pricePrecision)} • TP ${formatPrice(item.tp1, item.pricePrecision)} • ${formatDateTime(item.detectedAt)}</strong>
           </div>
           <div>
             <span>Actions</span>
@@ -1540,6 +1729,120 @@ function renderPinnedTable() {
   });
 }
 
+function renderQualityFeed() {
+  const qualified = state.liveSignals
+    .filter((candidate) => candidate.activeSignal && candidate.qualityScore >= state.qualityThreshold)
+    .slice(0, 8);
+
+  if (!qualified.length) {
+    dom.qualityFeed.innerHTML = `
+      <div class="table-row">
+        <div>
+          <span>Status</span>
+          <strong>No quality signals live</strong>
+        </div>
+        <div>
+          <span>Scope</span>
+          <strong>The rotating perp scan is still looking for cleaner EMA pullbacks.</strong>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  dom.qualityFeed.innerHTML = qualified
+    .map((candidate) => {
+      const signal = candidate.activeSignal;
+      const quality = qualityTier(candidate.qualityScore);
+      return `
+        <div class="table-row">
+          <div>
+            <span>${candidate.symbol} • ${signal.side}</span>
+            <strong class="${signal.tone}">${signal.touch} • ${formatDateTime(signal.detectedAt)}</strong>
+          </div>
+          <div>
+            <span>Plan</span>
+            <strong>${formatPrice(signal.entryLow, candidate.pricePrecision)} - ${formatPrice(signal.entryHigh, candidate.pricePrecision)} • TP ${formatPrice(signal.tp1, candidate.pricePrecision)}</strong>
+          </div>
+          <div>
+            <span>Quality</span>
+            <strong class="signals-side-actions">
+              <span class="quality-chip ${quality.className}">Q${candidate.qualityScore}</span>
+              <button class="mini-button signals-load-button" type="button" data-quality-symbol="${candidate.symbol}">Load</button>
+            </strong>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+
+  dom.qualityFeed.querySelectorAll("[data-quality-symbol]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const symbol = button.getAttribute("data-quality-symbol");
+      if (!symbol) return;
+      const candidate = lastSignalMap.get(symbol);
+      if (candidate) renderSelectedCandidate(candidate);
+    });
+  });
+}
+
+function renderPrimeFeed() {
+  if (!state.primeSignals.length) {
+    dom.primeFeed.innerHTML = `
+      <div class="table-row">
+        <div>
+          <span>Status</span>
+          <strong>No prime alerts yet</strong>
+        </div>
+        <div>
+          <span>Trigger</span>
+          <strong>Q100+ universe signals will flash here.</strong>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  dom.primeFeed.innerHTML = state.primeSignals
+    .slice(0, 10)
+    .map((item) => {
+      const quality = qualityTier(item.qualityScore);
+      return `
+        <div class="table-row">
+          <div>
+            <span>${item.symbol} • ${item.side}</span>
+            <strong class="${item.tone}">${item.touch} • ${formatDateTime(item.detectedAt)}</strong>
+          </div>
+          <div>
+            <span>Plan</span>
+            <strong>${formatPrice(item.entryLow, item.pricePrecision)} - ${formatPrice(item.entryHigh, item.pricePrecision)} • TP ${formatPrice(item.tp1, item.pricePrecision)}</strong>
+          </div>
+          <div>
+            <span>Prime</span>
+            <strong class="signals-side-actions">
+              <span class="quality-chip ${quality.className}">Q${item.qualityScore}</span>
+              <button class="mini-button signals-load-button" type="button" data-prime-symbol="${item.symbol}">Load</button>
+            </strong>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+
+  dom.primeFeed.querySelectorAll("[data-prime-symbol]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const symbol = button.getAttribute("data-prime-symbol");
+      if (!symbol) return;
+      const candidate = lastSignalMap.get(symbol);
+      if (candidate) {
+        renderSelectedCandidate(candidate);
+      } else {
+        await loadToken(symbol);
+      }
+    });
+  });
+}
+
 function renderStrategyNotes() {
   renderAnalysisGrid(dom.notesGrid, [
     {
@@ -1569,9 +1872,38 @@ function renderStrategyNotes() {
   ]);
 }
 
+function updateSideTabs() {
+  const tabs = [
+    {
+      key: "selected",
+      button: dom.sideTabSelected,
+      panel: dom.sidePanelSelected,
+      note: "Selected Setup keeps the focused chart, live plan, and immediate context visible.",
+    },
+    {
+      key: "quality",
+      button: dom.sideTabQuality,
+      panel: dom.sidePanelQuality,
+      note: "Quality Feed surfaces the strongest rotating-universe EMA signals detected right now.",
+    },
+    {
+      key: "prime",
+      button: dom.sideTabPrime,
+      panel: dom.sidePanelPrime,
+      note: "Prime Alerts tracks Q100+ pullbacks so they are easy to spot and revisit.",
+    },
+  ];
+
+  tabs.forEach((tab) => {
+    tab.button.classList.toggle("is-active", state.sideTab === tab.key);
+    tab.panel.hidden = state.sideTab !== tab.key;
+    if (state.sideTab === tab.key) dom.sideNote.textContent = tab.note;
+  });
+}
+
 function updateTabs() {
   const tabs = [
-    { key: "live", button: dom.tabLive, panel: dom.panelLive, note: "Live Signals shows only watchlist names that are currently qualifying under the EMA pullback ruleset." },
+    { key: "live", button: dom.tabLive, panel: dom.panelLive, note: "Universe Feed shows the strongest EMA pullback names currently detected from the rotating perp scan." },
     { key: "pinned", button: dom.tabPinned, panel: dom.panelPinned, note: "Pinned Signals keeps your saved trade ideas separate from the live scan so you can revisit them without clutter." },
     { key: "notes", button: dom.tabNotes, panel: dom.panelNotes, note: "Guardrails keeps the strategy honest so we do not confuse every EMA touch with a real continuation edge." },
   ];
@@ -1589,9 +1921,11 @@ function updateMetrics() {
   const shortCount = qualified.filter((candidate) => candidate.activeSignal.side === "Short").length;
 
   dom.metricWatchlist.textContent = `${state.watchlist.length}`;
-  dom.metricWatchlistNote.textContent = state.watchlist.join(", ");
+  dom.metricWatchlistNote.textContent = state.watchlist.length
+    ? `Focus list • ${state.watchlist.join(", ")}`
+    : "Focus list is empty";
   dom.metricQualified.textContent = `${qualified.length}`;
-  dom.metricQualifiedNote.textContent = `Quality >= ${state.qualityThreshold} on your watchlist`;
+  dom.metricQualifiedNote.textContent = `Quality >= ${state.qualityThreshold} across the rotating perp universe`;
   dom.metricPinned.textContent = `${state.pinnedSignals.length}`;
   dom.metricPinnedNote.textContent = state.pinnedSignals.length ? "Saved personal signal ideas" : "No pinned setups yet";
   dom.metricLongs.textContent = `${longCount}`;
@@ -1599,8 +1933,8 @@ function updateMetrics() {
   dom.metricShorts.textContent = `${shortCount}`;
   dom.metricShortsNote.textContent = shortCount ? "Bearish pullbacks are active" : "No qualified shorts";
   dom.metricLastScan.textContent = formatClock(state.lastScanAt);
-  dom.metricLastScanNote.textContent = state.lastScanAt ? "Watchlist refreshes every 5m" : "First scan pending";
-  dom.autoNote.textContent = `Watchlist scan refreshes every 5 minutes. ${qualified.length} names currently qualify.`;
+  dom.metricLastScanNote.textContent = state.lastScanAt ? "Universe rotates every 5m" : "First scan pending";
+  dom.autoNote.textContent = `Full perp universe rotates every 5 minutes. ${qualified.length} names currently qualify.`;
 }
 
 async function loadToken(token) {
@@ -1618,37 +1952,89 @@ async function loadToken(token) {
 }
 
 async function scanWatchlist(manual = false) {
-  const watchlist = parseWatchlist(dom.watchlistInput.value);
-  state.watchlist = watchlist.length ? watchlist : [...DEFAULT_WATCHLIST];
+  const focusList = parseWatchlist(dom.watchlistInput.value);
+  state.watchlist = focusList.length ? focusList : [...DEFAULT_WATCHLIST];
   state.qualityThreshold = Math.max(50, Number(dom.qualityThreshold.value) || DEFAULT_QUALITY_THRESHOLD);
   persistState();
 
   setStatus(
-    manual ? "Running manual watchlist scan..." : "Scanning your watchlist for EMA20/50 pullback setups...",
+    manual
+      ? "Running manual full-universe scan..."
+      : "Scanning the rotating perp universe for EMA20/50 pullback setups...",
     "neutral"
   );
 
   try {
-    const tokensToScan = Array.from(new Set([state.selectedToken, ...state.watchlist].map((token) => normalizeToken(token))));
-    const results = await mapWithConcurrency(tokensToScan, ANALYSIS_CONCURRENCY, async (token) => {
+    const universe = await getPerpUniverse();
+    const tickers = await fetchUniverseTickers();
+    universeTickerMap = buildTickerLookup(tickers);
+
+    const prioritizedSymbolInfos = Array.from(
+      new Map(
+        [state.selectedToken, ...state.watchlist]
+          .map((token) => normalizeToken(token))
+          .map((token) => {
+            try {
+              return resolvePerpSymbol(token, { symbols: universe });
+            } catch (error) {
+              return null;
+            }
+          })
+          .filter(Boolean)
+          .map((resolved) => [resolved.symbol, universe.find((item) => item.symbol === resolved.symbol)])
+          .filter((entry) => entry[1])
+      ).values()
+    );
+
+    const rotatingBatch = selectUniverseBatch(universe);
+    const batch = Array.from(
+      new Map([...prioritizedSymbolInfos, ...rotatingBatch].map((item) => [item.symbol, item])).values()
+    );
+    const scanStartedAt = Date.now();
+
+    const results = await mapWithConcurrency(batch, ANALYSIS_CONCURRENCY, async (symbolInfo) => {
       try {
-        const snapshot = await fetchEngineSnapshot(token);
-        return buildPullbackSignals(snapshot);
+        const snapshot = await fetchEngineSnapshot(symbolInfo.symbol);
+        const candidate = buildPullbackSignals(snapshot);
+        candidate.lastSeenAt = scanStartedAt;
+        return candidate;
       } catch (error) {
         return null;
       }
     });
 
-    state.liveSignals = results
-      .filter(Boolean)
-      .sort((left, right) => right.qualityScore - left.qualityScore);
+    results.filter(Boolean).forEach((candidate) => {
+      if (candidate.activeSignal && candidate.activeSignal.sinceTouchBars <= 3) {
+        candidate.lastSeenAt = scanStartedAt;
+        universeSignalMap.set(candidate.symbol, candidate);
+      } else {
+        universeSignalMap.delete(candidate.symbol);
+      }
+    });
+
+    for (const [symbol, candidate] of universeSignalMap.entries()) {
+      if (scanStartedAt - Number(candidate.lastSeenAt || 0) > AUTO_SCAN_MS * 6) {
+        universeSignalMap.delete(symbol);
+      }
+    }
+
+    state.liveSignals = Array.from(universeSignalMap.values())
+      .sort((left, right) => right.qualityScore - left.qualityScore)
+      .slice(0, 48);
     lastSignalMap = new Map(state.liveSignals.map((candidate) => [candidate.symbol, candidate]));
-    state.lastScanAt = Date.now();
+    state.lastScanAt = scanStartedAt;
     persistState();
 
-    state.liveSignals.forEach(notifyForCandidate);
+    const primeMessages = [];
+    state.liveSignals.forEach((candidate) => {
+      const primeMessage = notifyForCandidate(candidate);
+      if (primeMessage) primeMessages.push(primeMessage);
+    });
     renderLiveTable();
+    renderQualityFeed();
+    renderPrimeFeed();
     renderPinnedTable();
+    updateSideTabs();
     updateMetrics();
 
     const selectedCandidate = state.selectedSymbol ? lastSignalMap.get(state.selectedSymbol) : null;
@@ -1663,14 +2049,18 @@ async function scanWatchlist(manual = false) {
     const qualifiedCount = state.liveSignals.filter((candidate) => candidate.activeSignal && candidate.qualityScore >= state.qualityThreshold).length;
     setStatus(
       qualifiedCount
-        ? `${qualifiedCount} watchlist setups currently qualify.`
-        : "Watchlist scan complete. No signal currently clears your active quality bar.",
+        ? `${qualifiedCount} universe setups currently qualify from ${batch.length} freshly scanned perps.`
+        : `Universe scan complete. ${batch.length} perps refreshed and no signal currently clears your active quality bar.`,
       qualifiedCount ? "up" : "neutral"
     );
+    if (primeMessages.length) flashPrimeSignal(primeMessages[0]);
   } catch (error) {
     console.error(error);
-    setStatus(error.message || "Watchlist scan failed.", "down");
-    if (!state.selectedAnalysis) renderEmptySelected(error.message || "Waiting for watchlist data.");
+    setStatus(error.message || "Universe scan failed.", "down");
+    renderQualityFeed();
+    renderPrimeFeed();
+    updateSideTabs();
+    if (!state.selectedAnalysis) renderEmptySelected(error.message || "Waiting for perp-universe data.");
   }
 }
 
@@ -1719,6 +2109,24 @@ function bindEvents() {
     persistState();
     updateTabs();
   });
+
+  dom.sideTabSelected.addEventListener("click", () => {
+    state.sideTab = "selected";
+    persistState();
+    updateSideTabs();
+  });
+
+  dom.sideTabQuality.addEventListener("click", () => {
+    state.sideTab = "quality";
+    persistState();
+    updateSideTabs();
+  });
+
+  dom.sideTabPrime.addEventListener("click", () => {
+    state.sideTab = "prime";
+    persistState();
+    updateSideTabs();
+  });
 }
 
 async function init() {
@@ -1726,9 +2134,12 @@ async function init() {
   dom.watchlistInput.value = state.watchlist.join(", ");
   dom.qualityThreshold.value = `${state.qualityThreshold}`;
   updateTabs();
+  updateSideTabs();
   updateAlertButton();
   renderStrategyNotes();
   renderPinnedTable();
+  renderQualityFeed();
+  renderPrimeFeed();
   initChart();
   bindEvents();
   updateMetrics();

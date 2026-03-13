@@ -1709,8 +1709,8 @@ function renderChartSeriesLabels(ema20Value = null, ema50Value = null, anchorTim
       ? chart.timeScale().timeToCoordinate(latestTime)
       : null;
     const labelX = Number.isFinite(xCoordinate)
-      ? Math.max(44, Math.min(chartWidth - 88, xCoordinate - 14))
-      : chartWidth - 110;
+      ? Math.max(72, Math.min(chartWidth - 148, xCoordinate - 64))
+      : Math.max(72, chartWidth - 180);
 
     const labelEntries = [
       {
@@ -1726,9 +1726,9 @@ function renderChartSeriesLabels(ema20Value = null, ema50Value = null, anchorTim
     ];
 
     const chartHeight = dom.chart.clientHeight;
-    const minGap = 24;
-    const topPadding = 26;
-    const bottomPadding = 14;
+    const minGap = 18;
+    const topPadding = 18;
+    const bottomPadding = 10;
 
     const active = labelEntries
       .map((entry) => {
@@ -1752,7 +1752,7 @@ function renderChartSeriesLabels(ema20Value = null, ema50Value = null, anchorTim
 
     const positioned = [];
     active.forEach((entry, index) => {
-      let y = Math.max(topPadding, Math.min(chartHeight - bottomPadding, entry.y - 6));
+      let y = Math.max(topPadding, Math.min(chartHeight - bottomPadding, entry.y - 12));
       if (index > 0 && y - positioned[index - 1].y < minGap) {
         y = positioned[index - 1].y + minGap;
       }

@@ -1003,6 +1003,7 @@ function buildTradezSignals(snapshot, quoteVolume = 0) {
     const signal = {
       id: `${snapshot.symbol}:${side}:${touchLabel(touch20, touch50)}:${candle.time}`,
       time: candle.time,
+      detectedAt: candle.time * 1000,
       symbol: snapshot.symbol,
       token: snapshot.token,
       side,
@@ -1244,7 +1245,9 @@ function renderChartSeriesLabels(ema20Value, ema50Value, anchorTime) {
     const latestTime = anchorTime ?? state.chartSnapshot?.candles?.[state.chartSnapshot.candles.length - 1]?.time ?? null;
     const chartWidth = dom.chart.clientWidth;
     const xCoordinate = Number.isFinite(latestTime) ? chart.timeScale().timeToCoordinate(latestTime) : null;
-    const labelX = Number.isFinite(xCoordinate) ? Math.max(40, Math.min(chartWidth - 74, xCoordinate - 28)) : chartWidth - 84;
+    const labelX = Number.isFinite(xCoordinate)
+      ? Math.max(72, Math.min(chartWidth - 148, xCoordinate - 64))
+      : Math.max(72, chartWidth - 180);
 
     const entries = [
       { element: dom.chartLineLabelEma20, series: ema20LineSeries, value: ema20Value },
@@ -1268,14 +1271,14 @@ function renderChartSeriesLabels(ema20Value, ema50Value, anchorTime) {
       return;
     }
 
-    const topPadding = 20;
-    const bottomPadding = 14;
-    const minGap = 22;
+    const topPadding = 18;
+    const bottomPadding = 10;
+    const minGap = 18;
     const chartHeight = dom.chart.clientHeight;
     const positioned = [];
 
     active.forEach((entry, index) => {
-      let y = Math.max(topPadding, Math.min(chartHeight - bottomPadding, entry.y - 10));
+      let y = Math.max(topPadding, Math.min(chartHeight - bottomPadding, entry.y - 12));
       if (index > 0 && y - positioned[index - 1].y < minGap) {
         y = positioned[index - 1].y + minGap;
       }
@@ -1386,7 +1389,7 @@ function renderSelectedAnalysis(analysis, snapshot) {
   dom.tp1.textContent = active ? formatPrice(active.tp1, analysis.pricePrecision) : "-";
   dom.tp2.textContent = active ? formatPrice(active.tp2, analysis.pricePrecision) : "-";
   dom.planNote.textContent = active
-    ? `${active.touch} retest • ${active.sinceTouchBars} bars since touch`
+    ? `${active.touch} retest • detected ${formatDateTime(active.detectedAt)} • ${active.sinceTouchBars} bars since touch`
     : "Need a fresh EMA20/50 retest with confirmation";
   dom.tradeSummary.textContent = active
     ? `${active.note} Entry zone stays around the EMA stack. Initial invalidation sits beyond the touch candle plus ATR buffer.`
@@ -1487,6 +1490,7 @@ function renderSignalFeed() {
           </button>
           <div class="monitor-subtle">${volumeTier(universeTickerMap.get(candidate.symbol)?.quoteVolume || 0).label}</div>
         </td>
+        <td>${formatDateTime(signal.detectedAt)}</td>
         <td><span class="${signal.tone}">${signal.side}</span></td>
         <td>${signal.touch}</td>
         <td>${formatPrice(candidate.currentPrice, candidate.pricePrecision)}</td>
@@ -1507,6 +1511,7 @@ function renderSignalFeed() {
     dom.signalTable,
     [
       "Pair",
+      "Detected",
       "Setup",
       "Touch",
       "Price",
@@ -1624,7 +1629,7 @@ function pushAlertEvent(candidate) {
   state.seenSignalIds.add(signal.id);
   state.alertEvents.unshift({
     id: signal.id,
-    detectedAt: Date.now(),
+    detectedAt: signal.detectedAt,
     symbol: candidate.symbol,
     side: signal.side,
     tone: signal.tone,

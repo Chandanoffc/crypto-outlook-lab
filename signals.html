@@ -43,8 +43,9 @@
             <p class="eyebrow">My Signals</p>
             <h1>Personal EMA pullback board</h1>
             <p class="subtitle">
-              A personal signal desk built on the Tradez engine. Scan your own watchlist, pin the
-              setups you care about, and keep one clean chart focused on your best ideas.
+              A personal signal desk built on the Tradez engine. Scan the full perp universe,
+              keep a small focus list, pin the setups you care about, and keep one clean chart
+              centered on your best ideas.
             </p>
           </div>
 
@@ -63,7 +64,7 @@
             </label>
 
             <label>
-              Watchlist
+              Focus List
               <input
                 id="signals-watchlist-input"
                 name="watchlist"
@@ -99,9 +100,9 @@
       <main class="dashboard-grid signals-grid">
         <section class="metric-strip">
           <article class="metric-card">
-            <span class="metric-label">Watchlist Size</span>
+            <span class="metric-label">Focus List</span>
             <strong id="signals-metric-watchlist">-</strong>
-            <small id="signals-metric-watchlist-note">Tracked tokens</small>
+            <small id="signals-metric-watchlist-note">Focused names</small>
           </article>
           <article class="metric-card">
             <span class="metric-label">Qualified Live</span>
@@ -116,12 +117,12 @@
           <article class="metric-card">
             <span class="metric-label">Long Setups</span>
             <strong id="signals-metric-longs">-</strong>
-            <small id="signals-metric-longs-note">Bullish pullbacks on watchlist</small>
+            <small id="signals-metric-longs-note">Bullish pullbacks in universe</small>
           </article>
           <article class="metric-card">
             <span class="metric-label">Short Setups</span>
             <strong id="signals-metric-shorts">-</strong>
-            <small id="signals-metric-shorts-note">Bearish pullbacks on watchlist</small>
+            <small id="signals-metric-shorts-note">Bearish pullbacks in universe</small>
           </article>
           <article class="metric-card">
             <span class="metric-label">Last Scan</span>
@@ -208,65 +209,91 @@
           </div>
 
           <div id="signals-stream-status" class="stream-status neutral">
-            Waiting for your watchlist scan...
+            Waiting for the rotating perp-universe scan...
           </div>
 
-          <div id="signals-summary-copy" class="outlook-copy">
-            My Signals will summarize your selected setup here.
+          <div class="feed-tabs signals-side-tabs">
+            <button id="signals-side-tab-selected" class="mini-button feed-tab is-active" type="button">
+              Selected Setup
+            </button>
+            <button id="signals-side-tab-quality" class="mini-button feed-tab" type="button">
+              Quality Feed
+            </button>
+            <button id="signals-side-tab-prime" class="mini-button feed-tab" type="button">
+              Prime Alerts
+            </button>
           </div>
 
-          <div class="trade-idea-card signals-trade-card">
-            <div class="trade-idea-head">
-              <div>
-                <span class="stack-label">Plan</span>
-                <small id="signals-plan-note" class="trade-refresh-note">1H EMA continuation ruleset</small>
-              </div>
-              <div id="signals-stance-pill" class="pill neutral">Waiting</div>
+          <div id="signals-side-note" class="subsection-meta">
+            Selected Setup keeps the focused chart, live plan, and the latest strategy context in view.
+          </div>
+
+          <div id="signals-side-panel-selected">
+            <div id="signals-summary-copy" class="outlook-copy">
+              My Signals will summarize your selected setup here.
             </div>
 
-            <div class="trade-idea-grid">
-              <div class="trade-idea-stat">
-                <span>Entry Zone</span>
-                <strong id="signals-entry-zone">-</strong>
+            <div class="trade-idea-card signals-trade-card">
+              <div class="trade-idea-head">
+                <div>
+                  <span class="stack-label">Plan</span>
+                  <small id="signals-plan-note" class="trade-refresh-note">1H EMA continuation ruleset</small>
+                </div>
+                <div id="signals-stance-pill" class="pill neutral">Waiting</div>
               </div>
-              <div class="trade-idea-stat">
-                <span>Stop</span>
-                <strong id="signals-stop">-</strong>
+
+              <div class="trade-idea-grid">
+                <div class="trade-idea-stat">
+                  <span>Entry Zone</span>
+                  <strong id="signals-entry-zone">-</strong>
+                </div>
+                <div class="trade-idea-stat">
+                  <span>Stop</span>
+                  <strong id="signals-stop">-</strong>
+                </div>
+                <div class="trade-idea-stat">
+                  <span>TP1</span>
+                  <strong id="signals-tp1">-</strong>
+                </div>
+                <div class="trade-idea-stat">
+                  <span>TP2</span>
+                  <strong id="signals-tp2">-</strong>
+                </div>
               </div>
-              <div class="trade-idea-stat">
-                <span>TP1</span>
-                <strong id="signals-tp1">-</strong>
-              </div>
-              <div class="trade-idea-stat">
-                <span>TP2</span>
-                <strong id="signals-tp2">-</strong>
-              </div>
+
+              <p id="signals-trade-summary" class="trade-copy">
+                No personal setup selected yet.
+              </p>
             </div>
 
-            <p id="signals-trade-summary" class="trade-copy">
-              No personal setup selected yet.
-            </p>
+            <div id="signals-signal-list" class="signal-list"></div>
           </div>
 
-          <div id="signals-signal-list" class="signal-list"></div>
+          <div id="signals-side-panel-quality" hidden>
+            <div id="signals-quality-feed" class="table-card signals-side-feed"></div>
+          </div>
+
+          <div id="signals-side-panel-prime" hidden>
+            <div id="signals-prime-feed" class="table-card signals-side-feed"></div>
+          </div>
         </aside>
 
         <section class="panel workspace-panel signals-feed-panel">
           <div class="panel-head">
             <div>
               <p class="panel-label">Signal Desk</p>
-              <h2>Live watchlist scan, pinned setups, and strategy guardrails</h2>
+              <h2>Live universe scan, pinned setups, and strategy guardrails</h2>
             </div>
 
             <div class="feed-tabs">
-              <button id="signals-tab-live" class="mini-button feed-tab is-active" type="button">Live Signals</button>
+              <button id="signals-tab-live" class="mini-button feed-tab is-active" type="button">Universe Feed</button>
               <button id="signals-tab-pinned" class="mini-button feed-tab" type="button">Pinned Signals</button>
               <button id="signals-tab-notes" class="mini-button feed-tab" type="button">Guardrails</button>
             </div>
           </div>
 
           <div id="signals-tab-note" class="subsection-meta">
-            Live Signals only shows your watchlist names that currently qualify under the EMA pullback ruleset.
+            Universe Feed shows the strongest EMA pullback names currently detected from the rotating perp scan.
           </div>
 
           <div id="signals-panel-live">
