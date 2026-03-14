@@ -844,6 +844,19 @@ function persistTickers(tickers) {
   });
 }
 
+function mergeTickerLists(primary, secondary) {
+  const merged = new Map();
+  (primary || []).forEach((ticker) => {
+    if (ticker?.symbol) merged.set(ticker.symbol, ticker);
+  });
+  (secondary || []).forEach((ticker) => {
+    if (ticker?.symbol && !merged.has(ticker.symbol)) {
+      merged.set(ticker.symbol, ticker);
+    }
+  });
+  return Array.from(merged.values());
+}
+
 async function fetchUniverseTickersDirect(activeSymbols) {
   const tickers = await fetchJson("https://fapi.binance.com/fapi/v1/ticker/24hr", "24H tickers");
   return mapUniverseTickers(tickers, activeSymbols);
@@ -855,12 +868,17 @@ async function fetchUniverseTickersServer(activeSymbols) {
   if (!response.ok) {
     throw new Error(payload.error || `Arena ticker proxy failed (${response.status})`);
   }
-  tickerFeedState = {
+  return {
+    tickers: mapUniverseTickers(payload.tickers || [], activeSymbols),
     source: payload.source || "server proxy",
     degraded: Boolean(payload.degraded),
     warning: payload.warning || "",
   };
-  return mapUniverseTickers(payload.tickers || [], activeSymbols);
+}
+
+async function fetchUniverseSpotTickersFallback(activeSymbols) {
+  const tickers = await fetchJson("https://api.binance.com/api/v3/ticker/24hr", "Spot 24H tickers");
+  return mapUniverseTickers(tickers, activeSymbols);
 }
 
 async function fetchUniversePricesFallback(activeSymbols) {
@@ -894,10 +912,57 @@ async function fetchUniverseTickers() {
     return tickers;
   } catch (directError) {
     try {
-      const tickers = await fetchUniverseTickersServer(activeSymbols);
-      if (tickers.length) persistTickers(tickers);
-      return tickers;
+      const serverResult = await fetchUniverseTickersServer(activeSymbols);
+      const serverTickers = serverResult.tickers || [];
+      if (serverTickers.some((entry) => entry.quoteVolume > 0) || !serverResult.degraded) {
+        tickerFeedState = {
+          source: serverResult.source,
+          degraded: serverResult.degraded,
+          warning: serverResult.warning,
+        };
+        if (serverTickers.length) persistTickers(serverTickers);
+        return serverTickers;
+      }
+
+      const spotTickers = await fetchUniverseSpotTickersFallback(activeSymbols).catch(() => []);
+      const blendedTickers = mergeTickerLists(spotTickers, cachedTickers || serverTickers);
+      if (blendedTickers.length) {
+        tickerFeedState = {
+          source: "spot 24H fallback",
+          degraded: true,
+          warning: serverResult.warning || directError.message || "",
+        };
+        persistTickers(blendedTickers);
+        return blendedTickers;
+      }
+
+      if (cachedTickers?.length) {
+        tickerFeedState = {
+          source: "cached 24H feed",
+          degraded: true,
+          warning: serverResult.warning || directError.message || "",
+        };
+        return cachedTickers;
+      }
+
+      tickerFeedState = {
+        source: serverResult.source,
+        degraded: true,
+        warning: serverResult.warning || directError.message || "",
+      };
+      return serverTickers;
     } catch (serverError) {
+      const spotTickers = await fetchUniverseSpotTickersFallback(activeSymbols).catch(() => []);
+      if (spotTickers.length) {
+        tickerFeedState = {
+          source: "spot 24H fallback",
+          degraded: true,
+          warning: serverError.message || directError.message || "",
+        };
+        persistTickers(spotTickers);
+        return spotTickers;
+      }
+
       if (cachedTickers?.length) {
         tickerFeedState = {
           source: "cached 24H feed",
@@ -926,6 +991,51 @@ async function fetchUniverseTickers() {
       }
     }
   }
+}
+
+function buildSpotCoreSymbolCandidates(resolved) {
+  const candidates = [resolved.symbol];
+  if (!/^\d/.test(resolved.baseAsset || "")) {
+    candidates.push(`${resolved.baseAsset}${QUOTE_ASSET}`);
+    candidates.push(`${resolved.cleanedToken}${QUOTE_ASSET}`);
+  }
+  return Array.from(new Set(candidates.filter(Boolean)));
+}
+
+async function fetchFirstSuccessful(candidates, loader) {
+  for (const candidate of candidates) {
+    try {
+      const value = await loader(candidate);
+      if (value) return value;
+    } catch (error) {
+      // Try the next symbol variant.
+    }
+  }
+  return null;
+}
+
+async function fetchSpotCoreSnapshotDirect(resolved, interval) {
+  const candidates = buildSpotCoreSymbolCandidates(resolved);
+  return fetchFirstSuccessful(candidates, async (symbol) => {
+    const requests = await Promise.allSettled([
+      fetchJson(`https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=240`, "Spot klines"),
+      fetchJson(`https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`, "Spot 24H ticker"),
+      fetchJson(`https://api.binance.com/api/v3/depth?symbol=${symbol}&limit=100`, "Spot orderbook"),
+      fetchJson(`https://api.binance.com/api/v3/aggTrades?symbol=${symbol}&limit=400`, "Spot agg trades"),
+    ]);
+
+    const [klinesResult, tickerResult, depthResult, tradesResult] = requests;
+    if (klinesResult.status !== "fulfilled" || tickerResult.status !== "fulfilled") {
+      throw new Error(`Spot core data unavailable for ${symbol}`);
+    }
+
+    return {
+      candles: klinesResult.value.map(mapKlineEntry),
+      ticker: tickerResult.value,
+      depth: depthResult.status === "fulfilled" ? depthResult.value : { bids: [], asks: [] },
+      trades: tradesResult.status === "fulfilled" ? tradesResult.value : [],
+    };
+  });
 }
 
 async function fetchDirectSnapshot(token, interval) {
@@ -966,8 +1076,25 @@ async function fetchDirectSnapshot(token, interval) {
     takerResult,
   ] = requests;
 
-  if (klinesResult.status !== "fulfilled" || tickerResult.status !== "fulfilled") {
-    throw new Error(`Core data unavailable for ${resolved.symbol}`);
+  let candles;
+  let ticker;
+  let depth;
+  let trades;
+
+  if (klinesResult.status === "fulfilled" && tickerResult.status === "fulfilled") {
+    candles = klinesResult.value.map(mapKlineEntry);
+    ticker = tickerResult.value;
+    depth = depthResult.status === "fulfilled" ? depthResult.value : { bids: [], asks: [] };
+    trades = tradesResult.status === "fulfilled" ? tradesResult.value : [];
+  } else {
+    const spotCore = await fetchSpotCoreSnapshotDirect(resolved, interval).catch(() => null);
+    if (!spotCore) {
+      throw new Error(`Core perpetual market data is unavailable for ${resolved.symbol}.`);
+    }
+    candles = spotCore.candles;
+    ticker = spotCore.ticker;
+    depth = spotCore.depth;
+    trades = spotCore.trades;
   }
 
   return {
@@ -975,10 +1102,10 @@ async function fetchDirectSnapshot(token, interval) {
     symbol: resolved.symbol,
     baseAsset: resolved.baseAsset,
     pricePrecision: resolved.pricePrecision,
-    candles: klinesResult.value.map(mapKlineEntry),
-    ticker: tickerResult.value,
-    depth: depthResult.status === "fulfilled" ? depthResult.value : { bids: [], asks: [] },
-    trades: tradesResult.status === "fulfilled" ? tradesResult.value : [],
+    candles,
+    ticker,
+    depth,
+    trades,
     premiumIndex: premiumResult.status === "fulfilled" ? premiumResult.value : null,
     openInterestHistory: oiHistoryResult.status === "fulfilled" ? oiHistoryResult.value : [],
     globalLongShort: globalResult.status === "fulfilled" ? globalResult.value : [],
@@ -1020,7 +1147,13 @@ function selectUniverseBatch(universe) {
   const ranked = [...universe].sort((left, right) => {
     const rightTicker = universeTickerMap.get(right.symbol);
     const leftTicker = universeTickerMap.get(left.symbol);
-    return (rightTicker?.quoteVolume || 0) - (leftTicker?.quoteVolume || 0);
+    const volumeDelta = (rightTicker?.quoteVolume || 0) - (leftTicker?.quoteVolume || 0);
+    if (volumeDelta !== 0) return volumeDelta;
+    const leftScaled = /^\d/.test(left.baseAsset || "") ? 1 : 0;
+    const rightScaled = /^\d/.test(right.baseAsset || "") ? 1 : 0;
+    if (leftScaled !== rightScaled) return leftScaled - rightScaled;
+    if (left.symbol.length !== right.symbol.length) return left.symbol.length - right.symbol.length;
+    return left.symbol.localeCompare(right.symbol);
   });
 
   const priority = ranked.slice(0, PRIORITY_SCAN_COUNT);
@@ -1113,10 +1246,7 @@ async function fetchTimeframeMatrix(symbol) {
 
   const results = await Promise.allSettled(
     TIMEFRAME_CONFIG.map((config) =>
-      fetchJson(
-        `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${config.interval}&limit=180`,
-        `${config.interval} timeframe`
-      ).then((entries) => summarizeTimeframe(entries.map(mapKlineEntry)))
+      fetchTimeframeEntries(symbol, config).then((entries) => summarizeTimeframe(entries.map(mapKlineEntry)))
     )
   );
 
@@ -1135,6 +1265,25 @@ async function fetchTimeframeMatrix(symbol) {
   });
 
   return summary;
+}
+
+async function fetchTimeframeEntries(symbol, config) {
+  try {
+    return await fetchJson(
+      `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${config.interval}&limit=180`,
+      `${config.interval} timeframe`
+    );
+  } catch (error) {
+    const exchangeInfo = await getExchangeInfo().catch(() => null);
+    const symbolInfo = (exchangeInfo?.symbols || []).find((entry) => entry.symbol === symbol);
+    if (!symbolInfo || /^\d/.test(symbolInfo.baseAsset || "")) {
+      throw error;
+    }
+    return fetchJson(
+      `https://api.binance.com/api/v3/klines?symbol=${symbolInfo.baseAsset}${QUOTE_ASSET}&interval=${config.interval}&limit=180`,
+      `${config.interval} spot timeframe`
+    );
+  }
 }
 
 function tradeTargets(candidate) {

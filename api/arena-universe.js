@@ -94,6 +94,14 @@ function buildShellTickers(activeSymbols) {
   }));
 }
 
+async function fetchSpotTickers(activeSymbols) {
+  const rawTickers = await fetchJson(
+    "https://api.binance.com/api/v3/ticker/24hr",
+    "Spot 24H tickers"
+  );
+  return mapTickerEntries(rawTickers, activeSymbols);
+}
+
 module.exports = async function handler(_req, res) {
   if (tickerCache.payload && Date.now() < tickerCache.expiresAt) {
     buildJsonResponse(res, 200, tickerCache.payload);
@@ -117,19 +125,27 @@ module.exports = async function handler(_req, res) {
     } catch (bulkError) {
       degraded = true;
       warning = bulkError.message || "24H tickers unavailable";
-      source = "server price proxy";
+      source = "server spot 24H proxy";
 
       try {
-        const rawPrices = await fetchJson(
-          "https://fapi.binance.com/fapi/v1/ticker/price",
-          "Ticker prices"
-        );
-        tickers = mapTickerEntries(rawPrices, activeSymbols);
-      } catch (priceError) {
+        tickers = await fetchSpotTickers(activeSymbols);
+      } catch (spotError) {
         degraded = true;
-        warning = priceError.message || warning;
-        source = "server shell universe";
-        tickers = buildShellTickers(activeSymbols);
+        warning = spotError.message || warning;
+        source = "server price proxy";
+
+        try {
+          const rawPrices = await fetchJson(
+            "https://fapi.binance.com/fapi/v1/ticker/price",
+            "Ticker prices"
+          );
+          tickers = mapTickerEntries(rawPrices, activeSymbols);
+        } catch (priceError) {
+          degraded = true;
+          warning = priceError.message || warning;
+          source = "server shell universe";
+          tickers = buildShellTickers(activeSymbols);
+        }
       }
     }
 
