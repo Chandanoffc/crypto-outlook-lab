@@ -1,11 +1,8 @@
 const STRATEGY_SPECS = [
-  { id: "core", label: "Core Trend", shortLabel: "Core", tone: "up", maxOpenTrades: 1 },
-  { id: "liq", label: "Liq Magnet", shortLabel: "Liq", tone: "neutral", maxOpenTrades: 1 },
-  { id: "obfvg", label: "OB + FVG", shortLabel: "OB/FVG", tone: "up", maxOpenTrades: 1 },
-  { id: "funding", label: "Funding MR", shortLabel: "Funding", tone: "down", maxOpenTrades: 1 },
+  { id: "core", label: "House Trend", shortLabel: "House", tone: "up", maxOpenTrades: 4 },
 ];
-const STRATEGY_START_BALANCE = 100;
-const START_BALANCE = STRATEGY_SPECS.length * STRATEGY_START_BALANCE;
+const STRATEGY_START_BALANCE = 200;
+const START_BALANCE = STRATEGY_START_BALANCE;
 const DEFAULT_INTERVAL = "15m";
 const DEFAULT_QUALITY_THRESHOLD = 68;
 const QUOTE_ASSET = "USDT";
@@ -16,7 +13,7 @@ const ANALYSIS_CONCURRENCY = 5;
 const HTF_CONFIRMATION_CONCURRENCY = 4;
 const HTF_CONFIRMATION_CACHE_MS = 5 * 60 * 1000;
 const MAX_CONCURRENT_TRADES = STRATEGY_SPECS.reduce((sum, item) => sum + item.maxOpenTrades, 0);
-const MAX_NEW_TRADES_PER_SCAN = STRATEGY_SPECS.length;
+const MAX_NEW_TRADES_PER_SCAN = 2;
 const DEFAULT_LEVERAGE = 5;
 const TARGET_MARGIN_RETURN_PCT = 22;
 const STOP_MARGIN_RETURN_PCT = 10;
@@ -24,7 +21,7 @@ const TRADE_COOLDOWN_MS = 4 * 60 * 1000;
 const HIGH_VOLUME_FLOOR = 100_000_000;
 const MIN_RR = 1.6;
 const MIN_PROJECTED_MOVE_PCT = 2.1;
-const STRATEGY_VERSION = 3;
+const STRATEGY_VERSION = 4;
 const HTF_CONFIRMATION_CONFIG = [
   { key: "1h", label: "1H", interval: "1h" },
   { key: "4h", label: "4H", interval: "4h" },
@@ -1311,7 +1308,7 @@ function buildCoreTrendStrategySignal(candidate) {
     strategyId: "core",
     side: candidate.trade.stance,
     tone: candidate.trade.tone,
-    qualityScore: (candidate.refinedQualityScore ?? candidate.qualityScore) + 6,
+    qualityScore: candidate.refinedQualityScore ?? candidate.qualityScore,
     detectedAt: Date.now(),
     entry: candidate.trade.entry,
     stopLoss: candidate.trade.stopLoss,
@@ -1616,9 +1613,12 @@ function formatParameterLine(candidate, ticker) {
     return `${volumeNote} • queueing trend, flow, leverage, and entry plan`;
   }
 
-  const strategyTags = STRATEGY_SPECS.filter((spec) => candidate.strategySignals?.[spec.id])
-    .map((spec) => spec.shortLabel)
-    .join(" • ");
+  const strategyTags =
+    STRATEGY_SPECS.length > 1
+      ? STRATEGY_SPECS.filter((spec) => candidate.strategySignals?.[spec.id])
+          .map((spec) => spec.shortLabel)
+          .join(" • ")
+      : "";
 
   return `
     <div class="monitor-parameter-stack">
@@ -1648,7 +1648,10 @@ function buildMarketRows(universe) {
     .map((symbolInfo) => {
       const ticker = universeTickerMap.get(symbolInfo.symbol) || null;
       const analysis = analysisCache.get(symbolInfo.symbol) || null;
-      const qualityScore = analysis?.bestStrategyQuality ?? analysis?.refinedQualityScore ?? analysis?.qualityScore ?? -1;
+      const qualityScore =
+        STRATEGY_SPECS.length === 1
+          ? analysis?.refinedQualityScore ?? analysis?.qualityScore ?? -1
+          : analysis?.bestStrategyQuality ?? analysis?.refinedQualityScore ?? analysis?.qualityScore ?? -1;
       return {
         symbol: symbolInfo.symbol,
         baseAsset: symbolInfo.baseAsset,
@@ -1693,6 +1696,7 @@ function renderStrategySignalCell(signal) {
 function renderMarketTable(universe) {
   if (!dom.marketTable) return;
   const rows = buildMarketRows(universe);
+  const singleHouseStrategy = STRATEGY_SPECS.length === 1;
 
   if (!rows.length) {
     dom.marketTable.innerHTML = `
@@ -1720,10 +1724,16 @@ function renderMarketTable(universe) {
           <td>${price}</td>
           <td class="${toneFromNumber(row.changePct, 0.15)}">${formatPercent(row.changePct)}</td>
           <td class="${row.biasTone}">${row.biasLabel}</td>
+          ${
+            singleHouseStrategy
+              ? ""
+              : `
           <td class="strategy-column">${renderStrategySignalCell(row.strategySignals.core)}</td>
           <td class="strategy-column">${renderStrategySignalCell(row.strategySignals.liq)}</td>
           <td class="strategy-column">${renderStrategySignalCell(row.strategySignals.obfvg)}</td>
           <td class="strategy-column">${renderStrategySignalCell(row.strategySignals.funding)}</td>
+          `
+          }
           <td>${row.parameters}</td>
           <td class="monitor-quality ${qualityQualified ? "qualified" : ""}">${qualityLabel}</td>
         </tr>
@@ -1740,10 +1750,16 @@ function renderMarketTable(universe) {
             <th>Price</th>
             <th>24H</th>
             <th>Bias</th>
+            ${
+              singleHouseStrategy
+                ? ""
+                : `
             <th>Core</th>
             <th>Liq</th>
             <th>OB/FVG</th>
             <th>Funding</th>
+            `
+            }
             <th>Parameters</th>
             <th>Quality</th>
           </tr>
@@ -1769,13 +1785,14 @@ function applyStrategyUpgradeNotice() {
   state.balance = START_BALANCE;
   state.openTrades = [];
   state.closedTrades = [];
+  state.activity = [];
   state.lastCandidates = [];
   state.lastScanAt = 0;
   analysisCache = new Map();
   universeTickerMap = new Map();
   scanCursor = 0;
   logActivity(
-    "Multi-strategy sleeves activated. The simulator has been reset to four independent $100 books to keep the new journals clean.",
+    "House Trend has been restored on Auto Paper Trader. The old multi-strategy sleeve book was cleared so this journal now tracks only the stable house model.",
     "neutral"
   );
   state.strategyVersion = STRATEGY_VERSION;
@@ -1825,9 +1842,10 @@ function openTradeFromStrategySignal(candidate, strategyId) {
   if (freeCapital < 10) return false;
 
   const leverage = signal.leverage || DEFAULT_LEVERAGE;
+  const slotsRemaining = Math.max(1, (spec.maxOpenTrades || 1) - strategyOpenTrades(strategyId).length);
   const marginBudget = Math.min(
     freeCapital,
-    Math.max(strategyBalanceBefore * 0.24, freeCapital / Math.max(1, spec.maxOpenTrades))
+    Math.max(strategyBalanceBefore * 0.16, freeCapital / slotsRemaining)
   );
   const riskCapital = Math.max(marginBudget * 0.12, 2);
   const stopDistance = Math.abs(signal.entry - signal.stopLoss);
@@ -2005,6 +2023,30 @@ function qualifiedStrategyCandidates(candidates, strategyId, threshold) {
 
 function openQualifiedTrades(candidates) {
   const opened = [];
+  if (STRATEGY_SPECS.length === 1) {
+    const spec = STRATEGY_SPECS[0];
+    const eligible = qualifiedStrategyCandidates(candidates, spec.id, state.qualityThreshold).filter(
+      (entry) => !strategyHasOpenTrade(spec.id, entry.symbol) && !recentlyClosed(entry.symbol, spec.id)
+    );
+
+    for (const candidate of eligible) {
+      if (opened.length >= MAX_NEW_TRADES_PER_SCAN) break;
+      if (strategyOpenTrades(spec.id).length >= spec.maxOpenTrades) break;
+      if (openTradeFromStrategySignal(candidate, spec.id)) {
+        opened.push({
+          strategyId: spec.id,
+          strategyLabel: spec.label,
+          symbol: candidate.symbol,
+          signal: candidate.strategySignals[spec.id],
+          bias: candidate.bias,
+          pricePrecision: candidate.pricePrecision,
+        });
+      }
+    }
+
+    return opened;
+  }
+
   STRATEGY_SPECS.forEach((spec) => {
     if (opened.length >= MAX_NEW_TRADES_PER_SCAN) return;
     if (strategyOpenTrades(spec.id).length >= spec.maxOpenTrades) return;
@@ -2046,7 +2088,7 @@ function summarizeEngine(candidates, threshold) {
 
   const best = qualified[0];
   if (state.openTrades.length) {
-    return `${state.openTrades.length}/${MAX_CONCURRENT_TRADES} paper positions are active. ${qualified.length} fresh strategy signals still meet the filter, and ${best.strategyLabel} on ${best.candidate.symbol} leads with entry ${formatPrice(
+    return `${state.openTrades.length}/${MAX_CONCURRENT_TRADES} paper positions are active. ${qualified.length} fresh house-strategy setups still meet the filter, and ${best.candidate.symbol} leads with entry ${formatPrice(
       best.signal.entry,
       best.candidate.pricePrecision
     )}, TP ${formatPrice(best.signal.takeProfit, best.candidate.pricePrecision)}, and SL ${formatPrice(
@@ -2055,7 +2097,7 @@ function summarizeEngine(candidates, threshold) {
     )}. Higher-timeframe confirmation is now required before a new trade opens.`;
   }
 
-  return `${qualified.length} high-quality strategy signals are live across the perp universe. ${best.strategyLabel} on ${best.candidate.symbol} leads with entry ${formatPrice(
+  return `${qualified.length} high-quality house-strategy setups are live across the perp universe. ${best.candidate.symbol} leads with entry ${formatPrice(
     best.signal.entry,
     best.candidate.pricePrecision
   )}, TP ${formatPrice(best.signal.takeProfit, best.candidate.pricePrecision)}, SL ${formatPrice(
@@ -2089,7 +2131,7 @@ function renderStrategySleeves(candidates) {
       value: `${formatPrice(equity, 2)} • ${openTrades.length} open`,
       note: lead
         ? `${lead.symbol} ${lead.strategySignals[spec.id].side} • Q${lead.strategySignals[spec.id].qualityScore} • ${formatPercent(lead.strategySignals[spec.id].projectedMovePct)} move • ${wins}/${closed.length} wins`
-        : `${wins}/${closed.length} wins • no live ${spec.shortLabel.toLowerCase()} signal above Q${state.qualityThreshold}`,
+        : `${wins}/${closed.length} wins • no live ${spec.label.toLowerCase()} signal above Q${state.qualityThreshold}`,
       tone:
         equity > STRATEGY_START_BALANCE + 0.5
           ? "up"
@@ -2135,7 +2177,7 @@ function renderDashboard(universe = []) {
     ? toneFromNumber(unrealizedUsd, 0.01)
     : "neutral";
   dom.metricOpenNote.textContent = leadOpenTrade
-    ? `${leadOpenTrade.strategyLabel} • ${leadOpenTrade.symbol} ${leadOpenTrade.side} • entry ${formatPrice(
+    ? `${leadOpenTrade.symbol} ${leadOpenTrade.side} • entry ${formatPrice(
         leadOpenTrade.entryPrice,
         leadOpenTrade.pricePrecision || 2
       )} • TP ${formatPrice(leadOpenTrade.takeProfit, leadOpenTrade.pricePrecision || 2)} • SL ${formatPrice(
@@ -2234,7 +2276,7 @@ function renderDashboard(universe = []) {
 
   dom.autoToggleButton.textContent = state.autoEnabled ? "Pause Auto" : "Resume Auto";
   dom.autoRunNote.textContent = state.autoEnabled
-    ? `Auto-scans every 90 seconds across four $100 strategy sleeves and can hold up to ${MAX_CONCURRENT_TRADES} total positions.`
+    ? `Auto-scans every 90 seconds and can hold up to ${MAX_CONCURRENT_TRADES} quality positions.`
     : "Auto engine paused. Manual scans still work.";
   renderPaperTabs();
 }
@@ -2332,7 +2374,7 @@ async function scanUniverse({ manual = false } = {}) {
     if (opened.length) {
       const lead = opened[0];
       setStatus(
-        `Opened ${opened.length} new strategy trade${opened.length > 1 ? "s" : ""}. ${state.openTrades.length}/${MAX_CONCURRENT_TRADES} positions active, led by ${lead.strategyLabel} on ${lead.symbol}.`,
+        `Opened ${opened.length} new house-strategy trade${opened.length > 1 ? "s" : ""}. ${state.openTrades.length}/${MAX_CONCURRENT_TRADES} positions active, led by ${lead.symbol}.`,
         lead.signal.tone
       );
     } else if (state.openTrades.length) {
@@ -2411,10 +2453,10 @@ dom.resetSimButton.addEventListener("click", () => {
   analysisCache = new Map();
   universeTickerMap = new Map();
   scanCursor = 0;
-  logActivity("Simulation reset to four independent $100 strategy sleeves.", "neutral");
+  logActivity("Simulation reset to the $200 house strategy book.", "neutral");
   persistState();
   renderDashboard(perpUniverseCache || []);
-  setStatus("Simulation reset to four independent $100 strategy sleeves.", "neutral");
+  setStatus("Simulation reset to the $200 house strategy book.", "neutral");
 });
 
 if (dom.paperTabPositions) {

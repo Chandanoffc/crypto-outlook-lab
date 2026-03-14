@@ -45,7 +45,7 @@
             <p class="subtitle">
               A personal signal desk built on the Tradez engine. Scan the full perp universe,
               keep a small focus list, pin the setups you care about, and keep one clean chart
-              centered on your best ideas.
+              centered on your best ideas while the experimental strategy lab tracks the newer books separately.
             </p>
           </div>
 
@@ -306,6 +306,45 @@
 
           <div id="signals-panel-notes" hidden>
             <div id="signals-notes-grid" class="analysis-grid signals-notes-grid"></div>
+          </div>
+        </section>
+
+        <section class="panel workspace-panel signals-strategy-panel">
+          <div class="panel-head">
+            <div>
+              <p class="panel-label">Experimental Strategy Lab</p>
+              <h2>Liq Magnet, OB + FVG, and Funding MR</h2>
+            </div>
+
+            <div class="feed-tabs">
+              <button id="signals-strategy-tab-positions" class="mini-button feed-tab is-active" type="button">
+                Open Positions
+              </button>
+              <button id="signals-strategy-tab-trades" class="mini-button feed-tab" type="button">
+                Strategy Journal
+              </button>
+              <button id="signals-strategy-tab-activity" class="mini-button feed-tab" type="button">
+                Activity Feed
+              </button>
+            </div>
+          </div>
+
+          <div id="signals-strategy-tab-note" class="subsection-meta">
+            Experimental sleeves run separately from Auto Paper Trader, each with its own $100 virtual balance.
+          </div>
+
+          <div id="signals-strategy-sleeve-grid" class="analysis-grid signals-strategy-sleeves"></div>
+
+          <div id="signals-strategy-panel-positions">
+            <div id="signals-strategy-open-grid" class="analysis-grid"></div>
+          </div>
+
+          <div id="signals-strategy-panel-trades" hidden>
+            <div id="signals-strategy-trade-log" class="table-card"></div>
+          </div>
+
+          <div id="signals-strategy-panel-activity" hidden>
+            <div id="signals-strategy-activity-table" class="table-card"></div>
           </div>
         </section>
       </main>

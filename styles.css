@@ -1218,7 +1218,7 @@ body.dashboard-home .mini-button {
 }
 
 body.paper-trader-page .panel-monitor-large .monitor-table table {
-  min-width: 1520px;
+  min-width: 1120px;
 }
 
 body.paper-trader-page .panel-monitor-large .monitor-table th,
@@ -1226,7 +1226,7 @@ body.paper-trader-page .panel-monitor-large .monitor-table td {
   padding: 13px 15px;
 }
 
-body.paper-trader-page .panel-monitor-large .monitor-table td:nth-child(9) {
+body.paper-trader-page .panel-monitor-large .monitor-table td:nth-child(5) {
   min-width: 420px;
 }
 
@@ -1474,6 +1474,15 @@ body.tradez-page .quality-chip {
 
 .signals-feed-panel {
   grid-column: 1 / -1;
+}
+
+.signals-strategy-panel {
+  grid-column: 1 / -1;
+}
+
+.signals-strategy-sleeves {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  margin-bottom: 14px;
 }
 
 .signals-notes-grid {
