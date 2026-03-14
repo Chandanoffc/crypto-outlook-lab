@@ -768,6 +768,64 @@ async function fetchServerSnapshot(token) {
   return payload;
 }
 
+function buildSpotCoreSymbolCandidates(resolved) {
+  const candidates = [resolved.symbol];
+  if (!/^\d/.test(resolved.baseAsset || "")) {
+    candidates.push(`${resolved.baseAsset}${QUOTE_ASSET}`);
+    candidates.push(`${resolved.cleanedToken}${QUOTE_ASSET}`);
+  }
+  return Array.from(new Set(candidates.filter(Boolean)));
+}
+
+async function fetchFirstSuccessful(candidates, loader) {
+  for (const candidate of candidates) {
+    try {
+      const value = await loader(candidate);
+      if (value) return value;
+    } catch (error) {
+      // Try the next symbol variant.
+    }
+  }
+  return null;
+}
+
+async function fetchSpotCoreSnapshotDirect(resolved) {
+  const candidates = buildSpotCoreSymbolCandidates(resolved);
+  return fetchFirstSuccessful(candidates, async (symbol) => {
+    const requests = await Promise.allSettled([
+      fetchDirectJson(
+        `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${STRATEGY_INTERVAL}&limit=240`,
+        "Spot klines"
+      ),
+      fetchDirectJson(
+        `https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`,
+        "Spot 24H ticker"
+      ),
+      fetchDirectJson(
+        `https://api.binance.com/api/v3/depth?symbol=${symbol}&limit=100`,
+        "Spot orderbook"
+      ),
+      fetchDirectJson(
+        `https://api.binance.com/api/v3/aggTrades?symbol=${symbol}&limit=400`,
+        "Spot agg trades"
+      ),
+    ]);
+
+    const [klinesResult, tickerResult, depthResult, tradesResult] = requests;
+    if (klinesResult.status !== "fulfilled" || tickerResult.status !== "fulfilled") {
+      throw new Error(`Spot core data unavailable for ${symbol}`);
+    }
+
+    return {
+      symbol,
+      candles: klinesResult.value.map(mapKlineEntry),
+      ticker: tickerResult.value,
+      depth: depthResult.status === "fulfilled" ? depthResult.value : { bids: [], asks: [] },
+      trades: tradesResult.status === "fulfilled" ? tradesResult.value : [],
+    };
+  });
+}
+
 async function fetchDirectSnapshot(token) {
   const exchangeInfo = await getExchangeInfo();
   const resolved = resolvePerpSymbol(token, exchangeInfo);
@@ -806,8 +864,25 @@ async function fetchDirectSnapshot(token) {
     takerResult,
   ] = requests;
 
-  if (klinesResult.status !== "fulfilled" || tickerResult.status !== "fulfilled") {
-    throw new Error(`Core data unavailable for ${resolved.symbol}`);
+  let candles;
+  let ticker;
+  let depth;
+  let trades;
+
+  if (klinesResult.status === "fulfilled" && tickerResult.status === "fulfilled") {
+    candles = klinesResult.value.map(mapKlineEntry);
+    ticker = tickerResult.value;
+    depth = depthResult.status === "fulfilled" ? depthResult.value : { bids: [], asks: [] };
+    trades = tradesResult.status === "fulfilled" ? tradesResult.value : [];
+  } else {
+    const spotCore = await fetchSpotCoreSnapshotDirect(resolved).catch(() => null);
+    if (!spotCore) {
+      throw new Error(`Core perpetual market data is unavailable for ${resolved.symbol}.`);
+    }
+    candles = spotCore.candles;
+    ticker = spotCore.ticker;
+    depth = spotCore.depth;
+    trades = spotCore.trades;
   }
 
   return {
@@ -815,10 +890,10 @@ async function fetchDirectSnapshot(token) {
     symbol: resolved.symbol,
     baseAsset: resolved.baseAsset,
     pricePrecision: resolved.pricePrecision,
-    candles: klinesResult.value.map(mapKlineEntry),
-    ticker: tickerResult.value,
-    depth: depthResult.status === "fulfilled" ? depthResult.value : { bids: [], asks: [] },
-    trades: tradesResult.status === "fulfilled" ? tradesResult.value : [],
+    candles,
+    ticker,
+    depth,
+    trades,
     premiumIndex: premiumResult.status === "fulfilled" ? premiumResult.value : null,
     openInterestHistory: oiHistoryResult.status === "fulfilled" ? oiHistoryResult.value : [],
     globalLongShort: globalResult.status === "fulfilled" ? globalResult.value : [],

@@ -221,10 +221,10 @@ select {
 
 .brand-copy strong {
   font-family: var(--display-font);
-  font-size: 1.02rem;
-  font-style: italic;
-  font-weight: 700;
-  letter-spacing: 0.14em;
+  font-size: 1.32rem;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: transparent;
   background: linear-gradient(180deg, #f7ffd7 0%, #d6ff4d 100%);
