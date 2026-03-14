@@ -199,78 +199,9 @@
               <div id="tradez-resistance-fields" class="stack-values"></div>
             </div>
           </div>
-        </section>
-
-        <aside class="panel panel-outlook tradez-side-panel">
-          <div class="panel-head">
-            <div>
-              <p class="panel-label">Strategy Pulse</p>
-              <h2>Current best pullback</h2>
-            </div>
-            <div class="score-stack">
-              <div id="tradez-quality-badge" class="score-badge neutral">0</div>
-              <div class="quality-meter-block">
-                <div class="quality-meter-copy">
-                  <span>Setup Quality</span>
-                  <strong id="tradez-quality-label">Monitoring</strong>
-                </div>
-                <div id="tradez-quality-meter" class="quality-meter" style="--quality-progress: 0%">
-                  <span class="quality-meter-thumb"></span>
-                </div>
-                <div class="quality-meter-scale">
-                  <span>Weak</span>
-                  <span>Prime</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div id="tradez-stream-status" class="stream-status neutral">
-            Waiting for the first qualified pullback...
-          </div>
-
-          <div id="tradez-summary-copy" class="outlook-copy">
-            Tradez will summarize the active pullback quality, touch location, and risk context
-            here.
-          </div>
-
-          <div class="trade-idea-card tradez-trade-card">
-            <div class="trade-idea-head">
-              <div>
-                <span class="stack-label">Active Trade Plan</span>
-                <small id="tradez-plan-note" class="trade-refresh-note">1H EMA continuation ruleset</small>
-              </div>
-              <div id="tradez-stance-pill" class="pill neutral">Waiting</div>
-            </div>
-
-            <div class="trade-idea-grid">
-              <div class="trade-idea-stat">
-                <span>Entry Zone</span>
-                <strong id="tradez-entry-zone">-</strong>
-              </div>
-              <div class="trade-idea-stat">
-                <span>Stop</span>
-                <strong id="tradez-stop">-</strong>
-              </div>
-              <div class="trade-idea-stat">
-                <span>TP1</span>
-                <strong id="tradez-tp1">-</strong>
-              </div>
-              <div class="trade-idea-stat">
-                <span>TP2</span>
-                <strong id="tradez-tp2">-</strong>
-              </div>
-            </div>
-
-            <p id="tradez-trade-summary" class="trade-copy">
-              No active Tradez setup yet.
-            </p>
-          </div>
-
-          <div id="tradez-signal-list" class="signal-list"></div>
         </aside>
 
-        <section class="panel workspace-panel tradez-feed-panel">
+        <section class="panel tradez-feed-panel">
           <div class="panel-head">
             <div>
               <p class="panel-label">Tradez Feed</p>
@@ -305,6 +236,78 @@
 
           <div id="tradez-panel-notes" hidden>
             <div id="tradez-notes-grid" class="analysis-grid tradez-notes-grid"></div>
+          </div>
+        </section>
+
+        <section class="panel tradez-pulse-panel">
+          <div class="panel-head-inline tradez-pulse-head">
+            <div>
+              <p class="panel-label">Strategy Pulse</p>
+              <h3>Current best pullback</h3>
+            </div>
+            <div class="score-stack tradez-pulse-score">
+              <div id="tradez-quality-badge" class="score-badge neutral">0</div>
+              <div class="quality-meter-block">
+                <div class="quality-meter-copy">
+                  <span>Setup Quality</span>
+                  <strong id="tradez-quality-label">Monitoring</strong>
+                </div>
+                <div id="tradez-quality-meter" class="quality-meter" style="--quality-progress: 0%">
+                  <span class="quality-meter-thumb"></span>
+                </div>
+                <div class="quality-meter-scale">
+                  <span>Weak</span>
+                  <span>Prime</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div id="tradez-stream-status" class="stream-status neutral">
+            Waiting for the first qualified pullback...
+          </div>
+
+          <div class="tradez-pulse-grid">
+            <div class="tradez-pulse-copy">
+              <p id="tradez-summary-copy" class="outlook-copy">
+                Tradez will summarize the active pullback quality, touch location, and risk context
+                here.
+              </p>
+              <div id="tradez-signal-list" class="signal-list"></div>
+            </div>
+
+            <div class="trade-idea-card tradez-trade-card tradez-pulse-card">
+              <div class="trade-idea-head">
+                <div>
+                  <span class="stack-label">Active Trade Plan</span>
+                  <small id="tradez-plan-note" class="trade-refresh-note">1H EMA continuation ruleset</small>
+                </div>
+                <div id="tradez-stance-pill" class="pill neutral">Waiting</div>
+              </div>
+
+              <div class="trade-idea-grid">
+                <div class="trade-idea-stat">
+                  <span>Entry Zone</span>
+                  <strong id="tradez-entry-zone">-</strong>
+                </div>
+                <div class="trade-idea-stat">
+                  <span>Stop</span>
+                  <strong id="tradez-stop">-</strong>
+                </div>
+                <div class="trade-idea-stat">
+                  <span>TP1</span>
+                  <strong id="tradez-tp1">-</strong>
+                </div>
+                <div class="trade-idea-stat">
+                  <span>TP2</span>
+                  <strong id="tradez-tp2">-</strong>
+                </div>
+              </div>
+
+              <p id="tradez-trade-summary" class="trade-copy">
+                No active Tradez setup yet.
+              </p>
+            </div>
           </div>
         </section>
       </main>
