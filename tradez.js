@@ -977,6 +977,24 @@ function touchLabel(touch20, touch50) {
   return "EMA zone";
 }
 
+function touchesLevel(candle, level, tolerance) {
+  if (!Number.isFinite(level)) return false;
+  return candle.low <= level + tolerance && candle.high >= level - tolerance;
+}
+
+function levelLabel(side, useLevelTwo) {
+  if (side === "Long") return useLevelTwo ? "S2" : "S1";
+  return useLevelTwo ? "R2" : "R1";
+}
+
+function buildConfluenceLabel(side, useLevelTwo, touch20, touch50) {
+  const level = levelLabel(side, useLevelTwo);
+  if (touch20 && touch50) return `EMA20/50 + ${level}`;
+  if (touch20) return `EMA20 + ${level}`;
+  if (touch50) return `EMA50 + ${level}`;
+  return level;
+}
+
 function rangePosition(candle, side) {
   const candleRange = Math.max(candle.high - candle.low, 0.0000001);
   if (side === "Long") return (candle.close - candle.low) / candleRange;
@@ -1018,6 +1036,8 @@ function buildTradezSignals(snapshot, quoteVolume = 0) {
   const markers = [];
   const historicalSignals = [];
   let activeSignal = null;
+  const [support1, support2] = supportResistance.supportLevels;
+  const [resistance1, resistance2] = supportResistance.resistanceLevels;
 
   for (let index = completedLimit; index < candles.length - 1; index += 1) {
     const candle = candles[index];
@@ -1031,86 +1051,123 @@ function buildTradezSignals(snapshot, quoteVolume = 0) {
 
     const bullishTrend = ema20Value > ema50Value;
     const bearishTrend = ema20Value < ema50Value;
-    const tolerance = Math.max(atrValue * 0.16, candle.close * 0.0012);
+    const tolerance = Math.max(atrValue * 0.16, candle.close * 0.0012, supportResistance.bandWidth * 0.45);
     const touch20 = candle.low <= ema20Value + tolerance && candle.high >= ema20Value - tolerance;
     const touch50 = candle.low <= ema50Value + tolerance && candle.high >= ema50Value - tolerance;
-    if (!touch20 && !touch50) continue;
+    const touchS1 = touchesLevel(candle, support1, tolerance);
+    const touchS2 = touchesLevel(candle, support2, tolerance);
+    const touchR1 = touchesLevel(candle, resistance1, tolerance);
+    const touchR2 = touchesLevel(candle, resistance2, tolerance);
+    const averageVolume20 = average(candles.slice(Math.max(0, index - 20), index).map((entry) => entry.volume).filter(Boolean));
+    const volumeFactor = averageVolume20 ? candle.volume / averageVolume20 : 1;
+    const bullishVolumeConfirmed =
+      candle.close > candle.open &&
+      volumeFactor >= 1.05 &&
+      rangePosition(candle, "Long") >= 0.56 &&
+      (!nextCandle || nextCandle.close >= candle.close * 0.996);
+    const bearishVolumeConfirmed =
+      candle.close < candle.open &&
+      volumeFactor >= 1.05 &&
+      rangePosition(candle, "Short") >= 0.56 &&
+      (!nextCandle || nextCandle.close <= candle.close * 1.004);
 
-    const longSetup =
-      bullishTrend &&
-      candle.low <= Math.max(ema20Value, ema50Value) + tolerance &&
-      candle.close >= ema20Value - tolerance * 0.2 &&
-      (candle.close > candle.open || (nextCandle && nextCandle.close > candle.close));
-    const shortSetup =
-      bearishTrend &&
-      candle.high >= Math.min(ema20Value, ema50Value) - tolerance &&
-      candle.close <= ema20Value + tolerance * 0.2 &&
-      (candle.close < candle.open || (nextCandle && nextCandle.close < candle.close));
+    const longSetup = bullishTrend && (touchS1 || touchS2) && bullishVolumeConfirmed;
+    const shortSetup = bearishTrend && (touchR1 || touchR2) && bearishVolumeConfirmed;
 
     if (!longSetup && !shortSetup) continue;
 
     const side = longSetup ? "Long" : "Short";
     const tone = side === "Long" ? "up" : "down";
-    const averageVolume20 = average(candles.slice(Math.max(0, index - 20), index).map((entry) => entry.volume).filter(Boolean));
-    const volumeFactor = averageVolume20 ? candle.volume / averageVolume20 : 1;
-    const entryLow = Math.min(ema20Value, ema50Value) - tolerance * 0.35;
-    const entryHigh = Math.max(ema20Value, ema50Value) + tolerance * 0.35;
+    const useLevelTwo = side === "Long" ? touchS2 : touchR2;
+    const testedLevel = side === "Long" ? (useLevelTwo ? support2 : support1) : useLevelTwo ? resistance2 : resistance1;
+    const anchorLevel = Number.isFinite(testedLevel)
+      ? testedLevel
+      : side === "Long"
+        ? Math.min(candle.low, ema20Value, ema50Value)
+        : Math.max(candle.high, ema20Value, ema50Value);
+    const levelTag = levelLabel(side, useLevelTwo);
+    const confluenceLabel = buildConfluenceLabel(side, useLevelTwo, touch20, touch50);
+    const emaAnchorLow = Math.min(
+      anchorLevel,
+      touch20 ? ema20Value : anchorLevel,
+      touch50 ? ema50Value : anchorLevel,
+      candle.low
+    );
+    const emaAnchorHigh = Math.max(
+      anchorLevel,
+      touch20 ? ema20Value : anchorLevel,
+      touch50 ? ema50Value : anchorLevel,
+      candle.high
+    );
+    const entryLow = side === "Long" ? emaAnchorLow - tolerance * 0.16 : Math.min(anchorLevel, candle.close) - tolerance * 0.08;
+    const entryHigh = side === "Long" ? Math.max(anchorLevel, candle.close, touch20 ? ema20Value : anchorLevel, touch50 ? ema50Value : anchorLevel) + tolerance * 0.08 : emaAnchorHigh + tolerance * 0.16;
     const entryReference = average([entryLow, entryHigh]);
-    const nearestSupport = supportResistance.supportLevels[0] ?? entryReference - atrValue * 1.1;
-    const nearestResistance = supportResistance.resistanceLevels[0] ?? entryReference + atrValue * 1.1;
+    const nearestSupport = support1 ?? entryReference - atrValue * 1.1;
+    const secondSupport = support2 ?? nearestSupport - atrValue * 0.9;
+    const nearestResistance = resistance1 ?? entryReference + atrValue * 1.1;
+    const secondResistance = resistance2 ?? nearestResistance + atrValue * 0.9;
     const stopLoss =
       side === "Long"
-        ? Math.min(candle.low, nearestSupport) - atrValue * 0.24
-        : Math.max(candle.high, nearestResistance) + atrValue * 0.24;
+        ? Math.min(anchorLevel, candle.low) - Math.max(supportResistance.bandWidth * 0.45, atrValue * 0.18)
+        : Math.max(anchorLevel, candle.high) + Math.max(supportResistance.bandWidth * 0.45, atrValue * 0.18);
     const risk = Math.max(Math.abs(entryReference - stopLoss), atrValue * 0.55);
     const tp1 =
       side === "Long"
-        ? Math.max(nearestResistance, entryReference + risk * 1.65)
-        : Math.min(nearestSupport, entryReference - risk * 1.65);
-    const tp2 = side === "Long" ? entryReference + risk * 2.45 : entryReference - risk * 2.45;
-    const room = side === "Long" ? tp1 - currentPrice : currentPrice - tp1;
+        ? Math.max(nearestResistance, entryReference + risk * 1.2)
+        : Math.min(nearestSupport, entryReference - risk * 1.2);
+    const tp2 =
+      side === "Long"
+        ? Math.max(secondResistance, tp1 + atrValue * 0.55)
+        : Math.min(secondSupport, tp1 - atrValue * 0.55);
+    const room = side === "Long" ? tp1 - entryReference : entryReference - tp1;
     const rr = Math.abs(tp1 - entryReference) / Math.max(risk, 0.0000001);
     const recentDistancePct = Math.abs(pctChange(entryReference, currentPrice));
     const sinceTouchBars = candles.length - 2 - index;
-    let qualityScore = 34;
-    qualityScore += touch20 && touch50 ? 22 : touch20 ? 18 : 16;
-    qualityScore += side === "Long" ? 20 : 20;
+    const emaConfluenceScore = touch20 && touch50 ? 18 : touch50 ? 14 : touch20 ? 12 : 4;
+    let qualityScore = 46;
+    qualityScore += side === "Long" ? 18 : 18;
+    qualityScore += useLevelTwo ? 20 : 12;
+    qualityScore += emaConfluenceScore;
     qualityScore += (side === "Long" ? candle.close > candle.open : candle.close < candle.open) ? 10 : 0;
     qualityScore += rangePosition(candle, side) >= 0.62 ? 8 : -6;
-    qualityScore += volumeFactor >= 1.3 ? 12 : volumeFactor >= 1 ? 6 : -4;
+    qualityScore += volumeFactor >= 1.4 ? 16 : volumeFactor >= 1.15 ? 10 : -12;
     qualityScore += hasGoodTradingVolume(quoteVolume) ? 10 : -10;
     qualityScore += side === "Long" ? (tradeSummary.cvdSlope > 0 ? 10 : -8) : tradeSummary.cvdSlope < 0 ? 10 : -8;
     qualityScore += side === "Long" ? (depthSummary.imbalance > 0 ? 6 : -6) : depthSummary.imbalance < 0 ? 6 : -6;
     qualityScore += side === "Long" ? (takerSummary.latestRatio > 1.01 ? 8 : -6) : takerSummary.latestRatio < 0.99 ? 8 : -6;
     qualityScore += side === "Long" ? (oiChange1h > 0 ? 8 : -6) : oiChange1h > 0 ? 6 : 0;
     qualityScore += side === "Long"
-      ? latestRsi >= 50 && latestRsi <= 68
+      ? rsiValue >= 50 && rsiValue <= 68
         ? 8
-        : latestRsi > 74
+        : rsiValue > 74
           ? -10
           : 0
-      : latestRsi <= 50 && latestRsi >= 32
+      : rsiValue <= 50 && rsiValue >= 32
         ? 8
-        : latestRsi < 26
+        : rsiValue < 26
           ? -10
           : 0;
-    qualityScore += rr >= 2 ? 16 : rr >= 1.4 ? 8 : -10;
-    qualityScore += room / Math.max(risk, 0.0000001) >= 1.5 ? 8 : -10;
+    qualityScore += rr >= 1.8 ? 16 : rr >= 1.2 ? 8 : -10;
+    qualityScore += room / Math.max(risk, 0.0000001) >= 1.2 ? 8 : -10;
     qualityScore -= sinceTouchBars * 4;
-    if (recentDistancePct > 1.1) qualityScore -= 14;
+    if (recentDistancePct > 1.8) qualityScore -= 14;
     if (Math.abs(fundingRate) > 0.04 && ((side === "Long" && fundingRate > 0) || (side === "Short" && fundingRate < 0))) {
       qualityScore -= 6;
     }
+    if (rr < 1 || tp2 === tp1) continue;
 
     const signal = {
-      id: `${snapshot.symbol}:${side}:${touchLabel(touch20, touch50)}:${candle.time}`,
+      id: `${snapshot.symbol}:${side}:${confluenceLabel}:${candle.time}`,
       time: candle.time,
       detectedAt: candle.time * 1000,
       symbol: snapshot.symbol,
       token: snapshot.token,
       side,
       tone,
-      touch: touchLabel(touch20, touch50),
+      touch: confluenceLabel,
+      strength: useLevelTwo ? "Strong Signal" : "Good Signal",
+      levelTag,
+      testedLevel: anchorLevel,
       qualityScore: Math.max(0, Math.round(qualityScore)),
       entryLow,
       entryHigh,
@@ -1121,13 +1178,16 @@ function buildTradezSignals(snapshot, quoteVolume = 0) {
       sinceTouchBars,
       recentDistancePct,
       volumeFactor,
+      moveStopToEntryAfterTp1: true,
       note:
         side === "Long"
-          ? `${touchLabel(touch20, touch50)} retest held while EMA20 stays above EMA50.`
-          : `${touchLabel(touch20, touch50)} retest failed while EMA20 stays below EMA50.`,
+          ? `${confluenceLabel} held while EMA20 stays above EMA50. TP1 is R1, TP2 is R2, and the stop moves to entry after TP1.`
+          : `${confluenceLabel} held while EMA50 stays above EMA20. TP1 is S1, TP2 is S2, and the stop moves to entry after TP1.`,
       reasonParts: [
+        useLevelTwo ? `${levelTag} strong` : `${levelTag} good`,
+        touch20 || touch50 ? `EMA confluence ${touch20 && touch50 ? "20/50" : touch50 ? "50" : "20"}` : "level-led setup",
         hasGoodTradingVolume(quoteVolume) ? "good liquidity" : "thin liquidity",
-        volumeFactor >= 1 ? "touch candle volume confirmed" : "volume soft",
+        volumeFactor >= 1.15 ? "buy/sell volume confirmed" : "volume soft",
         side === "Long" ? (tradeSummary.cvdSlope > 0 ? "CVD supportive" : "CVD soft") : tradeSummary.cvdSlope < 0 ? "CVD supportive" : "CVD soft",
         side === "Long" ? (takerSummary.latestRatio > 1 ? "buyers active" : "buyers not leading") : takerSummary.latestRatio < 1 ? "sellers active" : "sellers not leading",
       ],
@@ -1139,7 +1199,7 @@ function buildTradezSignals(snapshot, quoteVolume = 0) {
       position: side === "Long" ? "belowBar" : "aboveBar",
       color: side === "Long" ? "#35c282" : "#e04c4c",
       shape: "circle",
-      text: `${side === "Long" ? "L" : "S"}${touch20 && !touch50 ? "20" : touch50 && !touch20 ? "50" : "Z"}`,
+      text: `${side === "Long" ? "L" : "S"}${useLevelTwo ? "2" : "1"}`,
     });
 
     if (!activeSignal && signal.sinceTouchBars <= 3) {
@@ -1196,7 +1256,7 @@ function buildSignalCards(analysis) {
       {
         label: "Status",
         value: "No fresh setup",
-        note: "The last few 1H candles did not produce a clean EMA pullback confirmation.",
+        note: "The last few 1H candles did not produce a clean S1/S2 or R1/R2 reaction with volume confirmation.",
         tone: "neutral",
       },
       {
@@ -1216,21 +1276,21 @@ function buildSignalCards(analysis) {
 
   return [
     {
-      label: "Touch zone",
+      label: "Confluence",
       value: active.touch,
-      note: `${active.sinceTouchBars} bars since touch • ${active.reasonParts[0]}`,
+      note: `${active.strength} • ${active.sinceTouchBars} bars since touch`,
       tone: active.tone,
     },
     {
       label: "Momentum",
       value: active.tone === "up" ? "Buyers leading" : "Sellers leading",
-      note: `${active.reasonParts[2]} • ${active.reasonParts[3]}`,
+      note: `${active.reasonParts[3]} • ${active.reasonParts[4]}`,
       tone: active.tone,
     },
     {
       label: "Reward to risk",
       value: `${active.rr.toFixed(2)}R`,
-      note: `Entry zone around ${formatPrice(active.entryLow, analysis.pricePrecision)} to ${formatPrice(active.entryHigh, analysis.pricePrecision)}`,
+      note: `TP1 ${active.side === "Long" ? "R1" : "S1"} • TP2 ${active.side === "Long" ? "R2" : "S2"} • move SL to entry after TP1`,
       tone: active.rr >= 1.5 ? "up" : "neutral",
     },
   ];
@@ -1478,7 +1538,7 @@ function renderSelectedAnalysis(analysis, snapshot) {
 
   dom.tokenInput.value = snapshot.token;
   dom.assetTitle.textContent = `${snapshot.symbol} 1H Pullback`;
-  dom.assetSubtitle.textContent = `EMA20/50 trend retest • ${analysis.historicalSignals.length} recent strategy markers`;
+  dom.assetSubtitle.textContent = `EMA + S/R confluence map • ${analysis.historicalSignals.length} recent strategy markers`;
   dom.headlinePrice.textContent = formatPrice(analysis.currentPrice, analysis.pricePrecision);
   dom.headlineChange.textContent = formatPercent(analysis.change24h);
   dom.headlineChange.className = toneFromNumber(analysis.change24h, 0.08);
@@ -1486,7 +1546,7 @@ function renderSelectedAnalysis(analysis, snapshot) {
   dom.headlineBias.className = analysis.setupBias.tone;
   dom.metricSelected.textContent = snapshot.symbol;
   dom.metricSelectedNote.textContent = analysis.activeSignal
-    ? `${analysis.activeSignal.touch} • ${analysis.activeSignal.side}`
+    ? `${analysis.activeSignal.touch} • ${analysis.activeSignal.strength}`
     : analysis.setupBias.summary;
 
   const quality = qualityTier(analysis.qualityScore);
@@ -1497,15 +1557,15 @@ function renderSelectedAnalysis(analysis, snapshot) {
   setQualityMeter(analysis.qualityScore);
   setStreamStatus(
     analysis.activeSignal
-      ? `${analysis.activeSignal.side} setup found on ${analysis.activeSignal.touch} retest`
-      : "No fresh 1H EMA touch signal right now",
+      ? `${analysis.activeSignal.side} setup found on ${analysis.activeSignal.touch} confluence`
+      : "No fresh 1H EMA + S/R confluence signal right now",
     analysis.activeSignal ? analysis.activeSignal.tone : "neutral"
   );
 
   const active = analysis.activeSignal;
   dom.summaryCopy.textContent = active
-    ? `${snapshot.symbol} is showing a ${active.side.toLowerCase()} continuation setup after a ${active.touch} retest. Quality ${active.qualityScore} reflects trend stack, candle confirmation, liquidity, order flow, and room to target.`
-    : `${snapshot.symbol} still shows ${analysis.setupBias.label.toLowerCase()} structure, but the latest candles have not produced a fresh EMA touch confirmation worth promoting.`;
+    ? `${snapshot.symbol} is showing a ${active.side.toLowerCase()} continuation setup after a ${active.touch} confluence with strong volume. Quality ${active.qualityScore} reflects trend stack, level strength, candle confirmation, liquidity, order flow, and room to target.`
+    : `${snapshot.symbol} still shows ${analysis.setupBias.label.toLowerCase()} structure, but the latest candles have not produced a fresh support/resistance confluence worth promoting.`;
 
   dom.stancePill.textContent = active ? active.side : "Waiting";
   dom.stancePill.className = `pill ${active ? active.tone : "neutral"}`;
@@ -1516,11 +1576,11 @@ function renderSelectedAnalysis(analysis, snapshot) {
   dom.tp1.textContent = active ? formatPrice(active.tp1, analysis.pricePrecision) : "-";
   dom.tp2.textContent = active ? formatPrice(active.tp2, analysis.pricePrecision) : "-";
   dom.planNote.textContent = active
-    ? `${active.touch} retest • detected ${formatDateTime(active.detectedAt)} • ${active.sinceTouchBars} bars since touch`
-    : "Need a fresh EMA20/50 retest with confirmation";
+    ? `${active.touch} • detected ${formatDateTime(active.detectedAt)} • ${active.sinceTouchBars} bars since touch`
+    : "Need a fresh EMA + S1/S2 or R1/R2 confluence with confirmation";
   dom.tradeSummary.textContent = active
-    ? `${active.note} Entry zone stays around the EMA stack. Initial invalidation sits beyond the touch candle plus ATR buffer.`
-    : "Tradez is waiting for a fresh trend pullback that tags EMA20 or EMA50 and confirms with candle structure.";
+    ? `${active.note} Entry zone centers on the reaction into the tested level and nearby EMA confluence. Initial invalidation sits beyond the touched support or resistance plus an ATR buffer.`
+    : "Tradez is waiting for a fresh trend pullback that reacts at S1/S2 or R1/R2, ideally with EMA confluence and strong volume.";
 
   renderSignalList(buildSignalCards(analysis));
   renderLevelBands(
@@ -1646,30 +1706,29 @@ function renderSignalFeed() {
                 </div>
               </div>
 
-              <div class="tradez-feed-meta-row">
+              <div class="tradez-feed-summary-row">
                 <div class="tradez-feed-meta-item">
                   <span>Setup</span>
                   <strong class="${signal.tone}">${signal.side}</strong>
                 </div>
-                <div class="tradez-feed-meta-item">
+                <div class="tradez-feed-quality-center">
+                  <span class="tradez-feed-quality-caption">Quality Score</span>
+                  <div class="tradez-feed-quality-badge ${sideClass}">
+                    Q${candidate.qualityScore}
+                  </div>
+                  <span class="tradez-feed-quality-tier">${quality.label}</span>
+                </div>
+                <div class="tradez-feed-meta-item tradez-feed-meta-item-right">
                   <span>Touch</span>
                   <strong>${signal.touch}</strong>
                 </div>
-                <div class="tradez-feed-meta-item">
+              </div>
+
+              <div class="tradez-feed-plan-grid">
+                <div class="tradez-feed-plan-item">
                   <span>Price</span>
                   <strong>${formatPrice(candidate.currentPrice, candidate.pricePrecision)}</strong>
                 </div>
-              </div>
-
-              <div class="tradez-feed-quality-row">
-                <span class="tradez-feed-quality-caption">Quality</span>
-                <div class="tradez-feed-quality-badge ${sideClass}">
-                  Q${candidate.qualityScore}
-                </div>
-                <span class="tradez-feed-quality-tier">${quality.label}</span>
-              </div>
-
-              <div class="tradez-feed-plan-row">
                 <div class="tradez-feed-plan-item">
                   <span>Entry</span>
                   <strong>${formatPrice(signal.entryLow, candidate.pricePrecision)} - ${formatPrice(signal.entryHigh, candidate.pricePrecision)}</strong>
@@ -1751,27 +1810,27 @@ function renderStrategyNotes() {
   renderAnalysisGrid(dom.notesGrid, [
     {
       label: "What qualifies",
-      value: "Trend + touch + confirmation",
-      note: "EMA20 above EMA50 for longs, below for shorts. Tradez only promotes pullbacks that tag the stack and then confirm with candle structure.",
+      value: "Trend + level + volume",
+      note: "Longs need EMA20 above EMA50 with a reaction at S1 or S2, plus strong buying volume. Shorts need EMA50 above EMA20 with a reaction at R1 or R2, plus strong selling volume.",
       tone: "up",
     },
     {
-      label: "Prefer",
-      value: "First or second retest",
-      note: "Fresh pullbacks usually behave better than the fourth or fifth touch. Older touches lose edge as the move matures.",
+      label: "Best upgrade",
+      value: "EMA + S/R confluence",
+      note: "A plain S1/R1 touch is valid, but quality improves when the candle also tags EMA20 or EMA50 at the same time. S2 and R2 are treated as the stronger version of the setup.",
       tone: "neutral",
     },
     {
-      label: "Avoid",
-      value: "No room into levels",
-      note: "If resistance is too close for longs, or support is too close for shorts, the move is often statistically clean but structurally cramped.",
-      tone: "down",
+      label: "Trade plan",
+      value: "TP1 level, TP2 extension",
+      note: "For longs, TP1 is R1 and TP2 is R2. For shorts, TP1 is S1 and TP2 is S2. After TP1, the stop should move to entry so the second leg is protected.",
+      tone: "up",
     },
     {
-      label: "Best filter",
-      value: "Volume + flow confirmation",
-      note: "Touches work better when volume expands, CVD agrees, and taker flow is moving in the same direction as the trend stack.",
-      tone: "up",
+      label: "Avoid",
+      value: "Weak volume or cramped room",
+      note: "If volume does not confirm, or the next target level is too close to justify the risk, the setup should stay on watch instead of being promoted.",
+      tone: "down",
     },
   ]);
 }

@@ -1615,7 +1615,7 @@ body.paper-trader-page .panel-monitor-large .monitor-symbol {
 
 .tradez-feed-panel .panel-head {
   display: grid;
-  gap: 14px;
+  gap: 12px;
 }
 
 .tradez-feed-panel .panel-head .feed-tabs {
@@ -1734,11 +1734,11 @@ body.paper-trader-page .panel-monitor-large .monitor-symbol {
   animation: tradez-new-flash 1.1s ease-in-out infinite;
 }
 
-.tradez-feed-meta-row,
-.tradez-feed-plan-row {
+.tradez-feed-summary-row {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
   margin-top: 12px;
 }
 
@@ -1748,6 +1748,10 @@ body.paper-trader-page .panel-monitor-large .monitor-symbol {
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.05);
   background: rgba(255, 255, 255, 0.02);
+}
+
+.tradez-feed-meta-item-right {
+  text-align: right;
 }
 
 .tradez-feed-meta-item span,
@@ -1762,14 +1766,15 @@ body.paper-trader-page .panel-monitor-large .monitor-symbol {
 .tradez-feed-plan-item strong {
   display: block;
   font-size: 0.92rem;
+  overflow-wrap: anywhere;
 }
 
-.tradez-feed-quality-row {
+.tradez-feed-quality-center {
   display: grid;
   justify-items: center;
   gap: 6px;
-  margin-top: 12px;
   text-align: center;
+  min-width: 124px;
 }
 
 .tradez-feed-quality-caption,
@@ -1802,11 +1807,19 @@ body.paper-trader-page .panel-monitor-large .monitor-symbol {
   color: #ff9b9b;
 }
 
+.tradez-feed-plan-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
 .tradez-feed-qualifiers {
   margin-top: 12px;
   color: var(--text-soft);
   font-size: 0.83rem;
   line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .signals-grid {
@@ -1902,7 +1915,8 @@ body.signals-page .quality-chip {
 }
 
 .feed-tabs {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   flex-wrap: nowrap;
   margin-bottom: 12px;
@@ -1918,7 +1932,7 @@ body.signals-page .quality-chip {
 
 .feed-tab {
   min-width: 0;
-  flex: 1 1 0;
+  width: 100%;
   border-color: transparent;
   background: transparent;
   box-shadow: none;
@@ -2225,9 +2239,13 @@ body.signals-page .quality-chip {
     grid-template-columns: 1fr;
   }
 
-  .tradez-feed-meta-row,
-  .tradez-feed-plan-row {
+  .tradez-feed-summary-row,
+  .tradez-feed-plan-grid {
     grid-template-columns: 1fr;
+  }
+
+  .tradez-feed-meta-item-right {
+    text-align: left;
   }
 
   .signals-grid {
