@@ -11,6 +11,7 @@ const ALERT_EVENTS_KEY = "apex-signals-tradez-alert-events";
 const SIGNAL_IDS_KEY = "apex-signals-tradez-seen-signal-ids";
 const TICKER_STORAGE_KEY = "apex-signals-tradez-tickers";
 const TICKER_CACHE_MAX_AGE_MS = 30 * 60 * 1000;
+const FRESH_SIGNAL_WINDOW_MS = 10 * 60 * 1000;
 
 const dom = {
   form: document.getElementById("tradez-form"),
@@ -303,6 +304,23 @@ function formatDateTime(timestamp) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function formatExactDateTime(timestamp) {
+  if (!timestamp) return "-";
+  return new Date(timestamp).toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+}
+
+function isFreshSignal(timestamp) {
+  if (!timestamp) return false;
+  return Date.now() - timestamp <= FRESH_SIGNAL_WINDOW_MS;
 }
 
 function toneFromNumber(value, flatBand = 0.02) {
@@ -1587,53 +1605,92 @@ function renderMonitorTable(container, headers, rows, emptyText) {
 }
 
 function renderSignalFeed() {
-  const qualified = state.candidates.filter((candidate) => candidate.activeSignal && candidate.qualityScore >= state.qualityThreshold);
+  const qualified = state.candidates
+    .filter((candidate) => candidate.activeSignal && candidate.qualityScore >= state.qualityThreshold)
+    .sort((left, right) => {
+      const rightSeen = right.identifiedAt || right.activeSignal?.detectedAt || 0;
+      const leftSeen = left.identifiedAt || left.activeSignal?.detectedAt || 0;
+      return rightSeen - leftSeen || right.qualityScore - left.qualityScore;
+    });
 
-  const rows = qualified.map((candidate) => {
-    const quality = qualityTier(candidate.qualityScore);
-    const signal = candidate.activeSignal;
-    return `
-      <tr>
-        <td class="monitor-symbol">
-          <button class="mini-button tradez-symbol-button" type="button" data-symbol="${candidate.symbol}">
-            ${candidate.symbol}
-          </button>
-          <div class="monitor-subtle">${volumeTier(universeTickerMap.get(candidate.symbol)?.quoteVolume || 0).label}</div>
-        </td>
-        <td>${formatDateTime(signal.detectedAt)}</td>
-        <td><span class="${signal.tone}">${signal.side}</span></td>
-        <td>${signal.touch}</td>
-        <td>${formatPrice(candidate.currentPrice, candidate.pricePrecision)}</td>
-        <td>${formatPrice(signal.entryLow, candidate.pricePrecision)} - ${formatPrice(signal.entryHigh, candidate.pricePrecision)}</td>
-        <td>${formatPrice(signal.stopLoss, candidate.pricePrecision)}</td>
-        <td>${formatPrice(signal.tp1, candidate.pricePrecision)} / ${formatPrice(signal.tp2, candidate.pricePrecision)}</td>
-        <td>${signal.reasonParts.slice(0, 3).join(" • ")}</td>
-        <td class="quality-column quality-column-centered">
-          <span class="quality-chip ${quality.className}" title="${quality.label}">
-            Q${candidate.qualityScore}
-          </span>
-        </td>
-      </tr>
+  if (!qualified.length) {
+    dom.signalTable.innerHTML = `
+      <div class="monitor-empty">
+        No EMA20/50 pullback setup currently clears the active quality threshold.
+      </div>
     `;
-  });
+    return;
+  }
 
-  renderMonitorTable(
-    dom.signalTable,
-    [
-      "Pair",
-      "Detected",
-      "Setup",
-      "Touch",
-      "Price",
-      "Entry Zone",
-      "Stop",
-      "Targets",
-      "Why It Qualifies",
-      '<span class="quality-column-heading">Quality</span>',
-    ],
-    rows,
-    "No EMA20/50 pullback setup currently clears the active quality threshold."
-  );
+  dom.signalTable.innerHTML = `
+    <div class="tradez-feed-board">
+      ${qualified
+        .map((candidate) => {
+          const quality = qualityTier(candidate.qualityScore);
+          const signal = candidate.activeSignal;
+          const seenAt = candidate.identifiedAt || signal.detectedAt;
+          const isNew = isFreshSignal(seenAt);
+          const sideClass = signal.side === "Long" ? "is-long" : "is-short";
+          return `
+            <article class="tradez-feed-card ${sideClass}">
+              <div class="tradez-feed-card-head">
+                <div class="tradez-feed-symbol-block">
+                  <button class="mini-button tradez-symbol-button" type="button" data-symbol="${candidate.symbol}">
+                    ${candidate.symbol}
+                  </button>
+                  <div class="monitor-subtle">${volumeTier(universeTickerMap.get(candidate.symbol)?.quoteVolume || 0).label}</div>
+                </div>
+                <div class="tradez-feed-stamp-block">
+                  ${isNew ? '<span class="tradez-feed-new">NEW</span>' : ""}
+                  <time datetime="${new Date(seenAt).toISOString()}">${formatExactDateTime(seenAt)}</time>
+                </div>
+              </div>
+
+              <div class="tradez-feed-meta-row">
+                <div class="tradez-feed-meta-item">
+                  <span>Setup</span>
+                  <strong class="${signal.tone}">${signal.side}</strong>
+                </div>
+                <div class="tradez-feed-meta-item">
+                  <span>Touch</span>
+                  <strong>${signal.touch}</strong>
+                </div>
+                <div class="tradez-feed-meta-item">
+                  <span>Price</span>
+                  <strong>${formatPrice(candidate.currentPrice, candidate.pricePrecision)}</strong>
+                </div>
+              </div>
+
+              <div class="tradez-feed-quality-row">
+                <span class="tradez-feed-quality-caption">Quality</span>
+                <div class="tradez-feed-quality-badge ${sideClass}">
+                  Q${candidate.qualityScore}
+                </div>
+                <span class="tradez-feed-quality-tier">${quality.label}</span>
+              </div>
+
+              <div class="tradez-feed-plan-row">
+                <div class="tradez-feed-plan-item">
+                  <span>Entry</span>
+                  <strong>${formatPrice(signal.entryLow, candidate.pricePrecision)} - ${formatPrice(signal.entryHigh, candidate.pricePrecision)}</strong>
+                </div>
+                <div class="tradez-feed-plan-item">
+                  <span>Stop</span>
+                  <strong>${formatPrice(signal.stopLoss, candidate.pricePrecision)}</strong>
+                </div>
+                <div class="tradez-feed-plan-item">
+                  <span>Targets</span>
+                  <strong>${formatPrice(signal.tp1, candidate.pricePrecision)} / ${formatPrice(signal.tp2, candidate.pricePrecision)}</strong>
+                </div>
+              </div>
+
+              <div class="tradez-feed-qualifiers">${signal.reasonParts.slice(0, 4).join(" • ")}</div>
+            </article>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
 
   dom.signalTable.querySelectorAll("[data-symbol]").forEach((button) => {
     button.addEventListener("click", async () => {
@@ -1666,12 +1723,14 @@ function renderAlertFeed() {
   }
 
   dom.alertTable.innerHTML = state.alertEvents
+    .slice()
+    .sort((left, right) => (right.identifiedAt || right.detectedAt || 0) - (left.identifiedAt || left.detectedAt || 0))
     .slice(0, 16)
     .map(
       (event) => `
         <div class="table-row">
           <div>
-            <span>${formatDateTime(event.detectedAt)}</span>
+            <span>${formatExactDateTime(event.identifiedAt || event.detectedAt)}</span>
             <strong class="${event.tone}">${event.symbol} • ${event.side} • Q${event.qualityScore}</strong>
           </div>
           <div>
@@ -1737,8 +1796,10 @@ function pushAlertEvent(candidate) {
   if (state.seenSignalIds.has(signal.id)) return;
 
   state.seenSignalIds.add(signal.id);
+  const identifiedAt = candidate.identifiedAt || Date.now();
   state.alertEvents.unshift({
     id: signal.id,
+    identifiedAt,
     detectedAt: signal.detectedAt,
     symbol: candidate.symbol,
     side: signal.side,
@@ -1838,6 +1899,21 @@ async function scanUniverse(manual = false) {
       } catch (error) {
         return null;
       }
+    });
+
+    const scanIdentifiedAt = Date.now();
+    const priorSignalTimes = new Map(
+      state.alertEvents.map((event) => [event.id, event.identifiedAt || event.detectedAt])
+    );
+
+    analyses.forEach((candidate) => {
+      if (!candidate?.activeSignal) return;
+      const previous = candidateMap.get(candidate.symbol);
+      const preservedIdentifiedAt =
+        previous?.activeSignal?.id === candidate.activeSignal.id
+          ? previous.identifiedAt
+          : priorSignalTimes.get(candidate.activeSignal.id);
+      candidate.identifiedAt = preservedIdentifiedAt || scanIdentifiedAt;
     });
 
     latestBatchMap = new Map(analyses.filter(Boolean).map((candidate) => [candidate.symbol, candidate]));
