@@ -917,11 +917,12 @@ function analyzeSnapshot(snapshot) {
 }
 
 function highQualityCandidates(candidates, threshold) {
+  const effectiveThreshold = threshold + 10;
   return candidates
     .filter(
       (candidate) =>
         candidate.bias.tone !== "neutral" &&
-        (candidate.refinedQualityScore ?? candidate.qualityScore) >= threshold + 10 &&
+        (candidate.refinedQualityScore ?? candidate.qualityScore) >= effectiveThreshold &&
         candidate.entryQualityScore >= 16 &&
         candidate.alignedCount >= 2 &&
         candidate.conflictCount === 0 &&
@@ -934,6 +935,10 @@ function highQualityCandidates(candidates, threshold) {
         (right.refinedQualityScore ?? right.qualityScore) -
         (left.refinedQualityScore ?? left.qualityScore)
     );
+}
+
+function effectiveHouseQualityGate(threshold = state.qualityThreshold) {
+  return threshold + 10;
 }
 
 function formatPrice(value, digits = 2) {
@@ -2216,11 +2221,12 @@ function openQualifiedTrades(candidates) {
 
 function summarizeEngine(candidates, threshold) {
   const qualified = highQualityCandidates(candidates, threshold);
+  const effectiveThreshold = effectiveHouseQualityGate(threshold);
   if (!qualified.length) {
     if (state.openTrades.length) {
-      return `${state.openTrades.length}/${MAX_CONCURRENT_TRADES} paper positions are active. No fresh setup currently clears quality ${threshold}, so the engine is focused on managing existing TP and SL levels.`;
+      return `${state.openTrades.length}/${MAX_CONCURRENT_TRADES} paper positions are active. No fresh setup currently clears the effective house bar of Q${effectiveThreshold}, so the engine is focused on managing existing TP and SL levels.`;
     }
-    return `No perp currently meets the quality threshold of ${threshold}. The engine is continuously checking the full Binance USDT perp universe for stronger alignment across trend, order flow, leverage, and risk/reward.`;
+    return `No perp currently meets the effective house bar of Q${effectiveThreshold}. The engine is continuously checking the full Binance USDT perp universe for stronger alignment across trend, order flow, leverage, and risk/reward.`;
   }
 
   const best = qualified[0];
@@ -2263,6 +2269,7 @@ function renderStrategySleeves(candidates) {
   const wins = closed.filter((trade) => trade.reason === "TP").length;
   const winRate = closed.length ? (wins / closed.length) * 100 : 0;
   const lead = highQualityCandidates(candidates, state.qualityThreshold)[0] || null;
+  const effectiveThreshold = effectiveHouseQualityGate();
   const cards = [
     {
       label: spec.label,
@@ -2271,7 +2278,7 @@ function renderStrategySleeves(candidates) {
         ? `${lead.symbol} ${lead.trade.stance} • Q${lead.refinedQualityScore ?? lead.qualityScore} • ${formatPercent(
             lead.trade.projectedMovePct
           )} move • ${wins}/${closed.length} wins (${winRate.toFixed(0)}%)`
-        : `${wins}/${closed.length} wins (${winRate.toFixed(0)}%) • no live house setup above the active bar`,
+        : `${wins}/${closed.length} wins (${winRate.toFixed(0)}%) • no live house setup above Q${effectiveThreshold}`,
       tone:
         equity > STRATEGY_START_BALANCE + 0.5
           ? "up"
@@ -2416,7 +2423,7 @@ function renderDashboard(universe = []) {
 
   dom.autoToggleButton.textContent = state.autoEnabled ? "Pause Auto" : "Resume Auto";
   dom.autoRunNote.textContent = state.autoEnabled
-    ? `Auto-scans every 90 seconds, can open up to ${MAX_NEW_TRADES_PER_SCAN} fresh trades per pass, and can hold up to ${MAX_CONCURRENT_TRADES} quality positions.`
+    ? `Auto-scans every 90 seconds, can open up to ${MAX_NEW_TRADES_PER_SCAN} fresh trades per pass, can hold up to ${MAX_CONCURRENT_TRADES} quality positions, and currently requires an effective house bar of Q${effectiveHouseQualityGate()}.`
     : "Auto engine paused. Manual scans still work.";
   renderPaperTabs();
 }
@@ -2530,11 +2537,14 @@ async function scanUniverse({ manual = false } = {}) {
     } else {
       if (manual) {
         logActivity(
-          `Manual universe scan found no setup above quality ${state.qualityThreshold}.`,
+          `Manual universe scan found no setup above the effective house bar of Q${effectiveHouseQualityGate()}.`,
           "neutral"
         );
       }
-      setStatus(`No trade opened. Waiting for quality >= ${state.qualityThreshold}.`, "neutral");
+      setStatus(
+        `No trade opened. Waiting for the effective house bar of Q${effectiveHouseQualityGate()} (base threshold ${state.qualityThreshold} + confirmation buffer).`,
+        "neutral"
+      );
     }
 
     persistState();
