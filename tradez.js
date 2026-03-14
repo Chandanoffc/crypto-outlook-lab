@@ -10,6 +10,14 @@ const STORAGE_KEY = "apex-signals-tradez-state";
 const ALERT_EVENTS_KEY = "apex-signals-tradez-alert-events";
 const SIGNAL_IDS_KEY = "apex-signals-tradez-seen-signal-ids";
 const TICKER_STORAGE_KEY = "apex-signals-tradez-tickers";
+const HOUSE_AUTO_STORAGE_KEY = "apex-signals-auto-paper";
+const TRADEZ_AUTO_STORAGE_KEY = "hyperdrive-tradez-auto-paper";
+const TRADEZ_AUTO_START_BALANCE = 200;
+const TRADEZ_AUTO_LEVERAGE = 5;
+const TRADEZ_AUTO_MAX_CONCURRENT_TRADES = 6;
+const TRADEZ_AUTO_MAX_NEW_TRADES = 4;
+const TRADEZ_AUTO_VERSION = 1;
+const TRADEZ_AUTO_TRADE_COOLDOWN_MS = 4 * 60 * 1000;
 const TICKER_CACHE_MAX_AGE_MS = 30 * 60 * 1000;
 const FRESH_SIGNAL_WINDOW_MS = 10 * 60 * 1000;
 
@@ -71,9 +79,35 @@ const dom = {
   signalTable: document.getElementById("tradez-signal-table"),
   alertTable: document.getElementById("tradez-alert-table"),
   notesGrid: document.getElementById("tradez-notes-grid"),
+  compareGrid: document.getElementById("tradez-compare-grid"),
+  auto2Toggle: document.getElementById("tradez-auto2-toggle"),
+  auto2Reset: document.getElementById("tradez-auto2-reset"),
+  auto2Note: document.getElementById("tradez-auto2-note"),
+  auto2MetricStart: document.getElementById("tradez-auto2-metric-start"),
+  auto2MetricEquity: document.getElementById("tradez-auto2-metric-equity"),
+  auto2MetricEquityNote: document.getElementById("tradez-auto2-metric-equity-note"),
+  auto2MetricRealized: document.getElementById("tradez-auto2-metric-realized"),
+  auto2MetricRealizedNote: document.getElementById("tradez-auto2-metric-realized-note"),
+  auto2MetricWinRate: document.getElementById("tradez-auto2-metric-winrate"),
+  auto2MetricWinRateNote: document.getElementById("tradez-auto2-metric-winrate-note"),
+  auto2MetricOpen: document.getElementById("tradez-auto2-metric-open"),
+  auto2MetricOpenNote: document.getElementById("tradez-auto2-metric-open-note"),
+  auto2MetricLastScan: document.getElementById("tradez-auto2-metric-last-scan"),
+  auto2MetricLastScanNote: document.getElementById("tradez-auto2-metric-last-scan-note"),
+  auto2TabPositions: document.getElementById("tradez-auto2-tab-positions"),
+  auto2TabTrades: document.getElementById("tradez-auto2-tab-trades"),
+  auto2TabActivity: document.getElementById("tradez-auto2-tab-activity"),
+  auto2TabNote: document.getElementById("tradez-auto2-tab-note"),
+  auto2PanelPositions: document.getElementById("tradez-auto2-panel-positions"),
+  auto2PanelTrades: document.getElementById("tradez-auto2-panel-trades"),
+  auto2PanelActivity: document.getElementById("tradez-auto2-panel-activity"),
+  auto2OpenGrid: document.getElementById("tradez-auto2-open-grid"),
+  auto2TradeTable: document.getElementById("tradez-auto2-trade-table"),
+  auto2ActivityTable: document.getElementById("tradez-auto2-activity-table"),
 };
 
 const state = loadState();
+const tradezPaper = loadTradezPaperState();
 
 let chart;
 let candleSeries;
@@ -89,6 +123,21 @@ let universeTickerMap = new Map();
 let candidateMap = new Map();
 let latestBatchMap = new Map();
 let chartResizeBound = false;
+
+function loadTradezPaperState() {
+  const stored = readStoredJson(TRADEZ_AUTO_STORAGE_KEY, {});
+  return {
+    startingBalance: TRADEZ_AUTO_START_BALANCE,
+    balance: Number(stored.balance) || TRADEZ_AUTO_START_BALANCE,
+    autoEnabled: stored.autoEnabled !== false,
+    openTrades: Array.isArray(stored.openTrades) ? stored.openTrades : [],
+    closedTrades: Array.isArray(stored.closedTrades) ? stored.closedTrades : [],
+    activity: Array.isArray(stored.activity) ? stored.activity : [],
+    activeTab: stored.activeTab || "positions",
+    lastScanAt: Number(stored.lastScanAt) || 0,
+    strategyVersion: Number(stored.strategyVersion) || 1,
+  };
+}
 
 function loadState() {
   const stored = readStoredJson(STORAGE_KEY, {});
@@ -119,6 +168,19 @@ function persistState() {
   writeStoredJson(SIGNAL_IDS_KEY, Array.from(state.seenSignalIds).slice(-200));
 }
 
+function persistTradezPaperState() {
+  writeStoredJson(TRADEZ_AUTO_STORAGE_KEY, {
+    balance: tradezPaper.balance,
+    autoEnabled: tradezPaper.autoEnabled,
+    openTrades: tradezPaper.openTrades,
+    closedTrades: tradezPaper.closedTrades,
+    activity: tradezPaper.activity,
+    activeTab: tradezPaper.activeTab,
+    lastScanAt: tradezPaper.lastScanAt,
+    strategyVersion: tradezPaper.strategyVersion,
+  });
+}
+
 function readStoredJson(key, fallback) {
   try {
     const raw = window.localStorage.getItem(key);
@@ -134,6 +196,14 @@ function writeStoredJson(key, value) {
   } catch (error) {
     // Ignore storage write failures.
   }
+}
+
+function formatCompactUsd(value, digits = 2) {
+  if (!Number.isFinite(value)) return "-";
+  return `${value >= 0 ? "+" : "-"}$${new Intl.NumberFormat("en-US", {
+    notation: "compact",
+    maximumFractionDigits: digits,
+  }).format(Math.abs(value))}`;
 }
 
 function getFallbackExchangeInfo() {
@@ -396,6 +466,553 @@ function renderAnalysisGrid(container, items) {
     `;
     container.appendChild(card);
   });
+}
+
+function renderTable(container, rows, emptyText) {
+  if (!container) return;
+  if (!rows.length) {
+    container.innerHTML = `
+      <div class="table-row">
+        <div>
+          <span>Status</span>
+          <strong>${emptyText}</strong>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = rows
+    .map(
+      (row) => `
+        <div class="table-row">
+          <div>
+            <span>${row.label}</span>
+            <strong class="${row.tone || "neutral"}">${row.primary}</strong>
+          </div>
+          <div>
+            <span>${row.secondaryLabel}</span>
+            <strong>${row.secondary}</strong>
+          </div>
+          <div>
+            <span>${row.tertiaryLabel}</span>
+            <strong>${row.tertiary}</strong>
+          </div>
+        </div>
+      `
+    )
+    .join("");
+}
+
+function renderCompareCards(cards) {
+  if (!dom.compareGrid) return;
+  dom.compareGrid.innerHTML = cards
+    .map(
+      (card) => `
+        <article class="subpanel tradez-compare-card ${card.tone || "neutral"}">
+          <div class="panel-head-inline">
+            <div>
+              <p class="panel-label">${card.label}</p>
+              <h3>${card.title}</h3>
+            </div>
+            <div class="quality-chip ${card.qualityClass || "quality-tier-neutral"}">${card.qualityText}</div>
+          </div>
+          <div class="tradez-compare-stats">
+            ${card.stats
+              .map(
+                (stat) => `
+                  <div class="tradez-compare-stat">
+                    <span>${stat.label}</span>
+                    <strong class="${stat.tone || "neutral"}">${stat.value}</strong>
+                  </div>
+                `
+              )
+              .join("")}
+          </div>
+          <p class="monitor-subtle">${card.note}</p>
+        </article>
+      `
+    )
+    .join("");
+}
+
+function renderTradezAutoTabs() {
+  if (!dom.auto2TabPositions) return;
+  dom.auto2TabPositions.classList.toggle("is-active", tradezPaper.activeTab === "positions");
+  dom.auto2TabTrades.classList.toggle("is-active", tradezPaper.activeTab === "trades");
+  dom.auto2TabActivity.classList.toggle("is-active", tradezPaper.activeTab === "activity");
+  dom.auto2PanelPositions.hidden = tradezPaper.activeTab !== "positions";
+  dom.auto2PanelTrades.hidden = tradezPaper.activeTab !== "trades";
+  dom.auto2PanelActivity.hidden = tradezPaper.activeTab !== "activity";
+
+  if (dom.auto2TabNote) {
+    dom.auto2TabNote.textContent =
+      tradezPaper.activeTab === "positions"
+        ? "Live EMA Signals positions stay visible with entry, TP1, TP2, SL, and live return."
+        : tradezPaper.activeTab === "trades"
+          ? "The journal records each closed Auto Trade 2 position with planned levels and realized result."
+          : "Engine actions log detections, entries, TP1 protection, exits, and network retries.";
+  }
+}
+
+function tradezPaperReservedMargin() {
+  return tradezPaper.openTrades.reduce((sum, trade) => sum + (Number(trade.marginUsed) || 0), 0);
+}
+
+function tradezPaperHasOpenTrade(symbol) {
+  return tradezPaper.openTrades.some((trade) => trade.symbol === symbol);
+}
+
+function tradezPaperRecentlyClosed(symbol) {
+  return tradezPaper.closedTrades.some(
+    (trade) => trade.symbol === symbol && Date.now() - Number(trade.closedAt || 0) < TRADEZ_AUTO_TRADE_COOLDOWN_MS
+  );
+}
+
+function tradezPaperReturnPct(trade, exitPrice) {
+  const direction = trade.side === "Short" ? -1 : 1;
+  return pctChange(trade.entryPrice, exitPrice) * direction * (trade.leverage || TRADEZ_AUTO_LEVERAGE);
+}
+
+function logTradezPaperActivity(message, tone = "neutral") {
+  tradezPaper.activity.unshift({
+    time: Date.now(),
+    message,
+    tone,
+  });
+  tradezPaper.activity = tradezPaper.activity.slice(0, 30);
+}
+
+function applyTradezPaperUpgradeNotice() {
+  if (tradezPaper.strategyVersion >= TRADEZ_AUTO_VERSION) return;
+  tradezPaper.balance = TRADEZ_AUTO_START_BALANCE;
+  tradezPaper.openTrades = [];
+  tradezPaper.closedTrades = [];
+  tradezPaper.activity = [];
+  tradezPaper.lastScanAt = 0;
+  tradezPaper.strategyVersion = TRADEZ_AUTO_VERSION;
+  logTradezPaperActivity("Auto Trade 2 book initialized on the EMA Signals strategy.", "neutral");
+  persistTradezPaperState();
+}
+
+function buildTradezAutoCandidate(candidate) {
+  const signal = candidate.activeSignal;
+  if (!signal) return null;
+
+  const entry = average([signal.entryLow, signal.entryHigh]);
+  const structuralStop = signal.stopLoss;
+  const maxMarginStopPct = 10 / TRADEZ_AUTO_LEVERAGE;
+  const cappedStop =
+    signal.side === "Long"
+      ? entry * (1 - maxMarginStopPct / 100)
+      : entry * (1 + maxMarginStopPct / 100);
+  const stopLoss =
+    signal.side === "Long"
+      ? Math.max(structuralStop, cappedStop)
+      : Math.min(structuralStop, cappedStop);
+  const stopMarginPct = Math.abs(pctChange(entry, stopLoss)) * TRADEZ_AUTO_LEVERAGE;
+  const tp1 = signal.tp1;
+  const tp2 = signal.tp2;
+  const tp2MarginPct = Math.abs(pctChange(entry, tp2)) * TRADEZ_AUTO_LEVERAGE;
+  const rr = Math.abs(tp1 - entry) / Math.max(Math.abs(entry - stopLoss), 0.0000001);
+
+  return {
+    ...candidate,
+    paperTrade: {
+      entry,
+      stopLoss,
+      tp1,
+      tp2,
+      leverage: TRADEZ_AUTO_LEVERAGE,
+      targetMarginPct: tp2MarginPct,
+      stopMarginPct,
+      rr,
+    },
+  };
+}
+
+function highQualityTradezAutoCandidates(candidates, threshold) {
+  return candidates
+    .map(buildTradezAutoCandidate)
+    .filter(Boolean)
+    .filter((candidate) => candidate.qualityScore >= threshold)
+    .filter((candidate) => candidate.paperTrade.targetMarginPct >= 20 && candidate.paperTrade.targetMarginPct <= 55)
+    .filter((candidate) => candidate.paperTrade.rr >= 1.2)
+    .sort((left, right) => {
+      const rightSeen = right.identifiedAt || right.activeSignal?.detectedAt || 0;
+      const leftSeen = left.identifiedAt || left.activeSignal?.detectedAt || 0;
+      return right.qualityScore - left.qualityScore || rightSeen - leftSeen;
+    });
+}
+
+function openTradezPaperTrade(candidate) {
+  if (tradezPaperHasOpenTrade(candidate.symbol)) return false;
+  if (tradezPaper.openTrades.length >= TRADEZ_AUTO_MAX_CONCURRENT_TRADES) return false;
+
+  const freeCapital = Math.max(tradezPaper.balance - tradezPaperReservedMargin(), 0);
+  if (freeCapital < 10) return false;
+
+  const slotsRemaining = Math.max(1, TRADEZ_AUTO_MAX_CONCURRENT_TRADES - tradezPaper.openTrades.length);
+  const marginBudget = Math.min(
+    freeCapital,
+    Math.max(tradezPaper.startingBalance * 0.16, freeCapital / slotsRemaining)
+  );
+  const riskCapital = Math.max(marginBudget * 0.12, 2);
+  const stopDistance = Math.abs(candidate.paperTrade.entry - candidate.paperTrade.stopLoss);
+  const quantityByRisk = stopDistance > 0 ? riskCapital / stopDistance : 0;
+  const quantityByCapital = (marginBudget * candidate.paperTrade.leverage) / candidate.paperTrade.entry;
+  const quantity = Math.max(0, Math.min(quantityByRisk, quantityByCapital));
+  if (!Number.isFinite(quantity) || quantity <= 0) return false;
+
+  tradezPaper.openTrades.push({
+    id: `${Date.now()}-ema-${candidate.symbol}`,
+    strategyLabel: "Auto Trade 2",
+    symbol: candidate.symbol,
+    token: candidate.token,
+    side: candidate.activeSignal.side,
+    touch: candidate.activeSignal.touch,
+    strength: candidate.activeSignal.strength,
+    entryPrice: candidate.paperTrade.entry,
+    stopLoss: candidate.paperTrade.stopLoss,
+    tp1: candidate.paperTrade.tp1,
+    tp2: candidate.paperTrade.tp2,
+    currentTarget: candidate.paperTrade.tp1,
+    tp1Hit: false,
+    quantity,
+    leverage: candidate.paperTrade.leverage,
+    marginUsed: marginBudget,
+    qualityScore: candidate.qualityScore,
+    pricePrecision: candidate.pricePrecision,
+    detectedAt: candidate.identifiedAt || candidate.activeSignal.detectedAt || Date.now(),
+    openedAt: Date.now(),
+    lastPrice: candidate.currentPrice,
+    breakEvenArmed: false,
+  });
+
+  logTradezPaperActivity(
+    `Opened Auto Trade 2 ${candidate.activeSignal.side} ${candidate.symbol} • entry ${formatPrice(
+      candidate.paperTrade.entry,
+      candidate.pricePrecision
+    )} • TP1 ${formatPrice(candidate.paperTrade.tp1, candidate.pricePrecision)} • TP2 ${formatPrice(
+      candidate.paperTrade.tp2,
+      candidate.pricePrecision
+    )} • SL ${formatPrice(candidate.paperTrade.stopLoss, candidate.pricePrecision)} • Q${candidate.qualityScore}.`,
+    candidate.activeSignal.tone
+  );
+  return true;
+}
+
+function closeTradezPaperTrade(tradeId, reason, exitPrice, precisionHint) {
+  const index = tradezPaper.openTrades.findIndex((trade) => trade.id === tradeId);
+  if (index === -1) return;
+
+  const trade = tradezPaper.openTrades[index];
+  const direction = trade.side === "Short" ? -1 : 1;
+  const pnlUsd = (exitPrice - trade.entryPrice) * trade.quantity * direction;
+  const returnPct = tradezPaperReturnPct(trade, exitPrice);
+  tradezPaper.balance += pnlUsd;
+
+  tradezPaper.closedTrades.unshift({
+    ...trade,
+    exitPrice,
+    closedAt: Date.now(),
+    reason,
+    pnlUsd,
+    returnPct,
+    balanceAfter: tradezPaper.balance,
+  });
+  tradezPaper.closedTrades = tradezPaper.closedTrades.slice(0, 100);
+  tradezPaper.openTrades.splice(index, 1);
+
+  logTradezPaperActivity(
+    `${reason} closed Auto Trade 2 ${trade.side} ${trade.symbol} • entry ${formatPrice(
+      trade.entryPrice,
+      precisionHint
+    )} • exit ${formatPrice(exitPrice, precisionHint)} • ${formatPercent(returnPct)} on margin • ${formatCompactUsd(
+      pnlUsd,
+      2
+    )}.`,
+    reason === "TP" ? "up" : reason === "BE" ? "neutral" : "down"
+  );
+}
+
+function refreshTradezPaperTrades(candidates) {
+  if (!tradezPaper.openTrades.length) return;
+  const candidateLookup = new Map(candidates.map((candidate) => [candidate.symbol, candidate]));
+
+  [...tradezPaper.openTrades].forEach((trade) => {
+    const candidate = candidateLookup.get(trade.symbol);
+    if (!candidate) return;
+
+    trade.lastPrice = candidate.currentPrice;
+    trade.pricePrecision = candidate.pricePrecision;
+    const currentPrice = candidate.currentPrice;
+    const hitTp1 =
+      !trade.tp1Hit &&
+      (trade.side === "Long" ? currentPrice >= trade.tp1 : currentPrice <= trade.tp1);
+    const hitTp2 =
+      trade.side === "Long" ? currentPrice >= trade.tp2 : currentPrice <= trade.tp2;
+    const hitStop =
+      trade.side === "Long" ? currentPrice <= trade.stopLoss : currentPrice >= trade.stopLoss;
+
+    if (hitTp1) {
+      trade.tp1Hit = true;
+      trade.stopLoss = trade.entryPrice;
+      trade.currentTarget = trade.tp2;
+      logTradezPaperActivity(
+        `${trade.symbol} hit TP1. Stop moved to entry while the runner targets ${formatPrice(
+          trade.tp2,
+          candidate.pricePrecision
+        )}.`,
+        trade.side === "Long" ? "up" : "down"
+      );
+    }
+
+    if (hitTp2) {
+      closeTradezPaperTrade(trade.id, "TP", trade.tp2, candidate.pricePrecision);
+    } else if (hitStop) {
+      closeTradezPaperTrade(trade.id, trade.tp1Hit ? "BE" : "SL", trade.stopLoss, candidate.pricePrecision);
+    }
+  });
+}
+
+function openTradezQualifiedTrades(candidates) {
+  const eligible = highQualityTradezAutoCandidates(candidates, state.qualityThreshold).filter(
+    (candidate) => !tradezPaperHasOpenTrade(candidate.symbol) && !tradezPaperRecentlyClosed(candidate.symbol)
+  );
+
+  const opened = [];
+  for (const candidate of eligible) {
+    if (opened.length >= TRADEZ_AUTO_MAX_NEW_TRADES) break;
+    if (tradezPaper.openTrades.length >= TRADEZ_AUTO_MAX_CONCURRENT_TRADES) break;
+    if (openTradezPaperTrade(candidate)) opened.push(candidate);
+  }
+  return opened;
+}
+
+function readHouseTradeMetrics() {
+  const stored = readStoredJson(HOUSE_AUTO_STORAGE_KEY, {});
+  const openTrades = Array.isArray(stored.openTrades) ? stored.openTrades : [];
+  const closedTrades = Array.isArray(stored.closedTrades) ? stored.closedTrades : [];
+  const tpCount = closedTrades.filter((trade) => trade.reason === "TP").length;
+  const slCount = closedTrades.filter((trade) => trade.reason === "SL").length;
+  const totalClosed = closedTrades.length;
+  const winRate = totalClosed ? (tpCount / totalClosed) * 100 : 0;
+  const averageQuality = average(
+    [...openTrades, ...closedTrades].map((trade) => Number(trade.qualityScore)).filter(Number.isFinite)
+  );
+  return {
+    title: "Auto Trade",
+    tradesTaken: openTrades.length + closedTrades.length,
+    openTrades: openTrades.length,
+    tpCount,
+    slCount,
+    winRate,
+    averageQuality: Number.isFinite(averageQuality) ? averageQuality : 0,
+    note:
+      openTrades.length
+        ? `${openTrades.length} live house position${openTrades.length > 1 ? "s" : ""} still open.`
+        : "House engine currently has no open position.",
+  };
+}
+
+function readTradezPaperMetrics() {
+  const tpCount = tradezPaper.closedTrades.filter((trade) => trade.reason === "TP").length;
+  const slCount = tradezPaper.closedTrades.filter((trade) => trade.reason === "SL").length;
+  const totalClosed = tradezPaper.closedTrades.filter((trade) => trade.reason !== "BE").length;
+  const winRate = totalClosed ? (tpCount / totalClosed) * 100 : 0;
+  const unrealizedUsd = tradezPaper.openTrades.reduce((sum, trade) => {
+    const direction = trade.side === "Short" ? -1 : 1;
+    if (!Number.isFinite(trade.lastPrice)) return sum;
+    return sum + (trade.lastPrice - trade.entryPrice) * trade.quantity * direction;
+  }, 0);
+  const equity = tradezPaper.balance + unrealizedUsd;
+  const averageQuality = average(
+    [...tradezPaper.openTrades, ...tradezPaper.closedTrades].map((trade) => Number(trade.qualityScore)).filter(Number.isFinite)
+  );
+  return {
+    title: "Auto Trade 2",
+    tradesTaken: tradezPaper.openTrades.length + tradezPaper.closedTrades.length,
+    openTrades: tradezPaper.openTrades.length,
+    tpCount,
+    slCount,
+    beCount: tradezPaper.closedTrades.filter((trade) => trade.reason === "BE").length,
+    winRate,
+    averageQuality: Number.isFinite(averageQuality) ? averageQuality : 0,
+    equity,
+    unrealizedUsd,
+    note:
+      tradezPaper.openTrades.length
+        ? `${tradezPaper.openTrades.length} live EMA position${tradezPaper.openTrades.length > 1 ? "s" : ""} still open.`
+        : "EMA Signals engine currently has no open position.",
+  };
+}
+
+function renderTradezComparison() {
+  const house = readHouseTradeMetrics();
+  const auto2 = readTradezPaperMetrics();
+  renderCompareCards([
+    {
+      label: "Benchmark",
+      title: house.title,
+      qualityText: `Q${Math.round(house.averageQuality || 0)}`,
+      qualityClass: qualityTier(house.averageQuality || 0).className,
+      tone: "neutral",
+      note: house.note,
+      stats: [
+        { label: "Trades Taken", value: `${house.tradesTaken}` },
+        { label: "TPs Hit", value: `${house.tpCount}`, tone: "up" },
+        { label: "SLs Hit", value: `${house.slCount}`, tone: "down" },
+        { label: "Win %", value: `${house.winRate.toFixed(0)}%`, tone: toneFromNumber(house.winRate - 50, 2) },
+        { label: "Open", value: `${house.openTrades}` },
+        { label: "Avg Quality", value: `${Math.round(house.averageQuality || 0)}` },
+      ],
+    },
+    {
+      label: "EMA Book",
+      title: auto2.title,
+      qualityText: `Q${Math.round(auto2.averageQuality || 0)}`,
+      qualityClass: qualityTier(auto2.averageQuality || 0).className,
+      tone: "neutral",
+      note: `${auto2.note}${auto2.beCount ? ` ${auto2.beCount} trade${auto2.beCount > 1 ? "s" : ""} moved to breakeven after TP1.` : ""}`,
+      stats: [
+        { label: "Trades Taken", value: `${auto2.tradesTaken}` },
+        { label: "TPs Hit", value: `${auto2.tpCount}`, tone: "up" },
+        { label: "SLs Hit", value: `${auto2.slCount}`, tone: "down" },
+        { label: "Win %", value: `${auto2.winRate.toFixed(0)}%`, tone: toneFromNumber(auto2.winRate - 50, 2) },
+        { label: "Open", value: `${auto2.openTrades}` },
+        { label: "Avg Quality", value: `${Math.round(auto2.averageQuality || 0)}` },
+      ],
+    },
+  ]);
+}
+
+function renderTradezPaperDashboard() {
+  const metrics = readTradezPaperMetrics();
+  const realizedPnl = tradezPaper.balance - tradezPaper.startingBalance;
+
+  if (dom.auto2MetricStart) dom.auto2MetricStart.textContent = formatPrice(tradezPaper.startingBalance, 2);
+  if (dom.auto2MetricEquity) {
+    dom.auto2MetricEquity.textContent = formatPrice(metrics.equity, 2);
+    dom.auto2MetricEquity.className = toneFromNumber(metrics.equity - tradezPaper.startingBalance, 0.01);
+  }
+  if (dom.auto2MetricEquityNote) {
+    dom.auto2MetricEquityNote.textContent = tradezPaper.openTrades.length
+      ? `${tradezPaper.openTrades.length} open positions • unrealized ${formatCompactUsd(metrics.unrealizedUsd, 2)}`
+      : "No open position";
+  }
+  if (dom.auto2MetricRealized) {
+    dom.auto2MetricRealized.textContent = formatCompactUsd(realizedPnl, 2);
+    dom.auto2MetricRealized.className = toneFromNumber(realizedPnl, 0.01);
+  }
+  if (dom.auto2MetricRealizedNote) {
+    dom.auto2MetricRealizedNote.textContent = `${formatPercent(pctChange(tradezPaper.startingBalance, tradezPaper.balance))} vs start`;
+  }
+  if (dom.auto2MetricWinRate) {
+    dom.auto2MetricWinRate.textContent = `${metrics.winRate.toFixed(0)}%`;
+    dom.auto2MetricWinRate.className = toneFromNumber(metrics.winRate - 50, 2);
+  }
+  if (dom.auto2MetricWinRateNote) {
+    dom.auto2MetricWinRateNote.textContent = `${metrics.tpCount} winners / ${tradezPaper.closedTrades.length} closed trades`;
+  }
+  if (dom.auto2MetricOpen) {
+    dom.auto2MetricOpen.textContent = tradezPaper.openTrades.length ? `${tradezPaper.openTrades.length} Active` : "None";
+    dom.auto2MetricOpen.className = tradezPaper.openTrades.length
+      ? toneFromNumber(metrics.unrealizedUsd, 0.01)
+      : "neutral";
+  }
+  if (dom.auto2MetricOpenNote) {
+    const lead = tradezPaper.openTrades[0];
+    dom.auto2MetricOpenNote.textContent = lead
+      ? `${lead.symbol} ${lead.side} • TP1 ${formatPrice(lead.tp1, lead.pricePrecision || 2)} • TP2 ${formatPrice(
+          lead.tp2,
+          lead.pricePrecision || 2
+        )} • SL ${formatPrice(lead.stopLoss, lead.pricePrecision || 2)}`
+      : "Waiting for EMA setup";
+  }
+  if (dom.auto2MetricLastScan) {
+    dom.auto2MetricLastScan.textContent = tradezPaper.lastScanAt ? formatClock(tradezPaper.lastScanAt) : "-";
+  }
+  if (dom.auto2MetricLastScanNote) {
+    dom.auto2MetricLastScanNote.textContent = tradezPaper.autoEnabled
+      ? "EMA book scans every 5m in parallel"
+      : "EMA book paused";
+  }
+  if (dom.auto2Toggle) dom.auto2Toggle.textContent = tradezPaper.autoEnabled ? "Pause Auto 2" : "Resume Auto 2";
+  if (dom.auto2Note) {
+    dom.auto2Note.textContent = tradezPaper.autoEnabled
+      ? `Auto Trade 2 scans every 5 minutes, can open up to ${TRADEZ_AUTO_MAX_NEW_TRADES} fresh trades per pass, and can hold up to ${TRADEZ_AUTO_MAX_CONCURRENT_TRADES} EMA positions.`
+      : "Auto Trade 2 is paused. The feed still monitors EMA setups.";
+  }
+
+  renderAnalysisGrid(
+    dom.auto2OpenGrid,
+    tradezPaper.openTrades.length
+      ? tradezPaper.openTrades.slice(0, 6).map((trade) => ({
+          label: `${trade.symbol} ${trade.side}`,
+          value: `${formatPercent(tradezPaperReturnPct(trade, trade.lastPrice || trade.entryPrice))} live`,
+          note: `Entry ${formatPrice(trade.entryPrice, trade.pricePrecision || 2)} • TP1 ${formatPrice(
+            trade.tp1,
+            trade.pricePrecision || 2
+          )} • TP2 ${formatPrice(trade.tp2, trade.pricePrecision || 2)} • SL ${formatPrice(
+            trade.stopLoss,
+            trade.pricePrecision || 2
+          )} • ${trade.touch}`,
+          tone: trade.side === "Long" ? "up" : "down",
+        }))
+      : [
+          {
+            label: "Engine waiting",
+            value: "No open trade",
+            note: "Auto Trade 2 will open the next high-quality EMA Signals setup automatically.",
+            tone: "neutral",
+          },
+        ]
+  );
+
+  renderTable(
+    dom.auto2TradeTable,
+    tradezPaper.closedTrades.slice(0, 14).map((trade) => ({
+      label: `${trade.symbol} ${trade.side} • ${trade.reason}`,
+      primary: `Entry ${formatPrice(trade.entryPrice, trade.pricePrecision || 2)} • Exit ${formatPrice(
+        trade.exitPrice,
+        trade.pricePrecision || 2
+      )}`,
+      secondaryLabel: "Plan",
+      secondary: `TP1 ${formatPrice(trade.tp1, trade.pricePrecision || 2)} • TP2 ${formatPrice(
+        trade.tp2,
+        trade.pricePrecision || 2
+      )} • SL ${formatPrice(trade.stopLoss, trade.pricePrecision || 2)}`,
+      tertiaryLabel: "Result",
+      tertiary: `${formatPercent(trade.returnPct || 0)} on margin • ${formatCompactUsd(
+        trade.pnlUsd,
+        2
+      )} • Bal ${formatPrice(trade.balanceAfter, 2)}`,
+      tone: trade.reason === "TP" ? "up" : trade.reason === "BE" ? "neutral" : "down",
+    })),
+    "No closed Auto Trade 2 trades yet"
+  );
+
+  renderTable(
+    dom.auto2ActivityTable,
+    tradezPaper.activity.slice(0, 14).map((item) => ({
+      label: new Date(item.time).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      }),
+      primary: item.message,
+      secondaryLabel: "Mode",
+      secondary: tradezPaper.autoEnabled ? "Auto" : "Manual",
+      tertiaryLabel: "Status",
+      tertiary: item.tone === "up" ? "Constructive" : item.tone === "down" ? "Defensive" : "Watching",
+      tone: item.tone,
+    })),
+    "No Auto Trade 2 activity yet"
+  );
+
+  renderTradezAutoTabs();
+  renderTradezComparison();
 }
 
 function mapKlineEntry(entry) {
@@ -1985,15 +2602,26 @@ async function scanUniverse(manual = false) {
 
     candidateMap = new Map(state.candidates.map((candidate) => [candidate.symbol, candidate]));
     state.lastScanAt = Date.now();
+    tradezPaper.lastScanAt = state.lastScanAt;
     persistState();
 
     state.candidates.forEach(pushAlertEvent);
+    refreshTradezPaperTrades(state.candidates);
+    const openedTrades = tradezPaper.autoEnabled ? openTradezQualifiedTrades(state.candidates) : [];
     renderSignalFeed();
     renderAlertFeed();
     updateMetrics();
+    persistTradezPaperState();
+    renderTradezPaperDashboard();
 
     const best = state.candidates[0];
-    if (best) {
+    if (openedTrades.length) {
+      const lead = openedTrades[0];
+      setStatus(
+        `Opened ${openedTrades.length} new EMA Signals trade${openedTrades.length > 1 ? "s" : ""}. ${tradezPaper.openTrades.length}/${TRADEZ_AUTO_MAX_CONCURRENT_TRADES} Auto Trade 2 positions are active, led by ${lead.symbol}.`,
+        lead.activeSignal?.tone || "up"
+      );
+    } else if (best) {
       setStatus(
         `${state.candidates.filter((candidate) => candidate.qualityScore >= state.qualityThreshold).length} Tradez setups qualified. ${best.symbol} leads with Q${best.qualityScore}.`,
         "up"
@@ -2014,6 +2642,7 @@ async function scanUniverse(manual = false) {
     console.error(error);
     setStatus(error.message || "Tradez scan failed.", "down");
     if (!state.chartSnapshot) renderEmptySelected(error.message || "Tradez is waiting for data.");
+    renderTradezPaperDashboard();
   }
 }
 
@@ -2056,15 +2685,67 @@ function bindEvents() {
     persistState();
     updateTabs();
   });
+
+  if (dom.auto2Toggle) {
+    dom.auto2Toggle.addEventListener("click", () => {
+      tradezPaper.autoEnabled = !tradezPaper.autoEnabled;
+      persistTradezPaperState();
+      renderTradezPaperDashboard();
+      setStatus(
+        tradezPaper.autoEnabled ? "Auto Trade 2 resumed." : "Auto Trade 2 paused.",
+        tradezPaper.autoEnabled ? "up" : "neutral"
+      );
+    });
+  }
+
+  if (dom.auto2Reset) {
+    dom.auto2Reset.addEventListener("click", () => {
+      tradezPaper.balance = TRADEZ_AUTO_START_BALANCE;
+      tradezPaper.openTrades = [];
+      tradezPaper.closedTrades = [];
+      tradezPaper.activity = [];
+      tradezPaper.lastScanAt = 0;
+      logTradezPaperActivity("Auto Trade 2 reset to the $200 EMA Signals book.", "neutral");
+      persistTradezPaperState();
+      renderTradezPaperDashboard();
+      setStatus("Auto Trade 2 reset to the $200 EMA Signals book.", "neutral");
+    });
+  }
+
+  if (dom.auto2TabPositions) {
+    dom.auto2TabPositions.addEventListener("click", () => {
+      tradezPaper.activeTab = "positions";
+      persistTradezPaperState();
+      renderTradezAutoTabs();
+    });
+  }
+
+  if (dom.auto2TabTrades) {
+    dom.auto2TabTrades.addEventListener("click", () => {
+      tradezPaper.activeTab = "trades";
+      persistTradezPaperState();
+      renderTradezAutoTabs();
+    });
+  }
+
+  if (dom.auto2TabActivity) {
+    dom.auto2TabActivity.addEventListener("click", () => {
+      tradezPaper.activeTab = "activity";
+      persistTradezPaperState();
+      renderTradezAutoTabs();
+    });
+  }
 }
 
 async function init() {
   dom.tokenInput.value = state.selectedToken;
   dom.qualityThreshold.value = `${state.qualityThreshold}`;
+  applyTradezPaperUpgradeNotice();
   updateAlertPermissionButton();
   updateTabs();
   renderStrategyNotes();
   renderAlertFeed();
+  renderTradezPaperDashboard();
   initChart();
   bindEvents();
   updateMetrics();

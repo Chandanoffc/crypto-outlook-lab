@@ -1627,6 +1627,58 @@ body.paper-trader-page .panel-monitor-large .monitor-symbol {
   grid-column: 1 / -1;
 }
 
+.tradez-compare-panel,
+.tradez-auto2-panel {
+  grid-column: 1 / -1;
+}
+
+.tradez-compare-grid {
+  align-items: stretch;
+}
+
+.tradez-compare-card {
+  display: grid;
+  gap: 14px;
+}
+
+.tradez-compare-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.tradez-compare-stat {
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.tradez-compare-stat span {
+  display: block;
+  font-size: 0.76rem;
+  color: var(--text-soft);
+  margin-bottom: 5px;
+}
+
+.tradez-compare-stat strong {
+  display: block;
+  font-size: 0.92rem;
+}
+
+.tradez-auto2-controls {
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.tradez-auto2-metrics {
+  margin-top: 18px;
+}
+
+.tradez-auto2-workspace {
+  margin-top: 18px;
+}
+
 .tradez-pulse-head {
   display: flex;
   justify-content: space-between;
@@ -2239,6 +2291,10 @@ body.signals-page .quality-chip {
     grid-template-columns: 1fr;
   }
 
+  .tradez-compare-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .tradez-feed-summary-row,
   .tradez-feed-plan-grid {
     grid-template-columns: 1fr;
@@ -2323,6 +2379,10 @@ body.signals-page .quality-chip {
 
   .tradez-pulse-head {
     flex-direction: column;
+  }
+
+  .tradez-compare-stats {
+    grid-template-columns: 1fr;
   }
 
   .quality-meter-block {

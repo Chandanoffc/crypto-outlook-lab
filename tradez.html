@@ -311,6 +311,111 @@
             </div>
           </div>
         </section>
+
+        <section class="panel tradez-compare-panel">
+          <div class="panel-head-inline">
+            <div>
+              <p class="panel-label">Strategy Compare</p>
+              <h3>Auto Trade vs Auto Trade 2</h3>
+            </div>
+            <p class="subsection-meta">
+              House strategy benchmark versus the EMA Signals paper engine.
+            </p>
+          </div>
+
+          <div id="tradez-compare-grid" class="split-grid tradez-compare-grid"></div>
+        </section>
+
+        <section class="panel tradez-auto2-panel">
+          <div class="panel-head">
+            <div>
+              <p class="panel-label">Auto Trade 2</p>
+              <h2>EMA Signals paper execution desk</h2>
+              <p class="subtitle-inline">
+                Independent paper engine dedicated to EMA Signals. It runs in parallel with Auto
+                Trade so we can compare both systems honestly over time.
+              </p>
+            </div>
+
+            <div class="control-row tradez-auto2-controls">
+              <button id="tradez-auto2-toggle" class="mini-button" type="button">Pause Auto 2</button>
+              <button id="tradez-auto2-reset" class="mini-button" type="button">Reset Auto 2</button>
+              <span id="tradez-auto2-note" class="subsection-meta">
+                Auto Trade 2 scans every 5 minutes and uses the EMA Signals strategy only.
+              </span>
+            </div>
+          </div>
+
+          <section class="metric-strip tradez-auto2-metrics">
+            <article class="metric-card">
+              <span class="metric-label">Starting Balance</span>
+              <strong id="tradez-auto2-metric-start">$200</strong>
+              <small>Dedicated EMA book</small>
+            </article>
+            <article class="metric-card">
+              <span class="metric-label">Current Equity</span>
+              <strong id="tradez-auto2-metric-equity">-</strong>
+              <small id="tradez-auto2-metric-equity-note">No open position</small>
+            </article>
+            <article class="metric-card">
+              <span class="metric-label">Realized PnL</span>
+              <strong id="tradez-auto2-metric-realized">-</strong>
+              <small id="tradez-auto2-metric-realized-note">0.00% vs start</small>
+            </article>
+            <article class="metric-card">
+              <span class="metric-label">Win Rate</span>
+              <strong id="tradez-auto2-metric-winrate">-</strong>
+              <small id="tradez-auto2-metric-winrate-note">0 winners / 0 closed trades</small>
+            </article>
+            <article class="metric-card">
+              <span class="metric-label">Open Positions</span>
+              <strong id="tradez-auto2-metric-open">-</strong>
+              <small id="tradez-auto2-metric-open-note">Waiting for EMA setup</small>
+            </article>
+            <article class="metric-card">
+              <span class="metric-label">Last Scan</span>
+              <strong id="tradez-auto2-metric-last-scan">-</strong>
+              <small id="tradez-auto2-metric-last-scan-note">Waiting for first pass</small>
+            </article>
+          </section>
+
+          <div class="subpanel tradez-auto2-workspace">
+            <div class="panel-head">
+              <div>
+                <p class="panel-label">Execution Center</p>
+                <h3>Open positions, trade journal, and engine actions</h3>
+              </div>
+
+              <div class="feed-tabs tradez-auto2-tabs">
+                <button id="tradez-auto2-tab-positions" class="mini-button feed-tab is-active" type="button">
+                  Open Positions
+                </button>
+                <button id="tradez-auto2-tab-trades" class="mini-button feed-tab" type="button">
+                  Trade Journal
+                </button>
+                <button id="tradez-auto2-tab-activity" class="mini-button feed-tab" type="button">
+                  Activity Feed
+                </button>
+              </div>
+            </div>
+
+            <div id="tradez-auto2-tab-note" class="subsection-meta">
+              Open positions stay primary while the journal and engine actions remain one click away.
+            </div>
+
+            <div id="tradez-auto2-panel-positions">
+              <div id="tradez-auto2-open-grid" class="analysis-grid"></div>
+            </div>
+
+            <div id="tradez-auto2-panel-trades" hidden>
+              <div id="tradez-auto2-trade-table" class="table-card"></div>
+            </div>
+
+            <div id="tradez-auto2-panel-activity" hidden>
+              <div id="tradez-auto2-activity-table" class="table-card"></div>
+            </div>
+          </div>
+        </section>
       </main>
     </div>
   </body>
