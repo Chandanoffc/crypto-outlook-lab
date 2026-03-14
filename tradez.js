@@ -1223,6 +1223,7 @@ function volumeColor(candle) {
 }
 
 function initChart() {
+  if (chart) return;
   chart = LightweightCharts.createChart(dom.chart, {
     width: dom.chart.clientWidth,
     height: dom.chart.clientHeight,
@@ -1285,6 +1286,24 @@ function initChart() {
     window.addEventListener("resize", resizeChart);
     chartResizeBound = true;
   }
+}
+
+function resetChart() {
+  removePriceLines();
+  hideChartSeriesLabels();
+
+  if (chart) {
+    chart.remove();
+  }
+
+  chart = null;
+  candleSeries = null;
+  volumeSeries = null;
+  ema20LineSeries = null;
+  ema50LineSeries = null;
+  priceLines = [];
+  dom.chart.innerHTML = "";
+  initChart();
 }
 
 function resizeChart() {
@@ -1428,6 +1447,11 @@ function renderChart(analysis, snapshot) {
 }
 
 function renderSelectedAnalysis(analysis, snapshot) {
+  const symbolChanged = state.selectedSymbol && state.selectedSymbol !== snapshot.symbol;
+  if (symbolChanged) {
+    resetChart();
+  }
+
   state.chartAnalysis = analysis;
   state.chartSnapshot = snapshot;
   state.selectedSymbol = snapshot.symbol;
