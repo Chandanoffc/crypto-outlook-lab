@@ -57,6 +57,8 @@ const dom = {
   outlookSummary: document.getElementById("outlook-summary"),
   signalList: document.getElementById("signal-list"),
   biasScore: document.getElementById("bias-score"),
+  biasQualityMeter: document.getElementById("bias-quality-meter"),
+  biasQualityLabel: document.getElementById("bias-quality-label"),
   statusBanner: document.getElementById("status-banner"),
   streamStatus: document.getElementById("stream-status"),
   metricVolume: document.getElementById("metric-volume"),
@@ -1607,33 +1609,33 @@ function initChart() {
     width: dom.chart.clientWidth,
     height: dom.chart.clientHeight,
     layout: {
-      background: { color: "#050913" },
-      textColor: "#9eb1c9",
+      background: { color: "#040503" },
+      textColor: "#a6ae9a",
       fontFamily: '"IBM Plex Sans", "Helvetica Neue", "Segoe UI", sans-serif',
     },
     grid: {
-      vertLines: { color: "rgba(84, 136, 220, 0.08)" },
-      horzLines: { color: "rgba(84, 136, 220, 0.1)" },
+      vertLines: { color: "rgba(255, 255, 255, 0.04)" },
+      horzLines: { color: "rgba(255, 255, 255, 0.06)" },
     },
     timeScale: {
-      borderColor: "rgba(84, 136, 220, 0.16)",
+      borderColor: "rgba(255, 255, 255, 0.08)",
       timeVisible: true,
     },
     rightPriceScale: {
-      borderColor: "rgba(84, 136, 220, 0.16)",
+      borderColor: "rgba(255, 255, 255, 0.08)",
     },
   });
 
   candleSeries = chart.addCandlestickSeries({
-    upColor: "#0d8f54",
-    downColor: "#c23a3a",
-    wickUpColor: "#0d8f54",
-    wickDownColor: "#c23a3a",
+    upColor: "#57da86",
+    downColor: "#e25b5b",
+    wickUpColor: "#57da86",
+    wickDownColor: "#e25b5b",
     borderVisible: false,
   });
 
   ema20LineSeries = chart.addLineSeries({
-    color: "#67d5ff",
+    color: "#d8ff4d",
     lineWidth: 2,
     priceLineVisible: false,
     lastValueVisible: false,
@@ -1641,7 +1643,7 @@ function initChart() {
   });
 
   ema50LineSeries = chart.addLineSeries({
-    color: "#7e9cff",
+    color: "#c2cec0",
     lineWidth: 2,
     priceLineVisible: false,
     lastValueVisible: false,
@@ -1651,7 +1653,7 @@ function initChart() {
   volumeSeries = chart.addHistogramSeries({
     priceFormat: { type: "volume" },
     priceScaleId: "",
-    color: "rgba(84, 136, 220, 0.24)",
+    color: "rgba(216, 255, 77, 0.2)",
   });
 
   volumeSeries.priceScale().applyOptions({
@@ -2675,6 +2677,21 @@ function confidenceScore(score) {
   return Math.max(10, Math.min(95, Math.round(score)));
 }
 
+function setQualityMeter(meterElement, labelElement, progress, label) {
+  if (!meterElement || !labelElement) return;
+  const clamped = Math.max(6, Math.min(100, Math.round(progress)));
+  meterElement.style.setProperty("--quality-progress", `${clamped}%`);
+  labelElement.textContent = label;
+}
+
+function biasQualityLabel(score) {
+  const intensity = Math.abs(score);
+  if (intensity >= 72) return "Prime";
+  if (intensity >= 48) return "High";
+  if (intensity >= 24) return "Building";
+  return "Quiet";
+}
+
 function buildTradeSetups(context) {
   const takerSummary = context.takerSummary || {
     latestRatio: 1,
@@ -2953,6 +2970,7 @@ function renderEmptyDashboard(message) {
   dom.headlineBias.className = "neutral";
   dom.biasScore.textContent = "0";
   dom.biasScore.className = "score-badge neutral";
+  setQualityMeter(dom.biasQualityMeter, dom.biasQualityLabel, 0, "Monitoring");
   dom.outlookSummary.textContent = message;
   renderLevelBands(dom.supportFields, [], 0, "up", 2);
   renderLevelBands(dom.resistanceFields, [], 0, "down", 2);
@@ -3781,10 +3799,10 @@ function renderDashboard() {
 
   removePriceLines();
   derived.supportResistance.supportLevels.forEach((level, index) => {
-    addLevelLine(level, `S${index + 1}`, "#0d8f54");
+    addLevelLine(level, `S${index + 1}`, "#1db96f");
   });
   derived.supportResistance.resistanceLevels.forEach((level, index) => {
-    addLevelLine(level, `R${index + 1}`, "#c23a3a");
+    addLevelLine(level, `R${index + 1}`, "#db5555");
   });
   syncChartTaSeries(derived);
   applyTrapMarkers(derived.trapSignals.markers);
@@ -3802,6 +3820,12 @@ function renderDashboard() {
 
   dom.biasScore.textContent = `${derived.biasScore}`;
   dom.biasScore.className = `score-badge ${derived.bias.tone}`;
+  setQualityMeter(
+    dom.biasQualityMeter,
+    dom.biasQualityLabel,
+    14 + Math.abs(derived.biasScore) * 1.15,
+    biasQualityLabel(derived.biasScore)
+  );
   dom.outlookSummary.textContent = buildOutlook({
     ...derived,
     supportLevels: derived.supportResistance.supportLevels,

@@ -85,7 +85,7 @@ module.exports = async function handler(req, res) {
 
   try {
     const body = await readJsonBody(req);
-    const title = String(body?.title || "Apex Signals Alert").slice(0, 140);
+    const title = String(body?.title || "Hypervolt Alert").slice(0, 140);
     const event = body?.event || {};
     const destinations = body?.destinations || {};
     const results = {};

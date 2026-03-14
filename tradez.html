@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Apex Signals Tradez</title>
+    <title>Hypervolt EMA Signals</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -20,10 +20,11 @@
       <header class="app-header">
         <div class="app-bar">
           <a class="brand-block" href="./index.html">
-            <span class="brand-mark">AS</span>
+            <span class="brand-mark" aria-hidden="true">
+              <img src="./hypervolt-mark.svg" alt="" />
+            </span>
             <span class="brand-copy">
-              <strong>Apex Signals</strong>
-              <small>Perps Strategy Suite</small>
+              <strong>Hypervolt</strong>
             </span>
           </a>
 
@@ -207,7 +208,22 @@
               <p class="panel-label">Strategy Pulse</p>
               <h2>Current best pullback</h2>
             </div>
-            <div id="tradez-quality-badge" class="score-badge neutral">0</div>
+            <div class="score-stack">
+              <div id="tradez-quality-badge" class="score-badge neutral">0</div>
+              <div class="quality-meter-block">
+                <div class="quality-meter-copy">
+                  <span>Setup Quality</span>
+                  <strong id="tradez-quality-label">Monitoring</strong>
+                </div>
+                <div id="tradez-quality-meter" class="quality-meter" style="--quality-progress: 0%">
+                  <span class="quality-meter-thumb"></span>
+                </div>
+                <div class="quality-meter-scale">
+                  <span>Weak</span>
+                  <span>Prime</span>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div id="tradez-stream-status" class="stream-status neutral">

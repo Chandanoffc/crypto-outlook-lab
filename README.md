@@ -1,4 +1,4 @@
-# Apex Signals
+# Hypervolt
 
 Educational crypto dashboard built for perpetual futures analysis on Vercel.
 

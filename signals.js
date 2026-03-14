@@ -64,6 +64,8 @@ const dom = {
   supportFields: document.getElementById("signals-support-fields"),
   resistanceFields: document.getElementById("signals-resistance-fields"),
   qualityBadge: document.getElementById("signals-quality-badge"),
+  qualityMeter: document.getElementById("signals-quality-meter"),
+  qualityLabel: document.getElementById("signals-quality-label"),
   streamStatus: document.getElementById("signals-stream-status"),
   sideTabSelected: document.getElementById("signals-side-tab-selected"),
   sideTabQuality: document.getElementById("signals-side-tab-quality"),
@@ -376,6 +378,13 @@ function qualityTier(score) {
   if (score >= 60) return { className: "quality-tier-light-orange", label: "Watch" };
   if (score >= 40) return { className: "quality-tier-orange", label: "Weak" };
   return { className: "quality-tier-red", label: "Poor" };
+}
+
+function setQualityMeter(score) {
+  if (!dom.qualityMeter || !dom.qualityLabel) return;
+  const progress = Math.max(6, Math.min(100, Math.round((Math.max(0, score) / 200) * 100)));
+  dom.qualityMeter.style.setProperty("--quality-progress", `${progress}%`);
+  dom.qualityLabel.textContent = score > 0 ? qualityTier(score).label : "Monitoring";
 }
 
 function createPill(text, tone) {
@@ -1758,33 +1767,33 @@ function initChart() {
     width: dom.chart.clientWidth,
     height: dom.chart.clientHeight,
     layout: {
-      background: { color: "#050913" },
-      textColor: "#9eb1c9",
+      background: { color: "#040503" },
+      textColor: "#a6ae9a",
       fontFamily: '"IBM Plex Sans", "Helvetica Neue", "Segoe UI", sans-serif',
     },
     grid: {
-      vertLines: { color: "rgba(84, 136, 220, 0.08)" },
-      horzLines: { color: "rgba(84, 136, 220, 0.1)" },
+      vertLines: { color: "rgba(255, 255, 255, 0.04)" },
+      horzLines: { color: "rgba(255, 255, 255, 0.06)" },
     },
     timeScale: {
-      borderColor: "rgba(84, 136, 220, 0.16)",
+      borderColor: "rgba(255, 255, 255, 0.08)",
       timeVisible: true,
     },
     rightPriceScale: {
-      borderColor: "rgba(84, 136, 220, 0.16)",
+      borderColor: "rgba(255, 255, 255, 0.08)",
     },
   });
 
   candleSeries = chart.addCandlestickSeries({
-    upColor: "#0d8f54",
-    downColor: "#c23a3a",
-    wickUpColor: "#0d8f54",
-    wickDownColor: "#c23a3a",
+    upColor: "#57da86",
+    downColor: "#e25b5b",
+    wickUpColor: "#57da86",
+    wickDownColor: "#e25b5b",
     borderVisible: false,
   });
 
   ema20LineSeries = chart.addLineSeries({
-    color: "#67d5ff",
+    color: "#d8ff4d",
     lineWidth: 2,
     priceLineVisible: false,
     lastValueVisible: false,
@@ -1792,7 +1801,7 @@ function initChart() {
   });
 
   ema50LineSeries = chart.addLineSeries({
-    color: "#7e9cff",
+    color: "#c2cec0",
     lineWidth: 2,
     priceLineVisible: false,
     lastValueVisible: false,
@@ -1802,7 +1811,7 @@ function initChart() {
   volumeSeries = chart.addHistogramSeries({
     priceFormat: { type: "volume" },
     priceScaleId: "",
-    color: "rgba(84, 136, 220, 0.24)",
+    color: "rgba(216, 255, 77, 0.2)",
   });
 
   volumeSeries.priceScale().applyOptions({
@@ -1945,8 +1954,8 @@ function renderChart(candidate) {
   candleSeries.setMarkers(candidate.markers || []);
   chart.timeScale().fitContent();
   removePriceLines();
-  candidate.supportResistance.supportLevels.forEach((level, index) => addLevelLine(level, `S${index + 1}`, "#0d8f54"));
-  candidate.supportResistance.resistanceLevels.forEach((level, index) => addLevelLine(level, `R${index + 1}`, "#c23a3a"));
+  candidate.supportResistance.supportLevels.forEach((level, index) => addLevelLine(level, `S${index + 1}`, "#1db96f"));
+  candidate.supportResistance.resistanceLevels.forEach((level, index) => addLevelLine(level, `R${index + 1}`, "#db5555"));
   renderChartSeriesLabels(
     candidate.latestEma20,
     candidate.latestEma50,
@@ -1978,6 +1987,7 @@ function renderSelectedCandidate(candidate) {
   dom.qualityBadge.className = candidate.activeSignal
     ? `score-badge ${candidate.setupBias.tone} ${quality.className}`
     : "score-badge neutral";
+  setQualityMeter(candidate.qualityScore);
 
   setStreamStatus(
     candidate.activeSignal
@@ -2031,6 +2041,7 @@ function renderEmptySelected(message) {
   dom.headlineBias.textContent = "-";
   dom.qualityBadge.textContent = "0";
   dom.qualityBadge.className = "score-badge neutral";
+  setQualityMeter(0);
   dom.summaryCopy.textContent = message;
   dom.stancePill.textContent = "Waiting";
   dom.stancePill.className = "pill neutral";
