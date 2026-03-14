@@ -1,4 +1,4 @@
-# Hypervolt
+# HYPERDRIVE Signals
 
 Educational crypto dashboard built for perpetual futures analysis on Vercel.
 
