@@ -794,15 +794,30 @@ function readHouseTradeMetrics() {
   const stored = readStoredJson(HOUSE_AUTO_STORAGE_KEY, {});
   const openTrades = Array.isArray(stored.openTrades) ? stored.openTrades : [];
   const closedTrades = Array.isArray(stored.closedTrades) ? stored.closedTrades : [];
+  const startingBalance = Number(stored.startingBalance) || 200;
+  const realizedBalance = Number(stored.balance) || startingBalance;
   const tpCount = closedTrades.filter((trade) => trade.reason === "TP").length;
   const slCount = closedTrades.filter((trade) => trade.reason === "SL").length;
   const totalClosed = closedTrades.length;
   const winRate = totalClosed ? (tpCount / totalClosed) * 100 : 0;
+  const unrealizedUsd = openTrades.reduce((sum, trade) => {
+    const direction = trade.side === "Short" ? -1 : 1;
+    if (!Number.isFinite(trade.lastPrice) || !Number.isFinite(trade.entryPrice) || !Number.isFinite(trade.quantity)) {
+      return sum;
+    }
+    return sum + (trade.lastPrice - trade.entryPrice) * trade.quantity * direction;
+  }, 0);
+  const equity = realizedBalance + unrealizedUsd;
   const averageQuality = average(
     [...openTrades, ...closedTrades].map((trade) => Number(trade.qualityScore)).filter(Number.isFinite)
   );
   return {
     title: "Auto Trade",
+    startingBalance,
+    realizedBalance,
+    realizedPnl: realizedBalance - startingBalance,
+    unrealizedUsd,
+    equity,
     tradesTaken: openTrades.length + closedTrades.length,
     openTrades: openTrades.length,
     tpCount,
@@ -832,6 +847,9 @@ function readTradezPaperMetrics() {
   );
   return {
     title: "Auto Trade 2",
+    startingBalance: tradezPaper.startingBalance,
+    realizedBalance: tradezPaper.balance,
+    realizedPnl: tradezPaper.balance - tradezPaper.startingBalance,
     tradesTaken: tradezPaper.openTrades.length + tradezPaper.closedTrades.length,
     openTrades: tradezPaper.openTrades.length,
     tpCount,
@@ -860,6 +878,10 @@ function renderTradezComparison() {
       tone: "neutral",
       note: house.note,
       stats: [
+        { label: "Opening Bal", value: formatCompactUsd(house.startingBalance, 2) },
+        { label: "Current Bal", value: formatCompactUsd(house.equity, 2), tone: toneFromNumber(house.equity - house.startingBalance, 0.01) },
+        { label: "Realized PnL", value: formatCompactUsd(house.realizedPnl, 2), tone: toneFromNumber(house.realizedPnl, 0.01) },
+        { label: "Unrealized PnL", value: formatCompactUsd(house.unrealizedUsd, 2), tone: toneFromNumber(house.unrealizedUsd, 0.01) },
         { label: "Trades Taken", value: `${house.tradesTaken}` },
         { label: "TPs Hit", value: `${house.tpCount}`, tone: "up" },
         { label: "SLs Hit", value: `${house.slCount}`, tone: "down" },
@@ -876,6 +898,10 @@ function renderTradezComparison() {
       tone: "neutral",
       note: `${auto2.note}${auto2.beCount ? ` ${auto2.beCount} trade${auto2.beCount > 1 ? "s" : ""} moved to breakeven after TP1.` : ""}`,
       stats: [
+        { label: "Opening Bal", value: formatCompactUsd(auto2.startingBalance, 2) },
+        { label: "Current Bal", value: formatCompactUsd(auto2.equity, 2), tone: toneFromNumber(auto2.equity - auto2.startingBalance, 0.01) },
+        { label: "Realized PnL", value: formatCompactUsd(auto2.realizedPnl, 2), tone: toneFromNumber(auto2.realizedPnl, 0.01) },
+        { label: "Unrealized PnL", value: formatCompactUsd(auto2.unrealizedUsd, 2), tone: toneFromNumber(auto2.unrealizedUsd, 0.01) },
         { label: "Trades Taken", value: `${auto2.tradesTaken}` },
         { label: "TPs Hit", value: `${auto2.tpCount}`, tone: "up" },
         { label: "SLs Hit", value: `${auto2.slCount}`, tone: "down" },
@@ -958,7 +984,7 @@ function renderTradezPaperDashboard() {
             trade.stopLoss,
             trade.pricePrecision || 2
           )} • ${trade.touch}`,
-          tone: trade.side === "Long" ? "up" : "down",
+          tone: toneFromNumber(tradezPaperReturnPct(trade, trade.lastPrice || trade.entryPrice), 0.01),
         }))
       : [
           {

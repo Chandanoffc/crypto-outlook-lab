@@ -2363,7 +2363,7 @@ function renderDashboard(universe = []) {
             trade.marginUsed,
             2
           )} • ${trade.leverage}x`,
-          tone: trade.side === "Long" ? "up" : "down",
+          tone: toneFromNumber(tradeReturnPct(trade, trade.lastPrice || trade.entryPrice), 0.01),
         }))
       : [
           {
