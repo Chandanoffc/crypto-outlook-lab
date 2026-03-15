@@ -8,22 +8,22 @@
 }
 
 :root {
-  --page-bg: #040506;
-  --page-bg-soft: #0a0c0d;
-  --panel-bg: rgba(9, 11, 12, 0.94);
-  --panel-bg-strong: rgba(11, 13, 14, 0.98);
-  --panel-edge: rgba(203, 255, 81, 0.18);
-  --panel-edge-soft: rgba(255, 255, 255, 0.06);
-  --text-main: #f2f5ea;
-  --text-soft: #9ba38f;
-  --text-dim: #646b5d;
-  --orange: #f2f5ea;
-  --orange-soft: rgba(215, 255, 77, 0.12);
-  --orange-glow: rgba(215, 255, 77, 0.16);
-  --tab-accent: #d8ff4d;
-  --tab-accent-soft: rgba(216, 255, 77, 0.16);
-  --tab-accent-edge: rgba(216, 255, 77, 0.34);
-  --tab-accent-glow: rgba(216, 255, 77, 0.18);
+  --page-bg: #17181d;
+  --page-bg-soft: #1d1f26;
+  --panel-bg: rgba(31, 33, 43, 0.94);
+  --panel-bg-strong: rgba(25, 27, 35, 0.98);
+  --panel-edge: rgba(51, 65, 85, 0.64);
+  --panel-edge-soft: rgba(100, 116, 139, 0.26);
+  --text-main: #e5e7eb;
+  --text-soft: #9ca3af;
+  --text-dim: #6b7280;
+  --orange: #e5e7eb;
+  --orange-soft: rgba(34, 211, 238, 0.12);
+  --orange-glow: rgba(34, 211, 238, 0.16);
+  --tab-accent: #22d3ee;
+  --tab-accent-soft: rgba(34, 211, 238, 0.16);
+  --tab-accent-edge: rgba(34, 211, 238, 0.34);
+  --tab-accent-glow: rgba(34, 211, 238, 0.16);
   --green: #64e68f;
   --green-soft: rgba(100, 230, 143, 0.14);
   --green-edge: rgba(100, 230, 143, 0.24);
@@ -60,10 +60,9 @@ body {
   font-family: var(--body-font, var(--font-stack));
   color: var(--text-main);
   background:
-    radial-gradient(circle at 14% 10%, rgba(216, 255, 77, 0.05), transparent 16%),
-    radial-gradient(circle at 84% 14%, rgba(255, 255, 255, 0.035), transparent 18%),
-    radial-gradient(circle at 50% 100%, rgba(255, 255, 255, 0.04), transparent 24%),
-    linear-gradient(180deg, #030405 0%, #060809 38%, #040506 100%);
+    radial-gradient(circle at 16% -8%, rgba(34, 211, 238, 0.08), transparent 24%),
+    radial-gradient(circle at 86% 10%, rgba(148, 163, 184, 0.08), transparent 22%),
+    linear-gradient(180deg, #18191f 0%, #17181d 42%, #16171c 100%);
 }
 
 body::before,
@@ -77,17 +76,17 @@ body::after {
 
 body::before {
   background:
-    linear-gradient(120deg, transparent 0%, rgba(255, 255, 255, 0.025) 24%, transparent 42%),
-    radial-gradient(circle at 78% 18%, rgba(216, 255, 77, 0.03), transparent 18%);
-  opacity: 0.7;
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 18%),
+    radial-gradient(circle at 76% 16%, rgba(34, 211, 238, 0.05), transparent 18%);
+  opacity: 0.82;
 }
 
 body::after {
   background:
-    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
-  background-size: 100% 48px, 48px 100%;
-  opacity: 0.04;
+    linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.012) 1px, transparent 1px);
+  background-size: 100% 56px, 56px 100%;
+  opacity: 0.028;
 }
 
 body.dashboard-home {
@@ -170,22 +169,22 @@ select {
   position: sticky;
   top: 10px;
   z-index: 20;
-  border: 1px solid rgba(16, 185, 129, 0.18);
+  border: 1px solid rgba(34, 211, 238, 0.14);
   border-radius: 28px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 28%),
-    linear-gradient(180deg, rgba(23, 27, 24, 0.98), rgba(8, 10, 10, 0.96));
+    linear-gradient(180deg, rgba(35, 38, 48, 0.98), rgba(24, 26, 33, 0.96));
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    inset 0 0 0 1px rgba(16, 185, 129, 0.04),
-    0 18px 42px rgba(0, 0, 0, 0.5),
+    inset 0 0 0 1px rgba(34, 211, 238, 0.03),
+    0 18px 42px rgba(0, 0, 0, 0.42),
     0 0 0 1px rgba(255, 255, 255, 0.015);
   backdrop-filter: blur(16px);
 }
 
 .brand-block {
   display: inline-flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 14px;
   text-decoration: none;
   color: inherit;
@@ -197,15 +196,15 @@ select {
   display: grid;
   place-items: center;
   border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(34, 211, 238, 0.18);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 30%),
-    radial-gradient(circle at 50% 18%, rgba(16, 185, 129, 0.1), transparent 58%),
-    rgba(12, 14, 15, 0.97);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 30%),
+    radial-gradient(circle at 50% 18%, rgba(34, 211, 238, 0.12), transparent 58%),
+    rgba(14, 16, 24, 0.97);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.06),
-    inset 0 0 0 1px rgba(16, 185, 129, 0.05),
-    0 0 24px rgba(16, 185, 129, 0.08);
+    inset 0 0 0 1px rgba(34, 211, 238, 0.05),
+    0 0 24px rgba(34, 211, 238, 0.08);
 }
 
 .brand-mark img {
@@ -213,35 +212,41 @@ select {
   height: 100%;
   display: block;
   object-fit: contain;
-  filter: drop-shadow(0 0 18px rgba(16, 185, 129, 0.22));
+  filter: drop-shadow(0 0 18px rgba(34, 211, 238, 0.22));
 }
 
 .brand-copy {
   display: grid;
   gap: 3px;
+  padding-top: 4px;
 }
 
 .brand-copy strong {
   font-family: var(--display-font);
-  font-size: 1.92rem;
+  font-size: 2.3rem;
   font-style: normal;
   font-weight: 800;
-  letter-spacing: 0.065em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  text-transform: none;
   color: transparent;
-  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 46%, #a3e635 100%);
+  background: linear-gradient(180deg, #f8fafc 0%, #dbeafe 42%, #67e8f9 100%);
   -webkit-background-clip: text;
   background-clip: text;
-  text-shadow: 0 0 16px rgba(16, 185, 129, 0.12);
+  text-shadow: 0 0 18px rgba(34, 211, 238, 0.1);
 }
 
 .brand-copy small {
   display: block;
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.28em;
-  text-transform: uppercase;
-  color: rgba(148, 163, 184, 0.86);
+  margin-top: -11px;
+  margin-left: 10px;
+  font-family: "Satisfy", cursive;
+  font-size: 1.18rem;
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  color: rgba(103, 232, 249, 0.88);
+  transform: rotate(-4deg);
 }
 
 .page-tabs {
@@ -250,14 +255,14 @@ select {
   align-items: center;
   gap: 10px;
   padding: 8px;
-  border: 1px solid rgba(56, 189, 248, 0.14);
+  border: 1px solid rgba(34, 211, 238, 0.14);
   border-radius: 24px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 42%),
-    linear-gradient(180deg, rgba(15, 18, 18, 0.97), rgba(8, 10, 10, 0.95));
+    linear-gradient(180deg, rgba(34, 36, 46, 0.97), rgba(25, 27, 35, 0.95));
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    0 14px 32px rgba(0, 0, 0, 0.35),
+    0 14px 32px rgba(0, 0, 0, 0.3),
     0 0 0 1px rgba(255, 255, 255, 0.015);
 }
 
@@ -268,8 +273,8 @@ select {
   justify-content: center;
   padding: 0 20px;
   border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  color: #c1c8ba;
+  border: 1px solid rgba(255, 255, 255, 0.035);
+  color: #b7c0cf;
   text-decoration: none;
   font-family: var(--ui-font);
   font-size: 0.84rem;
@@ -285,21 +290,23 @@ select {
 .page-tab:hover {
   color: var(--text-main);
   transform: translateY(-1px);
-  border-color: rgba(56, 189, 248, 0.22);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(12, 14, 13, 0.94));
+  border-color: rgba(34, 211, 238, 0.22);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 34%),
+    rgba(28, 31, 40, 0.96);
 }
 
 .page-tab.is-current {
   border-color: var(--tab-accent-edge);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 38%),
-    linear-gradient(180deg, rgba(18, 30, 44, 0.98), rgba(10, 16, 28, 0.96));
-  color: #f9ffeb;
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 38%),
+    linear-gradient(180deg, rgba(29, 46, 59, 0.98), rgba(25, 33, 44, 0.96));
+  color: #f8fafc;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    inset 0 0 0 1px rgba(56, 189, 248, 0.08),
-    0 14px 22px rgba(0, 0, 0, 0.34),
-    0 0 20px rgba(56, 189, 248, 0.08);
+    inset 0 0 0 1px rgba(34, 211, 238, 0.08),
+    0 14px 22px rgba(0, 0, 0, 0.26),
+    0 0 22px rgba(34, 211, 238, 0.1);
   transform: translateY(-2px);
 }
 
@@ -310,11 +317,11 @@ select {
   align-items: center;
   padding: 0 14px;
   border-radius: 16px;
-  border: 1px solid rgba(56, 189, 248, 0.14);
+  border: 1px solid rgba(34, 211, 238, 0.18);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 34%),
-    linear-gradient(180deg, rgba(18, 22, 20, 0.98), rgba(10, 12, 12, 0.95));
-  color: #dbeafe;
+    linear-gradient(180deg, rgba(34, 36, 46, 0.98), rgba(24, 26, 33, 0.95));
+  color: #cffafe;
   font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -545,33 +552,33 @@ body.dashboard-home .mini-button {
   border: 1px solid rgba(255, 255, 255, 0.08);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 44%),
-    linear-gradient(180deg, rgba(216, 255, 77, 0.04), transparent 70%),
-    rgba(7, 9, 7, 0.96);
+    linear-gradient(180deg, rgba(34, 211, 238, 0.04), transparent 70%),
+    rgba(24, 26, 33, 0.96);
   color: var(--text-main);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.03),
-    0 0 16px rgba(216, 255, 77, 0.03);
+    0 0 16px rgba(34, 211, 238, 0.03);
 }
 
 .token-form input:focus,
 .token-form select:focus {
   outline: none;
-  border-color: rgba(216, 255, 77, 0.28);
+  border-color: rgba(34, 211, 238, 0.28);
   box-shadow:
-    0 0 0 3px rgba(216, 255, 77, 0.08),
-    0 0 20px rgba(216, 255, 77, 0.08);
+    0 0 0 3px rgba(34, 211, 238, 0.08),
+    0 0 20px rgba(34, 211, 238, 0.08);
 }
 
 .token-form button {
   border: 1px solid var(--tab-accent-edge);
   font-weight: 800;
-  color: #101308;
+  color: #e0f2fe;
   background:
-    linear-gradient(180deg, #f6ffb0 0%, #d8ff4d 54%, #a7d72f 100%);
+    linear-gradient(180deg, #67e8f9 0%, #22d3ee 54%, #0891b2 100%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
     0 12px 24px rgba(0, 0, 0, 0.34),
-    0 0 18px rgba(216, 255, 77, 0.16);
+    0 0 18px rgba(34, 211, 238, 0.16);
   cursor: pointer;
   transition:
     transform 150ms ease,
@@ -929,7 +936,7 @@ body.dashboard-home .mini-button {
 }
 
 .trade-idea-card .stack-label {
-  color: #dfff79;
+  color: #67e8f9;
 }
 
 .trade-actions {
@@ -942,7 +949,7 @@ body.dashboard-home .mini-button {
   display: block;
   margin-top: 6px;
   font-size: 0.74rem;
-  color: #a9b39d;
+  color: #93a6ba;
 }
 
 .trade-refresh-button {
@@ -951,15 +958,15 @@ body.dashboard-home .mini-button {
   border-radius: 999px;
   border: 1px solid var(--tab-accent-edge);
   background:
-    linear-gradient(180deg, #f6ffb0 0%, #d8ff4d 54%, #a7d72f 100%);
-  color: #13170a;
-  box-shadow: 0 0 18px rgba(216, 255, 77, 0.14);
+    linear-gradient(180deg, #67e8f9 0%, #22d3ee 54%, #0891b2 100%);
+  color: #e0f2fe;
+  box-shadow: 0 0 18px rgba(34, 211, 238, 0.14);
   cursor: pointer;
 }
 
 .trade-refresh-button:hover {
   filter: brightness(1.03);
-  box-shadow: 0 0 22px rgba(216, 255, 77, 0.18);
+  box-shadow: 0 0 22px rgba(34, 211, 238, 0.18);
 }
 
 .trade-idea-grid {
@@ -2226,7 +2233,7 @@ body.signals-page .quality-chip {
 .checkbox-inline input {
   width: 16px;
   height: 16px;
-  accent-color: #d8ff4d;
+  accent-color: #22d3ee;
 }
 
 .stack-list {
@@ -2493,35 +2500,34 @@ body.signals-page .quality-chip {
 
 /* Shared shell redesign for Main / Auto Trade / Signals Arena */
 body.shell-page:not(.tradez-page) {
-  --page-bg: #0b1426;
-  --page-bg-soft: #111c30;
-  --panel-bg: rgba(17, 28, 48, 0.9);
-  --panel-bg-strong: rgba(13, 23, 40, 0.97);
-  --panel-edge: rgba(30, 41, 59, 0.92);
-  --panel-edge-soft: rgba(71, 85, 105, 0.44);
-  --text-main: #cbd5e1;
-  --text-soft: #94a3b8;
-  --text-dim: #64748b;
+  --page-bg: #17181d;
+  --page-bg-soft: #1d1f26;
+  --panel-bg: rgba(31, 33, 43, 0.92);
+  --panel-bg-strong: rgba(26, 28, 36, 0.98);
+  --panel-edge: rgba(51, 65, 85, 0.82);
+  --panel-edge-soft: rgba(100, 116, 139, 0.32);
+  --text-main: #e5e7eb;
+  --text-soft: #9ca3af;
+  --text-dim: #6b7280;
   background:
-    radial-gradient(circle at 10% 12%, rgba(59, 130, 246, 0.12), transparent 20%),
-    radial-gradient(circle at 92% 18%, rgba(16, 185, 129, 0.06), transparent 18%),
-    radial-gradient(circle at 52% 100%, rgba(14, 165, 233, 0.08), transparent 28%),
-    linear-gradient(180deg, #08101f 0%, #0b1426 38%, #091222 100%);
+    radial-gradient(circle at 15% -4%, rgba(34, 211, 238, 0.08), transparent 22%),
+    radial-gradient(circle at 84% 12%, rgba(148, 163, 184, 0.08), transparent 20%),
+    linear-gradient(180deg, #18191f 0%, #17181d 100%);
 }
 
 body.shell-page:not(.tradez-page)::before {
   background:
-    linear-gradient(180deg, rgba(148, 163, 184, 0.04), transparent 22%),
-    radial-gradient(circle at 82% 10%, rgba(16, 185, 129, 0.08), transparent 22%);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 18%),
+    radial-gradient(circle at 82% 10%, rgba(34, 211, 238, 0.05), transparent 22%);
   opacity: 0.9;
 }
 
 body.shell-page:not(.tradez-page)::after {
   background:
-    linear-gradient(rgba(148, 163, 184, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148, 163, 184, 0.03) 1px, transparent 1px);
+    linear-gradient(rgba(148, 163, 184, 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.018) 1px, transparent 1px);
   background-size: 100% 54px, 54px 100%;
-  opacity: 0.06;
+  opacity: 0.04;
 }
 
 body.shell-page:not(.tradez-page) .page-shell.shell-layout {
@@ -2546,15 +2552,15 @@ body.shell-page:not(.tradez-page) .shell-sidebar {
   border-radius: 28px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 24%),
-    linear-gradient(180deg, rgba(17, 28, 48, 0.98), rgba(9, 18, 34, 0.96));
+    linear-gradient(180deg, rgba(34, 36, 46, 0.98), rgba(24, 26, 33, 0.97));
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.04),
-    0 22px 50px rgba(1, 8, 20, 0.45);
+    0 22px 50px rgba(6, 8, 14, 0.42);
 }
 
 body.shell-page:not(.tradez-page) .brand-block-sidebar {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   width: 100%;
   gap: 14px;
 }
@@ -2563,19 +2569,19 @@ body.shell-page:not(.tradez-page) .brand-mark {
   width: 72px;
   height: 72px;
   border-radius: 18px;
-  border-color: rgba(16, 185, 129, 0.18);
+  border-color: rgba(34, 211, 238, 0.18);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 26%),
-    radial-gradient(circle at 50% 18%, rgba(16, 185, 129, 0.14), transparent 58%),
-    rgba(17, 28, 48, 0.94);
+    radial-gradient(circle at 50% 18%, rgba(34, 211, 238, 0.14), transparent 58%),
+    rgba(26, 28, 36, 0.94);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.06),
-    0 16px 30px rgba(2, 8, 23, 0.42),
-    0 0 0 1px rgba(16, 185, 129, 0.06);
+    0 16px 30px rgba(4, 7, 14, 0.38),
+    0 0 0 1px rgba(34, 211, 238, 0.06);
 }
 
 body.shell-page:not(.tradez-page) .brand-mark img {
-  filter: drop-shadow(0 0 14px rgba(16, 185, 129, 0.18));
+  filter: drop-shadow(0 0 14px rgba(34, 211, 238, 0.18));
 }
 
 body.shell-page:not(.tradez-page) .brand-copy {
@@ -2585,20 +2591,20 @@ body.shell-page:not(.tradez-page) .brand-copy {
 }
 
 body.shell-page:not(.tradez-page) .brand-copy strong {
-  font-size: 1.82rem;
+  font-size: 2.18rem;
   line-height: 0.98;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.01em;
   white-space: nowrap;
-  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 40%, #a3e635 100%);
+  background: linear-gradient(180deg, #f8fafc 0%, #dbeafe 42%, #67e8f9 100%);
   -webkit-background-clip: text;
   background-clip: text;
   text-shadow: none;
 }
 
 body.shell-page:not(.tradez-page) .brand-copy small {
-  color: rgba(148, 163, 184, 0.82);
-  letter-spacing: 0.18em;
-  font-size: 0.78rem;
+  color: rgba(103, 232, 249, 0.86);
+  letter-spacing: 0.01em;
+  font-size: 1.08rem;
 }
 
 body.shell-page:not(.tradez-page) .shell-sidebar-nav {
@@ -2630,22 +2636,22 @@ body.shell-page:not(.tradez-page) .page-tab {
 
 body.shell-page:not(.tradez-page) .page-tab:hover {
   color: #e2e8f0;
-  border-color: rgba(16, 185, 129, 0.18);
+  border-color: rgba(34, 211, 238, 0.18);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 34%),
-    rgba(14, 22, 38, 0.9);
+    rgba(29, 32, 41, 0.94);
 }
 
 body.shell-page:not(.tradez-page) .page-tab.is-current {
   color: #f8fafc;
-  border-color: rgba(16, 185, 129, 0.32);
+  border-color: rgba(34, 211, 238, 0.32);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 36%),
-    linear-gradient(90deg, rgba(16, 185, 129, 0.16), rgba(17, 28, 48, 0.96));
+    linear-gradient(90deg, rgba(34, 211, 238, 0.18), rgba(36, 40, 51, 0.96));
   box-shadow:
-    inset 0 0 0 1px rgba(16, 185, 129, 0.08),
-    0 8px 20px rgba(2, 8, 23, 0.24),
-    -2px 0 0 rgba(16, 185, 129, 0.92);
+    inset 0 0 0 1px rgba(34, 211, 238, 0.08),
+    0 8px 20px rgba(4, 8, 14, 0.22),
+    -2px 0 0 rgba(34, 211, 238, 0.92);
 }
 
 body.shell-page:not(.tradez-page) .shell-sidebar-foot {
@@ -2659,12 +2665,12 @@ body.shell-page:not(.tradez-page) .app-pill {
   justify-content: center;
   min-height: 38px;
   border-radius: 14px;
-  border-color: rgba(16, 185, 129, 0.18);
+  border-color: rgba(34, 211, 238, 0.18);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 36%),
-    rgba(14, 22, 38, 0.96);
-  color: #dcfce7;
-  box-shadow: 0 12px 24px rgba(2, 8, 23, 0.22);
+    rgba(29, 32, 41, 0.96);
+  color: #cffafe;
+  box-shadow: 0 12px 24px rgba(4, 8, 14, 0.2);
 }
 
 body.shell-page:not(.tradez-page) .shell-sidebar-card {
@@ -2675,7 +2681,7 @@ body.shell-page:not(.tradez-page) .shell-sidebar-card {
   border-radius: 18px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 30%),
-    rgba(14, 22, 38, 0.94);
+    rgba(29, 32, 41, 0.94);
   color: var(--text-soft);
 }
 
@@ -2712,21 +2718,21 @@ body.shell-page:not(.tradez-page) .subpanel {
   border-color: rgba(30, 41, 59, 0.95);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 24%),
-    linear-gradient(180deg, rgba(17, 28, 48, 0.98), rgba(13, 23, 40, 0.96));
+    linear-gradient(180deg, rgba(34, 36, 46, 0.98), rgba(24, 26, 33, 0.96));
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.035),
-    0 20px 48px rgba(2, 8, 23, 0.46);
+    0 20px 48px rgba(4, 8, 14, 0.42);
 }
 
 body.shell-page:not(.tradez-page) .panel::before,
 body.shell-page:not(.tradez-page) .metric-strip::before {
-  background: radial-gradient(circle, rgba(16, 185, 129, 0.08), transparent 72%);
-  opacity: 0.3;
+  background: radial-gradient(circle, rgba(34, 211, 238, 0.06), transparent 72%);
+  opacity: 0.18;
 }
 
 body.shell-page:not(.tradez-page) .panel::after,
 body.shell-page:not(.tradez-page) .metric-strip::after {
-  background: radial-gradient(circle, rgba(16, 185, 129, 0.06), transparent 74%);
+  background: radial-gradient(circle, rgba(34, 211, 238, 0.04), transparent 74%);
 }
 
 body.shell-page:not(.tradez-page) .headline-chip,
@@ -2744,15 +2750,15 @@ body.shell-page:not(.tradez-page) .stack-card {
   border-color: rgba(30, 41, 59, 0.95);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 30%),
-    rgba(14, 22, 38, 0.92);
+    rgba(29, 32, 41, 0.92);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.02),
-    0 14px 32px rgba(2, 8, 23, 0.18);
+    0 14px 32px rgba(4, 8, 14, 0.18);
 }
 
 body.shell-page:not(.tradez-page) .panel-label,
 body.shell-page:not(.tradez-page) .eyebrow {
-  color: #a3e635;
+  color: #67e8f9;
 }
 
 body.shell-page:not(.tradez-page) .hero-copy h1,
@@ -2774,61 +2780,61 @@ body.shell-page:not(.tradez-page) .token-form select {
   border-color: rgba(30, 41, 59, 0.95);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 30%),
-    rgba(13, 23, 40, 0.98);
+    rgba(24, 26, 33, 0.98);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.03),
-    0 8px 20px rgba(2, 8, 23, 0.16);
+    0 8px 20px rgba(4, 8, 14, 0.14);
 }
 
 body.shell-page:not(.tradez-page) .token-form input:focus,
 body.shell-page:not(.tradez-page) .token-form select:focus {
-  border-color: rgba(16, 185, 129, 0.34);
+  border-color: rgba(34, 211, 238, 0.34);
   box-shadow:
-    0 0 0 3px rgba(16, 185, 129, 0.12),
-    0 0 0 1px rgba(16, 185, 129, 0.08);
+    0 0 0 3px rgba(34, 211, 238, 0.12),
+    0 0 0 1px rgba(34, 211, 238, 0.08);
 }
 
 body.shell-page:not(.tradez-page) .token-form button,
 body.shell-page:not(.tradez-page) .mini-button {
-  border-color: rgba(16, 185, 129, 0.26);
+  border-color: rgba(34, 211, 238, 0.24);
   color: #f8fafc;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 34%),
-    linear-gradient(180deg, rgba(16, 185, 129, 0.14), rgba(14, 22, 38, 0.96));
+    linear-gradient(180deg, rgba(34, 211, 238, 0.14), rgba(29, 32, 41, 0.96));
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.06),
-    0 12px 24px rgba(2, 8, 23, 0.22);
+    0 12px 24px rgba(4, 8, 14, 0.18);
 }
 
 body.shell-page:not(.tradez-page) .token-form button:hover,
 body.shell-page:not(.tradez-page) .mini-button:hover {
-  border-color: rgba(16, 185, 129, 0.28);
+  border-color: rgba(34, 211, 238, 0.28);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 16px 28px rgba(2, 8, 23, 0.28),
-    0 0 0 1px rgba(16, 185, 129, 0.08);
+    0 16px 28px rgba(4, 8, 14, 0.22),
+    0 0 0 1px rgba(34, 211, 238, 0.08);
   filter: none;
 }
 
 body.shell-page:not(.tradez-page) .feed-tab.is-active,
 body.shell-page:not(.tradez-page) .mini-button.is-active {
-  border-color: rgba(16, 185, 129, 0.32);
+  border-color: rgba(34, 211, 238, 0.32);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 30%),
-    linear-gradient(180deg, rgba(16, 185, 129, 0.18), rgba(14, 22, 38, 0.98));
+    linear-gradient(180deg, rgba(34, 211, 238, 0.18), rgba(29, 32, 41, 0.98));
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.07),
-    0 14px 28px rgba(2, 8, 23, 0.26),
-    0 0 24px rgba(16, 185, 129, 0.08);
+    0 14px 28px rgba(4, 8, 14, 0.2),
+    0 0 24px rgba(34, 211, 238, 0.08);
 }
 
 body.shell-page:not(.tradez-page) .status-banner {
   margin-bottom: 0;
   border-color: rgba(30, 41, 59, 0.95);
   background:
-    linear-gradient(90deg, rgba(16, 185, 129, 0.12), transparent 40%),
+    linear-gradient(90deg, rgba(34, 211, 238, 0.12), transparent 40%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 42%),
-    rgba(13, 23, 40, 0.94);
+    rgba(24, 26, 33, 0.94);
   color: #cbd5e1;
 }
 
@@ -2837,7 +2843,7 @@ body.shell-page:not(.tradez-page) .status-banner.up {
   border-color: rgba(16, 185, 129, 0.3);
   background:
     linear-gradient(90deg, rgba(16, 185, 129, 0.14), transparent 46%),
-    rgba(13, 23, 40, 0.94);
+    rgba(24, 26, 33, 0.94);
 }
 
 body.shell-page:not(.tradez-page) .status-banner.down {
@@ -2845,7 +2851,7 @@ body.shell-page:not(.tradez-page) .status-banner.down {
   border-color: rgba(239, 68, 68, 0.26);
   background:
     linear-gradient(90deg, rgba(239, 68, 68, 0.14), transparent 46%),
-    rgba(13, 23, 40, 0.94);
+    rgba(24, 26, 33, 0.94);
 }
 
 body.shell-page:not(.tradez-page) .shell-metric-strip {
@@ -2872,13 +2878,13 @@ body.shell-page:not(.tradez-page) .chart-shell {
   padding: 12px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 22%),
-    rgba(9, 17, 32, 0.94);
+    rgba(20, 22, 30, 0.94);
   border: 1px solid rgba(30, 41, 59, 0.9);
 }
 
 body.shell-page:not(.tradez-page) .chart-frame {
   border-radius: 20px;
-  background: #081120;
+  background: #15171e;
 }
 
 body.shell-page:not(.tradez-page) .shell-control-panel {
@@ -3012,22 +3018,22 @@ body.arena-shell-page .conviction-columns {
 
 /* EMA Signals UI-only redesign */
 body.tradez-page {
-  --page-bg: #0b1426;
-  --page-bg-soft: #111c30;
-  --panel-bg: rgba(17, 28, 48, 0.9);
-  --panel-bg-strong: rgba(13, 23, 40, 0.97);
-  --panel-edge: rgba(30, 41, 59, 0.92);
-  --panel-edge-soft: rgba(71, 85, 105, 0.44);
-  --text-main: #cbd5e1;
-  --text-soft: #94a3b8;
-  --text-dim: #64748b;
-  --orange: #e2e8f0;
-  --orange-soft: rgba(16, 185, 129, 0.08);
-  --orange-glow: rgba(16, 185, 129, 0.12);
-  --tab-accent: #10b981;
-  --tab-accent-soft: rgba(16, 185, 129, 0.14);
-  --tab-accent-edge: rgba(16, 185, 129, 0.34);
-  --tab-accent-glow: rgba(16, 185, 129, 0.18);
+  --page-bg: #17181d;
+  --page-bg-soft: #1d1f26;
+  --panel-bg: rgba(31, 33, 43, 0.92);
+  --panel-bg-strong: rgba(26, 28, 36, 0.98);
+  --panel-edge: rgba(51, 65, 85, 0.82);
+  --panel-edge-soft: rgba(100, 116, 139, 0.32);
+  --text-main: #e5e7eb;
+  --text-soft: #9ca3af;
+  --text-dim: #6b7280;
+  --orange: #e5e7eb;
+  --orange-soft: rgba(34, 211, 238, 0.08);
+  --orange-glow: rgba(34, 211, 238, 0.12);
+  --tab-accent: #22d3ee;
+  --tab-accent-soft: rgba(34, 211, 238, 0.14);
+  --tab-accent-edge: rgba(34, 211, 238, 0.34);
+  --tab-accent-glow: rgba(34, 211, 238, 0.18);
   --green: #10b981;
   --green-soft: rgba(16, 185, 129, 0.12);
   --green-edge: rgba(16, 185, 129, 0.3);
@@ -3035,25 +3041,24 @@ body.tradez-page {
   --red-soft: rgba(239, 68, 68, 0.12);
   --red-edge: rgba(239, 68, 68, 0.28);
   background:
-    radial-gradient(circle at 10% 12%, rgba(59, 130, 246, 0.12), transparent 20%),
-    radial-gradient(circle at 92% 18%, rgba(16, 185, 129, 0.06), transparent 18%),
-    radial-gradient(circle at 52% 100%, rgba(14, 165, 233, 0.08), transparent 28%),
-    linear-gradient(180deg, #08101f 0%, #0b1426 38%, #091222 100%);
+    radial-gradient(circle at 15% -4%, rgba(34, 211, 238, 0.08), transparent 22%),
+    radial-gradient(circle at 84% 12%, rgba(148, 163, 184, 0.08), transparent 20%),
+    linear-gradient(180deg, #18191f 0%, #17181d 100%);
 }
 
 body.tradez-page::before {
   background:
-    linear-gradient(180deg, rgba(148, 163, 184, 0.04), transparent 22%),
-    radial-gradient(circle at 82% 10%, rgba(16, 185, 129, 0.08), transparent 22%);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 18%),
+    radial-gradient(circle at 82% 10%, rgba(34, 211, 238, 0.05), transparent 22%);
   opacity: 0.9;
 }
 
 body.tradez-page::after {
   background:
-    linear-gradient(rgba(148, 163, 184, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148, 163, 184, 0.03) 1px, transparent 1px);
+    linear-gradient(rgba(148, 163, 184, 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.018) 1px, transparent 1px);
   background-size: 100% 54px, 54px 100%;
-  opacity: 0.06;
+  opacity: 0.04;
 }
 
 body.tradez-page .page-shell.tradez-layout {
@@ -3078,15 +3083,15 @@ body.tradez-page .tradez-sidebar {
   border-radius: 28px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 24%),
-    linear-gradient(180deg, rgba(17, 28, 48, 0.98), rgba(9, 18, 34, 0.96));
+    linear-gradient(180deg, rgba(34, 36, 46, 0.98), rgba(24, 26, 33, 0.97));
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.04),
-    0 22px 50px rgba(1, 8, 20, 0.45);
+    0 22px 50px rgba(6, 8, 14, 0.42);
 }
 
 body.tradez-page .brand-block-sidebar {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   width: 100%;
   gap: 14px;
 }
@@ -3095,19 +3100,19 @@ body.tradez-page .brand-mark {
   width: 72px;
   height: 72px;
   border-radius: 18px;
-  border-color: rgba(16, 185, 129, 0.18);
+  border-color: rgba(34, 211, 238, 0.18);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 26%),
-    radial-gradient(circle at 50% 18%, rgba(16, 185, 129, 0.14), transparent 58%),
-    rgba(17, 28, 48, 0.94);
+    radial-gradient(circle at 50% 18%, rgba(34, 211, 238, 0.14), transparent 58%),
+    rgba(26, 28, 36, 0.94);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.06),
-    0 16px 30px rgba(2, 8, 23, 0.42),
-    0 0 0 1px rgba(16, 185, 129, 0.06);
+    0 16px 30px rgba(4, 7, 14, 0.38),
+    0 0 0 1px rgba(34, 211, 238, 0.06);
 }
 
 body.tradez-page .brand-mark img {
-  filter: drop-shadow(0 0 14px rgba(16, 185, 129, 0.18));
+  filter: drop-shadow(0 0 14px rgba(34, 211, 238, 0.18));
 }
 
 body.tradez-page .brand-copy {
@@ -3117,20 +3122,20 @@ body.tradez-page .brand-copy {
 }
 
 body.tradez-page .brand-copy strong {
-  font-size: 1.86rem;
+  font-size: 2.22rem;
   line-height: 0.98;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.01em;
   white-space: nowrap;
-  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 40%, #a3e635 100%);
+  background: linear-gradient(180deg, #f8fafc 0%, #dbeafe 42%, #67e8f9 100%);
   -webkit-background-clip: text;
   background-clip: text;
   text-shadow: none;
 }
 
 body.tradez-page .brand-copy small {
-  color: rgba(148, 163, 184, 0.82);
-  letter-spacing: 0.18em;
-  font-size: 0.78rem;
+  color: rgba(103, 232, 249, 0.86);
+  letter-spacing: 0.01em;
+  font-size: 1.08rem;
 }
 
 body.tradez-page .tradez-sidebar-nav {
@@ -3162,22 +3167,22 @@ body.tradez-page .page-tab {
 
 body.tradez-page .page-tab:hover {
   color: #e2e8f0;
-  border-color: rgba(16, 185, 129, 0.18);
+  border-color: rgba(34, 211, 238, 0.18);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 34%),
-    rgba(14, 22, 38, 0.9);
+    rgba(29, 32, 41, 0.94);
 }
 
 body.tradez-page .page-tab.is-current {
   color: #f8fafc;
-  border-color: rgba(16, 185, 129, 0.32);
+  border-color: rgba(34, 211, 238, 0.32);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 36%),
-    linear-gradient(90deg, rgba(16, 185, 129, 0.16), rgba(17, 28, 48, 0.96));
+    linear-gradient(90deg, rgba(34, 211, 238, 0.18), rgba(36, 40, 51, 0.96));
   box-shadow:
-    inset 0 0 0 1px rgba(16, 185, 129, 0.08),
-    0 8px 20px rgba(2, 8, 23, 0.24),
-    -2px 0 0 rgba(16, 185, 129, 0.92);
+    inset 0 0 0 1px rgba(34, 211, 238, 0.08),
+    0 8px 20px rgba(4, 8, 14, 0.22),
+    -2px 0 0 rgba(34, 211, 238, 0.92);
   transform: none;
 }
 
@@ -3193,12 +3198,12 @@ body.tradez-page .tradez-mini-pill {
   justify-content: center;
   min-height: 38px;
   border-radius: 14px;
-  border-color: rgba(16, 185, 129, 0.18);
+  border-color: rgba(34, 211, 238, 0.18);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 36%),
-    rgba(14, 22, 38, 0.96);
-  color: #dcfce7;
-  box-shadow: 0 12px 24px rgba(2, 8, 23, 0.22);
+    rgba(29, 32, 41, 0.96);
+  color: #cffafe;
+  box-shadow: 0 12px 24px rgba(4, 8, 14, 0.2);
 }
 
 body.tradez-page .tradez-sidebar-card {
@@ -3209,7 +3214,7 @@ body.tradez-page .tradez-sidebar-card {
   border-radius: 18px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 30%),
-    rgba(14, 22, 38, 0.94);
+    rgba(29, 32, 41, 0.94);
   color: var(--text-soft);
 }
 
@@ -3266,21 +3271,21 @@ body.tradez-page .subpanel {
   border-color: rgba(30, 41, 59, 0.95);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 24%),
-    linear-gradient(180deg, rgba(17, 28, 48, 0.98), rgba(13, 23, 40, 0.96));
+    linear-gradient(180deg, rgba(34, 36, 46, 0.98), rgba(24, 26, 33, 0.96));
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.035),
-    0 20px 48px rgba(2, 8, 23, 0.46);
+    0 20px 48px rgba(4, 8, 14, 0.42);
 }
 
 body.tradez-page .panel::before,
 body.tradez-page .metric-strip::before {
-  background: radial-gradient(circle, rgba(16, 185, 129, 0.08), transparent 72%);
-  opacity: 0.3;
+  background: radial-gradient(circle, rgba(34, 211, 238, 0.06), transparent 72%);
+  opacity: 0.18;
 }
 
 body.tradez-page .panel::after,
 body.tradez-page .metric-strip::after {
-  background: radial-gradient(circle, rgba(16, 185, 129, 0.06), transparent 74%);
+  background: radial-gradient(circle, rgba(34, 211, 238, 0.04), transparent 74%);
 }
 
 body.tradez-page .headline-chip,
@@ -3298,15 +3303,15 @@ body.tradez-page .stack-card {
   border-color: rgba(30, 41, 59, 0.95);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 30%),
-    rgba(14, 22, 38, 0.92);
+    rgba(29, 32, 41, 0.92);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.02),
-    0 14px 32px rgba(2, 8, 23, 0.18);
+    0 14px 32px rgba(4, 8, 14, 0.18);
 }
 
 body.tradez-page .panel-label,
 body.tradez-page .eyebrow {
-  color: #a3e635;
+  color: #67e8f9;
 }
 
 body.tradez-page .hero-copy h1,
@@ -3337,62 +3342,62 @@ body.tradez-page .token-form select {
   border-color: rgba(30, 41, 59, 0.95);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 30%),
-    rgba(13, 23, 40, 0.98);
+    rgba(24, 26, 33, 0.98);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.03),
-    0 8px 20px rgba(2, 8, 23, 0.16);
+    0 8px 20px rgba(4, 8, 14, 0.14);
 }
 
 body.tradez-page .token-form input:focus,
 body.tradez-page .token-form select:focus {
-  border-color: rgba(16, 185, 129, 0.34);
+  border-color: rgba(34, 211, 238, 0.34);
   box-shadow:
-    0 0 0 3px rgba(16, 185, 129, 0.12),
-    0 0 0 1px rgba(16, 185, 129, 0.08);
+    0 0 0 3px rgba(34, 211, 238, 0.12),
+    0 0 0 1px rgba(34, 211, 238, 0.08);
 }
 
 body.tradez-page .token-form button,
 body.tradez-page .mini-button {
-  border-color: rgba(16, 185, 129, 0.26);
+  border-color: rgba(34, 211, 238, 0.24);
   color: #f8fafc;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 34%),
-    linear-gradient(180deg, rgba(16, 185, 129, 0.14), rgba(14, 22, 38, 0.96));
+    linear-gradient(180deg, rgba(34, 211, 238, 0.14), rgba(29, 32, 41, 0.96));
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.06),
-    0 12px 24px rgba(2, 8, 23, 0.22);
+    0 12px 24px rgba(4, 8, 14, 0.18);
 }
 
 body.tradez-page .token-form button:hover,
 body.tradez-page .mini-button:hover {
-  border-color: rgba(16, 185, 129, 0.28);
+  border-color: rgba(34, 211, 238, 0.28);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 16px 28px rgba(2, 8, 23, 0.28),
-    0 0 0 1px rgba(16, 185, 129, 0.08);
+    0 16px 28px rgba(4, 8, 14, 0.22),
+    0 0 0 1px rgba(34, 211, 238, 0.08);
   filter: none;
 }
 
 body.tradez-page .feed-tab.is-active,
 body.tradez-page .page-tab.is-current,
 body.tradez-page .mini-button.is-active {
-  border-color: rgba(16, 185, 129, 0.32);
+  border-color: rgba(34, 211, 238, 0.32);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 30%),
-    linear-gradient(180deg, rgba(16, 185, 129, 0.18), rgba(14, 22, 38, 0.98));
+    linear-gradient(180deg, rgba(34, 211, 238, 0.18), rgba(29, 32, 41, 0.98));
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.07),
-    0 14px 28px rgba(2, 8, 23, 0.26),
-    0 0 24px rgba(16, 185, 129, 0.08);
+    0 14px 28px rgba(4, 8, 14, 0.2),
+    0 0 24px rgba(34, 211, 238, 0.08);
 }
 
 body.tradez-page .status-banner {
   margin-bottom: 0;
   border-color: rgba(30, 41, 59, 0.95);
   background:
-    linear-gradient(90deg, rgba(16, 185, 129, 0.12), transparent 40%),
+    linear-gradient(90deg, rgba(34, 211, 238, 0.12), transparent 40%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 42%),
-    rgba(13, 23, 40, 0.94);
+    rgba(24, 26, 33, 0.94);
   color: #cbd5e1;
 }
 
@@ -3401,7 +3406,7 @@ body.tradez-page .status-banner.up {
   border-color: rgba(16, 185, 129, 0.3);
   background:
     linear-gradient(90deg, rgba(16, 185, 129, 0.14), transparent 46%),
-    rgba(13, 23, 40, 0.94);
+    rgba(24, 26, 33, 0.94);
 }
 
 body.tradez-page .status-banner.down {
@@ -3409,7 +3414,7 @@ body.tradez-page .status-banner.down {
   border-color: rgba(239, 68, 68, 0.26);
   background:
     linear-gradient(90deg, rgba(239, 68, 68, 0.14), transparent 46%),
-    rgba(13, 23, 40, 0.94);
+    rgba(24, 26, 33, 0.94);
 }
 
 body.tradez-page .tradez-metric-strip,
@@ -3454,14 +3459,14 @@ body.tradez-page .chart-shell {
   padding: 12px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 22%),
-    rgba(9, 17, 32, 0.94);
+    rgba(20, 22, 30, 0.94);
   border: 1px solid rgba(30, 41, 59, 0.9);
 }
 
 body.tradez-page .chart-frame {
   height: 560px;
   border-radius: 20px;
-  background: #081120;
+  background: #15171e;
 }
 
 body.tradez-page .chart-hud {
@@ -3506,7 +3511,7 @@ body.tradez-page .tradez-control-note {
   padding: 12px 14px;
   border-radius: 16px;
   border: 1px solid rgba(30, 41, 59, 0.92);
-  background: rgba(9, 17, 32, 0.78);
+  background: rgba(20, 22, 30, 0.78);
 }
 
 body.tradez-page .tradez-feed-panel {
@@ -3557,7 +3562,7 @@ body.tradez-page .monitor-table,
 body.tradez-page .table-card {
   border-radius: 20px;
   border: 1px solid rgba(30, 41, 59, 0.95);
-  background: rgba(9, 17, 32, 0.84);
+  background: rgba(20, 22, 30, 0.84);
   min-height: 100%;
 }
 

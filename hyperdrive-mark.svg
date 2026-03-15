@@ -1,51 +1,60 @@
 <svg width="96" height="96" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="bg" x1="14" y1="12" x2="82" y2="84" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#0B121A"/>
-      <stop offset="1" stop-color="#06080C"/>
+    <linearGradient id="arc" x1="15" y1="66" x2="80" y2="31" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#38BDF8"/>
+      <stop offset="1" stop-color="#67E8F9"/>
     </linearGradient>
-    <linearGradient id="lime" x1="17" y1="60" x2="77" y2="24" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#84CC16"/>
-      <stop offset="1" stop-color="#D9F99D"/>
+    <linearGradient id="arrow" x1="42" y1="74" x2="87" y2="24" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#22D3EE"/>
+      <stop offset="0.55" stop-color="#7DD3FC"/>
+      <stop offset="1" stop-color="#E0F2FE"/>
     </linearGradient>
-    <linearGradient id="green" x1="41" y1="67" x2="79" y2="44" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#10B981"/>
-      <stop offset="1" stop-color="#A3E635"/>
-    </linearGradient>
-    <filter id="glowLime" x="0" y="0" width="96" height="96" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
-      <feGaussianBlur stdDeviation="3" result="blur"/>
-      <feColorMatrix in="blur" type="matrix" values="1 0 0 0 0.51  0 1 0 0 0.8  0 0 1 0 0.09  0 0 0 1 0"/>
-    </filter>
-    <filter id="glowGreen" x="0" y="0" width="96" height="96" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
-      <feGaussianBlur stdDeviation="3" result="blur"/>
-      <feColorMatrix in="blur" type="matrix" values="1 0 0 0 0.06  0 1 0 0 0.72  0 0 1 0 0.51  0 0 0 1 0"/>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(52 44) rotate(48) scale(46 32)">
+      <stop stop-color="#67E8F9" stop-opacity="0.32"/>
+      <stop offset="1" stop-color="#67E8F9" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="softGlow" x="0" y="0" width="96" height="96" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="3.2" result="blur"/>
+      <feColorMatrix
+        in="blur"
+        type="matrix"
+        values="1 0 0 0 0.2  0 1 0 0 0.83  0 0 1 0 0.94  0 0 0 1 0"
+      />
     </filter>
   </defs>
 
-  <rect x="8" y="8" width="80" height="80" rx="24" fill="url(#bg)"/>
-  <rect x="8.75" y="8.75" width="78.5" height="78.5" rx="23.25" stroke="rgba(255,255,255,0.06)"/>
+  <circle cx="48" cy="48" r="47" fill="url(#glow)" />
 
-  <g opacity="0.55" filter="url(#glowLime)">
-    <path d="M18 59C30 32 48 24 74 23" stroke="#D9F99D" stroke-width="2.5" stroke-linecap="round"/>
-  </g>
-  <g opacity="0.55" filter="url(#glowGreen)">
-    <path d="M42 69C56 62 66 53 78 39" stroke="#34D399" stroke-width="2.5" stroke-linecap="round"/>
+  <g filter="url(#softGlow)" opacity="0.6">
+    <path
+      d="M14 62C25 42 40 31 64 28C72 27 78 28 84 29"
+      stroke="#67E8F9"
+      stroke-width="2.8"
+      stroke-linecap="round"
+    />
   </g>
 
-  <path d="M18 60C31 34 48 26 72 24L64 30C61 31 59 34 61 36C63 38 66 37 69 36L82 28L78 43C77 46 78 49 81 50C84 51 86 49 87 46L92 23L69 17C66 16 63 17 62 20C61 23 63 25 66 26L72 28C49 31 30 41 18 60Z" fill="url(#lime)"/>
-  <path d="M40 70C53 63 64 56 77 42L72 53C71 56 73 58 75 59C77 60 80 60 82 57L90 43L74 35C72 34 69 35 68 37C67 40 69 42 71 43L76 44C64 54 54 61 41 67L40 70Z" fill="url(#green)"/>
+  <path
+    d="M15 63C28 41 44 31 68 28L62 33C60 34 59 37 60.8 39C62.5 41 65.2 40.9 67.5 39.8L83.5 31.4L79.2 47.8C78.5 50.5 79.7 53 82.5 53.8C85.1 54.5 87.4 52.7 88.3 49.7L93 28L71.2 22.9C68.3 22.2 65.8 23.3 64.9 26C64 28.7 65.7 31 68.6 31.7L73.2 32.8C49.9 36.4 30.7 47 15 63Z"
+    fill="url(#arc)"
+  />
 
-  <g fill="#D9F99D">
-    <rect x="44" y="46" width="6" height="11" rx="1.4"/>
-    <rect x="53" y="40" width="6" height="14" rx="1.4"/>
-    <rect x="62" y="34" width="6" height="16" rx="1.4"/>
+  <path
+    d="M39.5 73.8C52 69.2 63.4 61.2 77.8 45.5L73.4 57.4C72.6 59.8 73.7 62 75.9 63.1C78 64.1 80.7 63.6 82.3 61.5L93 46.8L77.4 36.1C75.2 34.6 72.6 34.8 71.1 36.9C69.6 39 70.1 41.6 72.3 43.1L77.4 46.6C63.8 61 53.1 68.4 40 72.1L39.5 73.8Z"
+    fill="url(#arrow)"
+  />
+
+  <g fill="#DFF7FF">
+    <rect x="42.5" y="45" width="6.5" height="13" rx="1.5" />
+    <rect x="52" y="39.5" width="6.5" height="15.5" rx="1.5" />
+    <rect x="61.5" y="32.5" width="6.5" height="18" rx="1.5" />
   </g>
-  <g stroke="#D9F99D" stroke-linecap="round" opacity="0.9">
-    <path d="M47 42V46"/>
-    <path d="M47 57V61"/>
-    <path d="M56 36V40"/>
-    <path d="M56 54V58"/>
-    <path d="M65 29V34"/>
-    <path d="M65 50V55"/>
+  <g stroke="#DFF7FF" stroke-linecap="round" opacity="0.95">
+    <path d="M45.8 40.2V45" />
+    <path d="M45.8 58V62.2" />
+    <path d="M55.2 34.5V39.5" />
+    <path d="M55.2 55V60" />
+    <path d="M64.8 27V32.5" />
+    <path d="M64.8 50.5V55.5" />
   </g>
 </svg>
