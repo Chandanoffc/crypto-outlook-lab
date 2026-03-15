@@ -14,67 +14,79 @@
     <script src="./fallback-perps.js" defer></script>
     <script src="./arena.js" defer></script>
   </head>
-  <body class="arena-page">
-    <div class="page-shell">
-      <header class="app-header">
-        <div class="app-bar">
-          <a class="brand-block" href="./index.html">
-            <span class="brand-mark" aria-hidden="true">
-              <img src="./hyperdrive-mark.svg" alt="" />
-            </span>
-            <span class="brand-copy">
-              <strong>HYPERDRIVE</strong>
-              <small>Signals</small>
-            </span>
-          </a>
+  <body class="arena-page shell-page arena-shell-page">
+    <div class="page-shell shell-layout">
+      <aside class="shell-sidebar">
+        <a class="brand-block brand-block-sidebar" href="./index.html">
+          <span class="brand-mark" aria-hidden="true">
+            <img src="./hyperdrive-mark.svg" alt="" />
+          </span>
+          <span class="brand-copy">
+            <strong>HYPERDRIVE</strong>
+            <small>Signals</small>
+          </span>
+        </a>
 
-          <nav class="page-tabs" aria-label="Primary pages">
+        <div class="shell-sidebar-nav">
+          <p class="panel-label">Workspace</p>
+          <nav class="page-tabs shell-page-tabs" aria-label="Primary pages">
             <a class="page-tab" href="./index.html">Main</a>
             <a class="page-tab" href="./paper.html">Auto Trade</a>
             <a class="page-tab is-current" href="./arena.html">Signals Arena</a>
             <a class="page-tab" href="./tradez.html">EMA Signals</a>
           </nav>
-
-          <div class="app-pill">Signal Engine</div>
         </div>
 
-        <div class="hero-shell">
-          <div class="hero-copy">
-            <p class="eyebrow">Trading Arena</p>
-            <h1>Conviction and rotation board</h1>
-            <p class="subtitle">
-              Dedicated signal board for conviction pairs, quality scoring, and continuously scanned
-              hot perp rotations.
-            </p>
+        <div class="shell-sidebar-foot">
+          <div class="app-pill">Signal Engine</div>
+          <div class="shell-sidebar-card">
+            <span class="stack-label">Arena Desk</span>
+            <strong>Conviction Rotation</strong>
+            <small>
+              Multi-timeframe alignment, quality scoring, and perp rotations ranked in a tighter
+              institutional board.
+            </small>
+          </div>
+        </div>
+      </aside>
+
+      <div class="shell-main">
+        <header class="shell-top-shell">
+          <section class="panel hero-shell shell-hero-shell">
+            <div class="hero-copy">
+              <p class="eyebrow">Trading Arena</p>
+              <h1>Conviction and rotation board</h1>
+              <p class="subtitle">
+                Dedicated signal board for conviction pairs, quality scoring, and continuously
+                scanned hot perp rotations.
+              </p>
+            </div>
+
+            <form id="arena-form" class="token-form token-form-wide hero-form">
+              <label>
+                Perp Universe
+                <input id="arena-universe" type="text" value="All Binance USDT Perps" readonly />
+              </label>
+
+              <label>
+                Scan Cycle
+                <input id="arena-cycle" type="text" value="Every 5 minutes" readonly />
+              </label>
+
+              <label>
+                Min Quality
+                <input id="arena-quality-threshold" type="number" min="50" max="95" step="1" value="68" />
+              </label>
+
+              <button id="arena-refresh-submit" type="submit">Refresh Arena</button>
+            </form>
+          </section>
+
+          <div id="arena-status-banner" class="status-banner">
+            Initializing Trading Arena...
           </div>
 
-          <form id="arena-form" class="token-form token-form-wide hero-form">
-            <label>
-              Perp Universe
-              <input id="arena-universe" type="text" value="All Binance USDT Perps" readonly />
-            </label>
-
-            <label>
-              Scan Cycle
-              <input id="arena-cycle" type="text" value="Every 5 minutes" readonly />
-            </label>
-
-            <label>
-              Min Quality
-              <input id="arena-quality-threshold" type="number" min="50" max="95" step="1" value="68" />
-            </label>
-
-            <button id="arena-refresh-submit" type="submit">Refresh Arena</button>
-          </form>
-        </div>
-      </header>
-
-      <div id="arena-status-banner" class="status-banner">
-        Initializing Trading Arena...
-      </div>
-
-      <main class="arena-layout">
-        <section class="metric-strip">
+          <section class="metric-strip shell-metric-strip">
           <article class="metric-card">
             <span class="metric-label">Universe</span>
             <strong id="arena-metric-universe">-</strong>
@@ -105,8 +117,10 @@
             <strong id="arena-metric-last-scan">-</strong>
             <small id="arena-metric-last-scan-note">Auto refresh armed</small>
           </article>
-        </section>
+          </section>
+        </header>
 
+      <main class="arena-layout arena-grid-shell">
         <section class="panel">
           <div class="panel-head">
             <div>
@@ -183,6 +197,7 @@
           </div>
         </section>
       </main>
+      </div>
     </div>
   </body>
 </html>

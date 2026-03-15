@@ -2491,6 +2491,525 @@ body.signals-page .quality-chip {
   }
 }
 
+/* Shared shell redesign for Main / Auto Trade / Signals Arena */
+body.shell-page:not(.tradez-page) {
+  --page-bg: #0b1426;
+  --page-bg-soft: #111c30;
+  --panel-bg: rgba(17, 28, 48, 0.9);
+  --panel-bg-strong: rgba(13, 23, 40, 0.97);
+  --panel-edge: rgba(30, 41, 59, 0.92);
+  --panel-edge-soft: rgba(71, 85, 105, 0.44);
+  --text-main: #cbd5e1;
+  --text-soft: #94a3b8;
+  --text-dim: #64748b;
+  background:
+    radial-gradient(circle at 10% 12%, rgba(59, 130, 246, 0.12), transparent 20%),
+    radial-gradient(circle at 92% 18%, rgba(16, 185, 129, 0.06), transparent 18%),
+    radial-gradient(circle at 52% 100%, rgba(14, 165, 233, 0.08), transparent 28%),
+    linear-gradient(180deg, #08101f 0%, #0b1426 38%, #091222 100%);
+}
+
+body.shell-page:not(.tradez-page)::before {
+  background:
+    linear-gradient(180deg, rgba(148, 163, 184, 0.04), transparent 22%),
+    radial-gradient(circle at 82% 10%, rgba(16, 185, 129, 0.08), transparent 22%);
+  opacity: 0.9;
+}
+
+body.shell-page:not(.tradez-page)::after {
+  background:
+    linear-gradient(rgba(148, 163, 184, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.03) 1px, transparent 1px);
+  background-size: 100% 54px, 54px 100%;
+  opacity: 0.06;
+}
+
+body.shell-page:not(.tradez-page) .page-shell.shell-layout {
+  width: min(1600px, calc(100% - 32px));
+  padding: 20px 0 28px;
+  display: grid;
+  grid-template-columns: 278px minmax(0, 1fr);
+  gap: 20px;
+  min-height: 100vh;
+}
+
+body.shell-page:not(.tradez-page) .shell-sidebar {
+  position: sticky;
+  top: 18px;
+  align-self: start;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  gap: 18px;
+  min-height: calc(100vh - 36px);
+  padding: 18px 16px;
+  border: 1px solid var(--panel-edge);
+  border-radius: 28px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 24%),
+    linear-gradient(180deg, rgba(17, 28, 48, 0.98), rgba(9, 18, 34, 0.96));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 22px 50px rgba(1, 8, 20, 0.45);
+}
+
+body.shell-page:not(.tradez-page) .brand-block-sidebar {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 14px;
+}
+
+body.shell-page:not(.tradez-page) .brand-mark {
+  width: 72px;
+  height: 72px;
+  border-radius: 18px;
+  border-color: rgba(16, 185, 129, 0.18);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 26%),
+    radial-gradient(circle at 50% 18%, rgba(16, 185, 129, 0.14), transparent 58%),
+    rgba(17, 28, 48, 0.94);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 16px 30px rgba(2, 8, 23, 0.42),
+    0 0 0 1px rgba(16, 185, 129, 0.06);
+}
+
+body.shell-page:not(.tradez-page) .brand-mark img {
+  filter: drop-shadow(0 0 14px rgba(16, 185, 129, 0.18));
+}
+
+body.shell-page:not(.tradez-page) .brand-copy {
+  gap: 6px;
+  min-width: 0;
+  align-items: start;
+}
+
+body.shell-page:not(.tradez-page) .brand-copy strong {
+  font-size: 1.82rem;
+  line-height: 0.98;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 40%, #a3e635 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  text-shadow: none;
+}
+
+body.shell-page:not(.tradez-page) .brand-copy small {
+  color: rgba(148, 163, 184, 0.82);
+  letter-spacing: 0.18em;
+  font-size: 0.78rem;
+}
+
+body.shell-page:not(.tradez-page) .shell-sidebar-nav {
+  display: grid;
+  gap: 10px;
+}
+
+body.shell-page:not(.tradez-page) .shell-page-tabs {
+  display: grid;
+  justify-self: stretch;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+body.shell-page:not(.tradez-page) .page-tab {
+  width: 100%;
+  min-height: 46px;
+  justify-content: flex-start;
+  padding: 0 14px;
+  border-radius: 16px;
+  border-color: transparent;
+  color: #94a3b8;
+  background: transparent;
+}
+
+body.shell-page:not(.tradez-page) .page-tab:hover {
+  color: #e2e8f0;
+  border-color: rgba(16, 185, 129, 0.18);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 34%),
+    rgba(14, 22, 38, 0.9);
+}
+
+body.shell-page:not(.tradez-page) .page-tab.is-current {
+  color: #f8fafc;
+  border-color: rgba(16, 185, 129, 0.32);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 36%),
+    linear-gradient(90deg, rgba(16, 185, 129, 0.16), rgba(17, 28, 48, 0.96));
+  box-shadow:
+    inset 0 0 0 1px rgba(16, 185, 129, 0.08),
+    0 8px 20px rgba(2, 8, 23, 0.24),
+    -2px 0 0 rgba(16, 185, 129, 0.92);
+}
+
+body.shell-page:not(.tradez-page) .shell-sidebar-foot {
+  display: grid;
+  align-content: end;
+  gap: 12px;
+}
+
+body.shell-page:not(.tradez-page) .app-pill {
+  justify-self: stretch;
+  justify-content: center;
+  min-height: 38px;
+  border-radius: 14px;
+  border-color: rgba(16, 185, 129, 0.18);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 36%),
+    rgba(14, 22, 38, 0.96);
+  color: #dcfce7;
+  box-shadow: 0 12px 24px rgba(2, 8, 23, 0.22);
+}
+
+body.shell-page:not(.tradez-page) .shell-sidebar-card {
+  display: grid;
+  gap: 8px;
+  padding: 14px 12px;
+  border: 1px solid var(--panel-edge);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 30%),
+    rgba(14, 22, 38, 0.94);
+  color: var(--text-soft);
+}
+
+body.shell-page:not(.tradez-page) .shell-sidebar-card strong {
+  color: var(--text-main);
+  font-size: 0.88rem;
+}
+
+body.shell-page:not(.tradez-page) .shell-main {
+  min-width: 0;
+  display: grid;
+  gap: 20px;
+}
+
+body.shell-page:not(.tradez-page) .shell-top-shell {
+  display: grid;
+  gap: 20px;
+}
+
+body.shell-page:not(.tradez-page) .shell-hero-shell {
+  grid-template-columns: minmax(0, 1.2fr) minmax(420px, 0.88fr);
+  padding: 22px;
+  border-radius: 28px;
+}
+
+body.shell-page:not(.tradez-page) .hero-form {
+  align-self: stretch;
+  min-width: 0;
+}
+
+body.shell-page:not(.tradez-page) .panel,
+body.shell-page:not(.tradez-page) .metric-strip,
+body.shell-page:not(.tradez-page) .subpanel {
+  border-color: rgba(30, 41, 59, 0.95);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 24%),
+    linear-gradient(180deg, rgba(17, 28, 48, 0.98), rgba(13, 23, 40, 0.96));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.035),
+    0 20px 48px rgba(2, 8, 23, 0.46);
+}
+
+body.shell-page:not(.tradez-page) .panel::before,
+body.shell-page:not(.tradez-page) .metric-strip::before {
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.08), transparent 72%);
+  opacity: 0.3;
+}
+
+body.shell-page:not(.tradez-page) .panel::after,
+body.shell-page:not(.tradez-page) .metric-strip::after {
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.06), transparent 74%);
+}
+
+body.shell-page:not(.tradez-page) .headline-chip,
+body.shell-page:not(.tradez-page) .metric-card,
+body.shell-page:not(.tradez-page) .analysis-card,
+body.shell-page:not(.tradez-page) .setup-card,
+body.shell-page:not(.tradez-page) .news-item,
+body.shell-page:not(.tradez-page) .signal-item,
+body.shell-page:not(.tradez-page) .table-row,
+body.shell-page:not(.tradez-page) .chart-hud-item,
+body.shell-page:not(.tradez-page) .timeframe-inline,
+body.shell-page:not(.tradez-page) .trade-idea-card,
+body.shell-page:not(.tradez-page) .trade-idea-stat,
+body.shell-page:not(.tradez-page) .stack-card {
+  border-color: rgba(30, 41, 59, 0.95);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 30%),
+    rgba(14, 22, 38, 0.92);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.02),
+    0 14px 32px rgba(2, 8, 23, 0.18);
+}
+
+body.shell-page:not(.tradez-page) .panel-label,
+body.shell-page:not(.tradez-page) .eyebrow {
+  color: #a3e635;
+}
+
+body.shell-page:not(.tradez-page) .hero-copy h1,
+body.shell-page:not(.tradez-page) .panel-head h2,
+body.shell-page:not(.tradez-page) .panel h3 {
+  color: #f8fafc;
+}
+
+body.shell-page:not(.tradez-page) .subtitle,
+body.shell-page:not(.tradez-page) .subtitle-inline,
+body.shell-page:not(.tradez-page) .subsection-meta,
+body.shell-page:not(.tradez-page) .trade-copy,
+body.shell-page:not(.tradez-page) .outlook-copy {
+  color: var(--text-soft);
+}
+
+body.shell-page:not(.tradez-page) .token-form input,
+body.shell-page:not(.tradez-page) .token-form select {
+  border-color: rgba(30, 41, 59, 0.95);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 30%),
+    rgba(13, 23, 40, 0.98);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.03),
+    0 8px 20px rgba(2, 8, 23, 0.16);
+}
+
+body.shell-page:not(.tradez-page) .token-form input:focus,
+body.shell-page:not(.tradez-page) .token-form select:focus {
+  border-color: rgba(16, 185, 129, 0.34);
+  box-shadow:
+    0 0 0 3px rgba(16, 185, 129, 0.12),
+    0 0 0 1px rgba(16, 185, 129, 0.08);
+}
+
+body.shell-page:not(.tradez-page) .token-form button,
+body.shell-page:not(.tradez-page) .mini-button {
+  border-color: rgba(16, 185, 129, 0.26);
+  color: #f8fafc;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 34%),
+    linear-gradient(180deg, rgba(16, 185, 129, 0.14), rgba(14, 22, 38, 0.96));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 12px 24px rgba(2, 8, 23, 0.22);
+}
+
+body.shell-page:not(.tradez-page) .token-form button:hover,
+body.shell-page:not(.tradez-page) .mini-button:hover {
+  border-color: rgba(16, 185, 129, 0.28);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 16px 28px rgba(2, 8, 23, 0.28),
+    0 0 0 1px rgba(16, 185, 129, 0.08);
+  filter: none;
+}
+
+body.shell-page:not(.tradez-page) .feed-tab.is-active,
+body.shell-page:not(.tradez-page) .mini-button.is-active {
+  border-color: rgba(16, 185, 129, 0.32);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 30%),
+    linear-gradient(180deg, rgba(16, 185, 129, 0.18), rgba(14, 22, 38, 0.98));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 14px 28px rgba(2, 8, 23, 0.26),
+    0 0 24px rgba(16, 185, 129, 0.08);
+}
+
+body.shell-page:not(.tradez-page) .status-banner {
+  margin-bottom: 0;
+  border-color: rgba(30, 41, 59, 0.95);
+  background:
+    linear-gradient(90deg, rgba(16, 185, 129, 0.12), transparent 40%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 42%),
+    rgba(13, 23, 40, 0.94);
+  color: #cbd5e1;
+}
+
+body.shell-page:not(.tradez-page) .status-banner.up {
+  color: #34d399;
+  border-color: rgba(16, 185, 129, 0.3);
+  background:
+    linear-gradient(90deg, rgba(16, 185, 129, 0.14), transparent 46%),
+    rgba(13, 23, 40, 0.94);
+}
+
+body.shell-page:not(.tradez-page) .status-banner.down {
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.26);
+  background:
+    linear-gradient(90deg, rgba(239, 68, 68, 0.14), transparent 46%),
+    rgba(13, 23, 40, 0.94);
+}
+
+body.shell-page:not(.tradez-page) .shell-metric-strip {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 14px;
+  padding: 14px;
+  border-radius: 24px;
+}
+
+body.shell-page:not(.tradez-page) .metric-card {
+  min-height: 98px;
+  padding: 14px 15px;
+  border-radius: 18px;
+}
+
+body.shell-page:not(.tradez-page) .metric-card strong {
+  font-size: 1.08rem;
+  color: #f8fafc;
+}
+
+body.shell-page:not(.tradez-page) .chart-shell {
+  border-radius: 24px;
+  padding: 12px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 22%),
+    rgba(9, 17, 32, 0.94);
+  border: 1px solid rgba(30, 41, 59, 0.9);
+}
+
+body.shell-page:not(.tradez-page) .chart-frame {
+  border-radius: 20px;
+  background: #081120;
+}
+
+body.shell-page:not(.tradez-page) .shell-control-panel {
+  padding: 14px 18px;
+}
+
+body.shell-page:not(.tradez-page) .shell-control-panel .control-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+body.shell-page:not(.tradez-page) .shell-control-panel .subsection-meta {
+  flex: 1;
+  min-width: 220px;
+}
+
+body.main-shell-page .main-grid {
+  grid-template-columns: minmax(0, 1.55fr) minmax(350px, 0.9fr);
+  gap: 20px;
+  align-items: start;
+}
+
+body.main-shell-page .workspace-panel,
+body.auto-shell-page .workspace-panel {
+  grid-column: 1 / -1;
+}
+
+body.auto-shell-page .auto-grid {
+  grid-template-columns: minmax(0, 1.72fr) minmax(320px, 0.84fr);
+  gap: 20px;
+  align-items: start;
+}
+
+body.auto-shell-page .panel-engine-compact .analysis-grid {
+  grid-template-columns: 1fr;
+}
+
+body.arena-shell-page .arena-grid-shell {
+  display: grid;
+  gap: 20px;
+  align-items: start;
+}
+
+body.arena-shell-page .conviction-columns {
+  gap: 18px;
+}
+
+@media (max-width: 1400px) {
+  body.shell-page:not(.tradez-page) .page-shell.shell-layout {
+    grid-template-columns: 1fr;
+  }
+
+  body.shell-page:not(.tradez-page) .shell-sidebar {
+    position: static;
+    min-height: auto;
+    grid-template-columns: auto 1fr auto;
+    grid-template-rows: auto;
+    align-items: center;
+  }
+
+  body.shell-page:not(.tradez-page) .brand-block-sidebar {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+  }
+
+  body.shell-page:not(.tradez-page) .shell-page-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    padding: 0;
+  }
+
+  body.shell-page:not(.tradez-page) .page-tab {
+    width: auto;
+    justify-content: center;
+  }
+
+  body.shell-page:not(.tradez-page) .shell-sidebar-foot {
+    justify-items: end;
+    align-content: center;
+  }
+}
+
+@media (max-width: 1240px) {
+  body.shell-page:not(.tradez-page) .shell-hero-shell,
+  body.main-shell-page .main-grid,
+  body.auto-shell-page .auto-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 980px) {
+  body.shell-page:not(.tradez-page) .shell-metric-strip {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  body.shell-page:not(.tradez-page) .page-shell.shell-layout {
+    width: min(100% - 20px, 1600px);
+  }
+
+  body.shell-page:not(.tradez-page) .shell-sidebar {
+    grid-template-columns: 1fr;
+    justify-items: stretch;
+  }
+
+  body.shell-page:not(.tradez-page) .brand-block-sidebar {
+    justify-content: center;
+  }
+
+  body.shell-page:not(.tradez-page) .brand-copy {
+    align-items: center;
+  }
+
+  body.shell-page:not(.tradez-page) .shell-sidebar-foot {
+    justify-items: stretch;
+  }
+
+  body.shell-page:not(.tradez-page) .shell-metric-strip,
+  body.shell-page:not(.tradez-page) .shell-control-panel .control-row {
+    grid-template-columns: 1fr;
+  }
+
+  body.shell-page:not(.tradez-page) .shell-control-panel .control-row {
+    display: grid;
+  }
+}
+
 /* EMA Signals UI-only redesign */
 body.tradez-page {
   --page-bg: #0b1426;

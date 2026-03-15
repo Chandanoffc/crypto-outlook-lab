@@ -15,74 +15,121 @@
     <script src="./fallback-perps.js" defer></script>
     <script src="./app.js" defer></script>
   </head>
-  <body class="dashboard-home">
-    <div class="page-shell">
-      <header class="app-header">
-        <div class="app-bar">
-          <a class="brand-block" href="./index.html">
-            <span class="brand-mark" aria-hidden="true">
-              <img src="./hyperdrive-mark.svg" alt="" />
-            </span>
-            <span class="brand-copy">
-              <strong>HYPERDRIVE</strong>
-              <small>Signals</small>
-            </span>
-          </a>
+  <body class="dashboard-home shell-page main-shell-page">
+    <div class="page-shell shell-layout">
+      <aside class="shell-sidebar">
+        <a class="brand-block brand-block-sidebar" href="./index.html">
+          <span class="brand-mark" aria-hidden="true">
+            <img src="./hyperdrive-mark.svg" alt="" />
+          </span>
+          <span class="brand-copy">
+            <strong>HYPERDRIVE</strong>
+            <small>Signals</small>
+          </span>
+        </a>
 
-          <nav class="page-tabs" aria-label="Primary pages">
+        <div class="shell-sidebar-nav">
+          <p class="panel-label">Workspace</p>
+          <nav class="page-tabs shell-page-tabs" aria-label="Primary pages">
             <a class="page-tab is-current" href="./index.html">Main</a>
             <a class="page-tab" href="./paper.html">Auto Trade</a>
             <a class="page-tab" href="./arena.html">Signals Arena</a>
             <a class="page-tab" href="./tradez.html">EMA Signals</a>
           </nav>
-
-          <div class="app-pill">Live Perps</div>
         </div>
 
-        <div class="hero-shell">
-          <div class="hero-copy">
-            <p class="eyebrow">Main Dashboard</p>
-            <h1>Institutional perps workspace</h1>
-            <p class="subtitle">
-              Futures-first dashboard for structure, leverage, order flow,
-              liquidation pressure, and short-horizon setups.
-            </p>
+        <div class="shell-sidebar-foot">
+          <div class="app-pill">Live Perps</div>
+          <div class="shell-sidebar-card">
+            <span class="stack-label">Main Desk</span>
+            <strong>Institutional Workspace</strong>
+            <small>
+              Structure, flow, funding, catalysts, and execution context in one tighter trading
+              surface.
+            </small>
+          </div>
+        </div>
+      </aside>
+
+      <div class="shell-main">
+        <header class="shell-top-shell">
+          <section class="panel hero-shell shell-hero-shell">
+            <div class="hero-copy">
+              <p class="eyebrow">Main Dashboard</p>
+              <h1>Institutional perps workspace</h1>
+              <p class="subtitle">
+                Futures-first dashboard for structure, leverage, order flow, liquidation pressure,
+                and short-horizon setups.
+              </p>
+            </div>
+
+            <form id="token-form" class="token-form hero-form">
+              <label>
+                Token
+                <input
+                  id="token-input"
+                  name="token"
+                  type="text"
+                  placeholder="BTC"
+                  value="BTC"
+                  autocomplete="off"
+                  spellcheck="false"
+                />
+              </label>
+
+              <label>
+                Chart Interval
+                <select id="interval-select" name="interval">
+                  <option value="5m">5m</option>
+                  <option value="15m" selected>15m</option>
+                  <option value="1h">1h</option>
+                  <option value="4h">4h</option>
+                </select>
+              </label>
+
+              <button type="submit">Load Dashboard</button>
+            </form>
+          </section>
+
+          <div id="status-banner" class="status-banner">
+            Preparing futures dashboard...
           </div>
 
-          <form id="token-form" class="token-form hero-form">
-            <label>
-              Token
-              <input
-                id="token-input"
-                name="token"
-                type="text"
-                placeholder="BTC"
-                value="BTC"
-                autocomplete="off"
-                spellcheck="false"
-              />
-            </label>
+          <section class="metric-strip shell-metric-strip">
+            <article class="metric-card">
+              <span class="metric-label">Perp Volume</span>
+              <strong id="metric-volume">-</strong>
+              <small id="metric-volume-note">24H quote volume</small>
+            </article>
+            <article class="metric-card">
+              <span class="metric-label">Orderbook Imbalance</span>
+              <strong id="metric-imbalance">-</strong>
+              <small id="metric-imbalance-note">Bid vs ask depth</small>
+            </article>
+            <article class="metric-card">
+              <span class="metric-label">CVD</span>
+              <strong id="metric-cvd">-</strong>
+              <small id="metric-cvd-note">Rolling futures delta</small>
+            </article>
+            <article class="metric-card">
+              <span class="metric-label">Funding</span>
+              <strong id="metric-funding">-</strong>
+              <small id="metric-funding-note">Perpetual futures</small>
+            </article>
+            <article class="metric-card">
+              <span class="metric-label">Open Interest</span>
+              <strong id="metric-oi">-</strong>
+              <small id="metric-oi-note">1H delta</small>
+            </article>
+            <article class="metric-card">
+              <span class="metric-label">Liquidations</span>
+              <strong id="metric-liq">-</strong>
+              <small id="metric-liq-note">Live forced orders</small>
+            </article>
+          </section>
+        </header>
 
-            <label>
-              Chart Interval
-              <select id="interval-select" name="interval">
-                <option value="5m">5m</option>
-                <option value="15m" selected>15m</option>
-                <option value="1h">1h</option>
-                <option value="4h">4h</option>
-              </select>
-            </label>
-
-            <button type="submit">Load Dashboard</button>
-          </form>
-        </div>
-      </header>
-
-      <div id="status-banner" class="status-banner">
-        Preparing futures dashboard...
-      </div>
-
-      <main class="dashboard-grid">
+        <main class="dashboard-grid main-grid">
         <section class="panel panel-hero">
           <div class="panel-head">
             <div>
@@ -237,39 +284,6 @@
             advice.
           </div>
         </aside>
-
-        <section class="metric-strip">
-          <article class="metric-card">
-            <span class="metric-label">Perp Volume</span>
-            <strong id="metric-volume">-</strong>
-            <small id="metric-volume-note">24H quote volume</small>
-          </article>
-          <article class="metric-card">
-            <span class="metric-label">Orderbook Imbalance</span>
-            <strong id="metric-imbalance">-</strong>
-            <small id="metric-imbalance-note">Bid vs ask depth</small>
-          </article>
-          <article class="metric-card">
-            <span class="metric-label">CVD</span>
-            <strong id="metric-cvd">-</strong>
-            <small id="metric-cvd-note">Rolling futures delta</small>
-          </article>
-          <article class="metric-card">
-            <span class="metric-label">Funding</span>
-            <strong id="metric-funding">-</strong>
-            <small id="metric-funding-note">Perpetual futures</small>
-          </article>
-          <article class="metric-card">
-            <span class="metric-label">Open Interest</span>
-            <strong id="metric-oi">-</strong>
-            <small id="metric-oi-note">1H delta</small>
-          </article>
-          <article class="metric-card">
-            <span class="metric-label">Liquidations</span>
-            <strong id="metric-liq">-</strong>
-            <small id="metric-liq-note">Live forced orders</small>
-          </article>
-        </section>
 
         <section class="panel workspace-panel">
           <div class="panel-head">
@@ -553,7 +567,8 @@
             </div>
           </div>
         </section>
-      </main>
+        </main>
+      </div>
     </div>
   </body>
 </html>

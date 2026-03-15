@@ -14,84 +14,98 @@
     <script src="./fallback-perps.js" defer></script>
     <script src="./paper.js" defer></script>
   </head>
-  <body class="paper-trader-page">
-    <div class="page-shell">
-      <header class="app-header">
-        <div class="app-bar">
-          <a class="brand-block" href="./index.html">
-            <span class="brand-mark" aria-hidden="true">
-              <img src="./hyperdrive-mark.svg" alt="" />
-            </span>
-            <span class="brand-copy">
-              <strong>HYPERDRIVE</strong>
-              <small>Signals</small>
-            </span>
-          </a>
+  <body class="paper-trader-page shell-page auto-shell-page">
+    <div class="page-shell shell-layout">
+      <aside class="shell-sidebar">
+        <a class="brand-block brand-block-sidebar" href="./index.html">
+          <span class="brand-mark" aria-hidden="true">
+            <img src="./hyperdrive-mark.svg" alt="" />
+          </span>
+          <span class="brand-copy">
+            <strong>HYPERDRIVE</strong>
+            <small>Signals</small>
+          </span>
+        </a>
 
-          <nav class="page-tabs" aria-label="Primary pages">
+        <div class="shell-sidebar-nav">
+          <p class="panel-label">Workspace</p>
+          <nav class="page-tabs shell-page-tabs" aria-label="Primary pages">
             <a class="page-tab" href="./index.html">Main</a>
             <a class="page-tab is-current" href="./paper.html">Auto Trade</a>
             <a class="page-tab" href="./arena.html">Signals Arena</a>
             <a class="page-tab" href="./tradez.html">EMA Signals</a>
           </nav>
-
-          <div class="app-pill">Auto Sim</div>
         </div>
 
-        <div class="hero-shell">
-          <div class="hero-copy">
-            <p class="eyebrow">Auto Paper Trader</p>
-            <h1>Automated paper execution desk</h1>
-            <p class="subtitle">
-              Automated paper-trading simulator. It scans the full Binance USDT
-              perp universe, can hold multiple high-quality paper positions,
-              starts at $200, uses the house trend-continuation model, and logs every TP or SL outcome.
-            </p>
+        <div class="shell-sidebar-foot">
+          <div class="app-pill">Auto Sim</div>
+          <div class="shell-sidebar-card">
+            <span class="stack-label">Auto Engine</span>
+            <strong>House Trend Book</strong>
+            <small>
+              Continuous universe scan, one in-house model, and a cleaner execution journal for
+              long-run optimization.
+            </small>
+          </div>
+        </div>
+      </aside>
+
+      <div class="shell-main">
+        <header class="shell-top-shell">
+          <section class="panel hero-shell shell-hero-shell">
+            <div class="hero-copy">
+              <p class="eyebrow">Auto Paper Trader</p>
+              <h1>Automated paper execution desk</h1>
+              <p class="subtitle">
+                Automated paper-trading simulator. It scans the full Binance USDT perp universe,
+                can hold multiple high-quality paper positions, starts at $200, uses the house
+                trend-continuation model, and logs every TP or SL outcome.
+              </p>
+            </div>
+
+            <form id="auto-form" class="token-form token-form-wide hero-form">
+              <label>
+                Perp Universe
+                <input id="universe-input" type="text" value="All Binance USDT Perps" readonly />
+              </label>
+
+              <label>
+                Signal Interval
+                <select id="scan-interval">
+                  <option value="5m">5m</option>
+                  <option value="15m" selected>15m</option>
+                  <option value="1h">1h</option>
+                  <option value="4h">4h</option>
+                </select>
+              </label>
+
+              <label>
+                Min Quality
+                <input id="quality-threshold" type="number" min="50" max="95" step="1" value="68" />
+              </label>
+
+              <label>
+                Universe Count
+                <input id="universe-count" type="text" value="Loading..." readonly />
+              </label>
+
+              <button id="scan-button" type="submit">Run Scan</button>
+            </form>
+          </section>
+
+          <div id="paper-status-banner" class="status-banner">
+            Initializing auto paper trader...
           </div>
 
-          <form id="auto-form" class="token-form token-form-wide hero-form">
-            <label>
-              Perp Universe
-              <input id="universe-input" type="text" value="All Binance USDT Perps" readonly />
-            </label>
+          <section class="panel shell-control-panel">
+            <div class="control-row">
+              <button id="auto-toggle-button" class="mini-button" type="button">Pause Auto</button>
+              <button id="reset-sim-button" class="mini-button" type="button">Reset to $200</button>
+              <span id="auto-run-note" class="subsection-meta">Auto-scans every 90 seconds.</span>
+            </div>
+          </section>
 
-            <label>
-              Signal Interval
-              <select id="scan-interval">
-                <option value="5m">5m</option>
-                <option value="15m" selected>15m</option>
-                <option value="1h">1h</option>
-                <option value="4h">4h</option>
-              </select>
-            </label>
-
-            <label>
-              Min Quality
-              <input id="quality-threshold" type="number" min="50" max="95" step="1" value="68" />
-            </label>
-
-            <label>
-              Universe Count
-              <input id="universe-count" type="text" value="Loading..." readonly />
-            </label>
-
-            <button id="scan-button" type="submit">Run Scan</button>
-          </form>
-        </div>
-      </header>
-
-      <div id="paper-status-banner" class="status-banner">
-        Initializing auto paper trader...
-      </div>
-
-      <div class="control-row">
-        <button id="auto-toggle-button" class="mini-button" type="button">Pause Auto</button>
-        <button id="reset-sim-button" class="mini-button" type="button">Reset to $200</button>
-        <span id="auto-run-note" class="subsection-meta">Auto-scans every 90 seconds.</span>
-      </div>
-
-      <main class="dashboard-grid">
-        <section class="metric-strip">
+          <section class="metric-strip shell-metric-strip">
           <article class="metric-card">
             <span class="metric-label">Starting Balance</span>
             <strong id="metric-start-balance">$200.00</strong>
@@ -122,8 +136,10 @@
             <strong id="metric-last-scan">-</strong>
             <small id="metric-last-scan-note">Auto engine idle</small>
           </article>
-        </section>
+          </section>
+        </header>
 
+        <main class="dashboard-grid auto-grid">
         <section class="panel panel-monitor-large">
           <div class="panel-head">
             <div>
@@ -191,7 +207,8 @@
             <div id="activity-table" class="table-card"></div>
           </div>
         </section>
-      </main>
+        </main>
+      </div>
     </div>
   </body>
 </html>
