@@ -879,7 +879,7 @@ function renderTradezComparison() {
       note: house.note,
       stats: [
         { label: "Opening Bal", value: formatCompactUsd(house.startingBalance, 2) },
-        { label: "Current Bal", value: formatCompactUsd(house.equity, 2), tone: toneFromNumber(house.equity - house.startingBalance, 0.01) },
+        { label: "Current Balance", value: formatCompactUsd(house.equity, 2), tone: toneFromNumber(house.equity - house.startingBalance, 0.01) },
         { label: "Realized PnL", value: formatCompactUsd(house.realizedPnl, 2), tone: toneFromNumber(house.realizedPnl, 0.01) },
         { label: "Unrealized PnL", value: formatCompactUsd(house.unrealizedUsd, 2), tone: toneFromNumber(house.unrealizedUsd, 0.01) },
         { label: "Trades Taken", value: `${house.tradesTaken}` },
@@ -899,7 +899,7 @@ function renderTradezComparison() {
       note: `${auto2.note}${auto2.beCount ? ` ${auto2.beCount} trade${auto2.beCount > 1 ? "s" : ""} moved to breakeven after TP1.` : ""}`,
       stats: [
         { label: "Opening Bal", value: formatCompactUsd(auto2.startingBalance, 2) },
-        { label: "Current Bal", value: formatCompactUsd(auto2.equity, 2), tone: toneFromNumber(auto2.equity - auto2.startingBalance, 0.01) },
+        { label: "Current Balance", value: formatCompactUsd(auto2.equity, 2), tone: toneFromNumber(auto2.equity - auto2.startingBalance, 0.01) },
         { label: "Realized PnL", value: formatCompactUsd(auto2.realizedPnl, 2), tone: toneFromNumber(auto2.realizedPnl, 0.01) },
         { label: "Unrealized PnL", value: formatCompactUsd(auto2.unrealizedUsd, 2), tone: toneFromNumber(auto2.unrealizedUsd, 0.01) },
         { label: "Trades Taken", value: `${auto2.tradesTaken}` },
