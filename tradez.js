@@ -517,13 +517,29 @@ function renderCompareCards(cards) {
             </div>
             <div class="quality-chip ${card.qualityClass || "quality-tier-neutral"}">${card.qualityText}</div>
           </div>
+          ${
+            card.leaderTags?.length
+              ? `
+                <div class="tradez-compare-leader-row">
+                  ${card.leaderTags
+                    .map(
+                      (tag) => `
+                        <span class="tradez-compare-leader-tag">${tag}</span>
+                      `
+                    )
+                    .join("")}
+                </div>
+              `
+              : ""
+          }
           <div class="tradez-compare-stats">
             ${card.stats
               .map(
                 (stat) => `
-                  <div class="tradez-compare-stat">
+                  <div class="tradez-compare-stat ${stat.isLeader ? "is-leader" : ""}">
                     <span>${stat.label}</span>
                     <strong class="${stat.tone || "neutral"}">${stat.value}</strong>
+                    ${stat.isLeader ? `<small class="tradez-compare-stat-tag">Leader</small>` : ""}
                   </div>
                 `
               )
@@ -818,6 +834,7 @@ function readHouseTradeMetrics() {
     realizedPnl: realizedBalance - startingBalance,
     unrealizedUsd,
     equity,
+    totalReturnPct: pctChange(startingBalance, equity),
     tradesTaken: openTrades.length + closedTrades.length,
     openTrades: openTrades.length,
     tpCount,
@@ -850,6 +867,7 @@ function readTradezPaperMetrics() {
     startingBalance: tradezPaper.startingBalance,
     realizedBalance: tradezPaper.balance,
     realizedPnl: tradezPaper.balance - tradezPaper.startingBalance,
+    totalReturnPct: pctChange(tradezPaper.startingBalance, equity),
     tradesTaken: tradezPaper.openTrades.length + tradezPaper.closedTrades.length,
     openTrades: tradezPaper.openTrades.length,
     tpCount,
@@ -869,6 +887,13 @@ function readTradezPaperMetrics() {
 function renderTradezComparison() {
   const house = readHouseTradeMetrics();
   const auto2 = readTradezPaperMetrics();
+  const houseLeadsReturn = house.totalReturnPct > auto2.totalReturnPct;
+  const auto2LeadsReturn = auto2.totalReturnPct > house.totalReturnPct;
+  const houseLeadsWin = house.winRate > auto2.winRate;
+  const auto2LeadsWin = auto2.winRate > house.winRate;
+  const houseLeadsQuality = house.averageQuality > auto2.averageQuality;
+  const auto2LeadsQuality = auto2.averageQuality > house.averageQuality;
+
   renderCompareCards([
     {
       label: "Benchmark",
@@ -876,18 +901,29 @@ function renderTradezComparison() {
       qualityText: `Q${Math.round(house.averageQuality || 0)}`,
       qualityClass: qualityTier(house.averageQuality || 0).className,
       tone: "neutral",
+      leaderTags: [
+        houseLeadsReturn ? "Leads Return" : "",
+        houseLeadsWin ? "Leads Win %" : "",
+        houseLeadsQuality ? "Leads Quality" : "",
+      ].filter(Boolean),
       note: house.note,
       stats: [
         { label: "Opening Bal", value: formatCompactUsd(house.startingBalance, 2) },
+        {
+          label: "Total Return",
+          value: formatPercent(house.totalReturnPct),
+          tone: toneFromNumber(house.totalReturnPct, 0.01),
+          isLeader: houseLeadsReturn,
+        },
         { label: "Current Balance", value: formatCompactUsd(house.equity, 2), tone: toneFromNumber(house.equity - house.startingBalance, 0.01) },
         { label: "Realized PnL", value: formatCompactUsd(house.realizedPnl, 2), tone: toneFromNumber(house.realizedPnl, 0.01) },
         { label: "Unrealized PnL", value: formatCompactUsd(house.unrealizedUsd, 2), tone: toneFromNumber(house.unrealizedUsd, 0.01) },
         { label: "Trades Taken", value: `${house.tradesTaken}` },
         { label: "TPs Hit", value: `${house.tpCount}`, tone: "up" },
         { label: "SLs Hit", value: `${house.slCount}`, tone: "down" },
-        { label: "Win %", value: `${house.winRate.toFixed(0)}%`, tone: toneFromNumber(house.winRate - 50, 2) },
+        { label: "Win %", value: `${house.winRate.toFixed(0)}%`, tone: toneFromNumber(house.winRate - 50, 2), isLeader: houseLeadsWin },
         { label: "Open", value: `${house.openTrades}` },
-        { label: "Avg Quality", value: `${Math.round(house.averageQuality || 0)}` },
+        { label: "Avg Quality", value: `${Math.round(house.averageQuality || 0)}`, isLeader: houseLeadsQuality },
       ],
     },
     {
@@ -896,18 +932,29 @@ function renderTradezComparison() {
       qualityText: `Q${Math.round(auto2.averageQuality || 0)}`,
       qualityClass: qualityTier(auto2.averageQuality || 0).className,
       tone: "neutral",
+      leaderTags: [
+        auto2LeadsReturn ? "Leads Return" : "",
+        auto2LeadsWin ? "Leads Win %" : "",
+        auto2LeadsQuality ? "Leads Quality" : "",
+      ].filter(Boolean),
       note: `${auto2.note}${auto2.beCount ? ` ${auto2.beCount} trade${auto2.beCount > 1 ? "s" : ""} moved to breakeven after TP1.` : ""}`,
       stats: [
         { label: "Opening Bal", value: formatCompactUsd(auto2.startingBalance, 2) },
+        {
+          label: "Total Return",
+          value: formatPercent(auto2.totalReturnPct),
+          tone: toneFromNumber(auto2.totalReturnPct, 0.01),
+          isLeader: auto2LeadsReturn,
+        },
         { label: "Current Balance", value: formatCompactUsd(auto2.equity, 2), tone: toneFromNumber(auto2.equity - auto2.startingBalance, 0.01) },
         { label: "Realized PnL", value: formatCompactUsd(auto2.realizedPnl, 2), tone: toneFromNumber(auto2.realizedPnl, 0.01) },
         { label: "Unrealized PnL", value: formatCompactUsd(auto2.unrealizedUsd, 2), tone: toneFromNumber(auto2.unrealizedUsd, 0.01) },
         { label: "Trades Taken", value: `${auto2.tradesTaken}` },
         { label: "TPs Hit", value: `${auto2.tpCount}`, tone: "up" },
         { label: "SLs Hit", value: `${auto2.slCount}`, tone: "down" },
-        { label: "Win %", value: `${auto2.winRate.toFixed(0)}%`, tone: toneFromNumber(auto2.winRate - 50, 2) },
+        { label: "Win %", value: `${auto2.winRate.toFixed(0)}%`, tone: toneFromNumber(auto2.winRate - 50, 2), isLeader: auto2LeadsWin },
         { label: "Open", value: `${auto2.openTrades}` },
-        { label: "Avg Quality", value: `${Math.round(auto2.averageQuality || 0)}` },
+        { label: "Avg Quality", value: `${Math.round(auto2.averageQuality || 0)}`, isLeader: auto2LeadsQuality },
       ],
     },
   ]);
