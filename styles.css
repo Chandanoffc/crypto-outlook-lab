@@ -170,14 +170,14 @@ select {
   position: sticky;
   top: 10px;
   z-index: 20;
-  border: 1px solid rgba(203, 255, 81, 0.18);
+  border: 1px solid rgba(16, 185, 129, 0.18);
   border-radius: 28px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 28%),
     linear-gradient(180deg, rgba(23, 27, 24, 0.98), rgba(8, 10, 10, 0.96));
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    inset 0 0 0 1px rgba(203, 255, 81, 0.04),
+    inset 0 0 0 1px rgba(16, 185, 129, 0.04),
     0 18px 42px rgba(0, 0, 0, 0.5),
     0 0 0 1px rgba(255, 255, 255, 0.015);
   backdrop-filter: blur(16px);
@@ -200,12 +200,12 @@ select {
   border: 1px solid rgba(255, 255, 255, 0.08);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 30%),
-    radial-gradient(circle at 50% 18%, rgba(216, 255, 77, 0.1), transparent 58%),
+    radial-gradient(circle at 50% 18%, rgba(16, 185, 129, 0.1), transparent 58%),
     rgba(12, 14, 15, 0.97);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.06),
-    inset 0 0 0 1px rgba(216, 255, 77, 0.05),
-    0 0 24px rgba(216, 255, 77, 0.08);
+    inset 0 0 0 1px rgba(16, 185, 129, 0.05),
+    0 0 24px rgba(16, 185, 129, 0.08);
 }
 
 .brand-mark img {
@@ -213,7 +213,7 @@ select {
   height: 100%;
   display: block;
   object-fit: contain;
-  filter: drop-shadow(0 0 18px rgba(216, 255, 77, 0.22));
+  filter: drop-shadow(0 0 18px rgba(16, 185, 129, 0.22));
 }
 
 .brand-copy {
@@ -229,10 +229,10 @@ select {
   letter-spacing: 0.065em;
   text-transform: uppercase;
   color: transparent;
-  background: linear-gradient(180deg, #f7ffd7 0%, #d8ff4d 60%, #8de46b 100%);
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 46%, #a3e635 100%);
   -webkit-background-clip: text;
   background-clip: text;
-  text-shadow: 0 0 16px rgba(216, 255, 77, 0.12);
+  text-shadow: 0 0 16px rgba(16, 185, 129, 0.12);
 }
 
 .brand-copy small {
@@ -241,7 +241,7 @@ select {
   font-weight: 600;
   letter-spacing: 0.28em;
   text-transform: uppercase;
-  color: rgba(216, 255, 77, 0.82);
+  color: rgba(148, 163, 184, 0.86);
 }
 
 .page-tabs {
@@ -250,7 +250,7 @@ select {
   align-items: center;
   gap: 10px;
   padding: 8px;
-  border: 1px solid rgba(203, 255, 81, 0.14);
+  border: 1px solid rgba(56, 189, 248, 0.14);
   border-radius: 24px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 42%),
@@ -285,7 +285,7 @@ select {
 .page-tab:hover {
   color: var(--text-main);
   transform: translateY(-1px);
-  border-color: rgba(216, 255, 77, 0.22);
+  border-color: rgba(56, 189, 248, 0.22);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(12, 14, 13, 0.94));
 }
 
@@ -293,13 +293,13 @@ select {
   border-color: var(--tab-accent-edge);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 38%),
-    linear-gradient(180deg, rgba(19, 24, 20, 0.98), rgba(10, 13, 12, 0.96));
+    linear-gradient(180deg, rgba(18, 30, 44, 0.98), rgba(10, 16, 28, 0.96));
   color: #f9ffeb;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    inset 0 0 0 1px rgba(216, 255, 77, 0.08),
+    inset 0 0 0 1px rgba(56, 189, 248, 0.08),
     0 14px 22px rgba(0, 0, 0, 0.34),
-    0 0 20px rgba(216, 255, 77, 0.08);
+    0 0 20px rgba(56, 189, 248, 0.08);
   transform: translateY(-2px);
 }
 
@@ -310,11 +310,11 @@ select {
   align-items: center;
   padding: 0 14px;
   border-radius: 16px;
-  border: 1px solid rgba(203, 255, 81, 0.14);
+  border: 1px solid rgba(56, 189, 248, 0.14);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 34%),
     linear-gradient(180deg, rgba(18, 22, 20, 0.98), rgba(10, 12, 12, 0.95));
-  color: #d3ddb9;
+  color: #dbeafe;
   font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -2525,7 +2525,7 @@ body.tradez-page {
 body.tradez-page::before {
   background:
     linear-gradient(180deg, rgba(148, 163, 184, 0.04), transparent 22%),
-    radial-gradient(circle at 82% 10%, rgba(56, 189, 248, 0.08), transparent 22%);
+    radial-gradient(circle at 82% 10%, rgba(16, 185, 129, 0.08), transparent 22%);
   opacity: 0.9;
 }
 
@@ -2541,7 +2541,7 @@ body.tradez-page .page-shell.tradez-layout {
   width: min(1600px, calc(100% - 32px));
   padding: 20px 0 28px;
   display: grid;
-  grid-template-columns: 112px minmax(0, 1fr);
+  grid-template-columns: 278px minmax(0, 1fr);
   gap: 20px;
   min-height: 100vh;
 }
@@ -2554,7 +2554,7 @@ body.tradez-page .tradez-sidebar {
   grid-template-rows: auto auto 1fr;
   gap: 18px;
   min-height: calc(100vh - 36px);
-  padding: 16px 14px;
+  padding: 18px 16px;
   border: 1px solid var(--panel-edge);
   border-radius: 28px;
   background:
@@ -2566,38 +2566,43 @@ body.tradez-page .tradez-sidebar {
 }
 
 body.tradez-page .brand-block-sidebar {
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 12px;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 14px;
 }
 
 body.tradez-page .brand-mark {
-  width: 64px;
-  height: 64px;
+  width: 72px;
+  height: 72px;
   border-radius: 18px;
-  border-color: rgba(56, 189, 248, 0.16);
+  border-color: rgba(16, 185, 129, 0.18);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 26%),
-    radial-gradient(circle at 50% 18%, rgba(16, 185, 129, 0.1), transparent 58%),
+    radial-gradient(circle at 50% 18%, rgba(16, 185, 129, 0.14), transparent 58%),
     rgba(17, 28, 48, 0.94);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.06),
     0 16px 30px rgba(2, 8, 23, 0.42),
-    0 0 0 1px rgba(16, 185, 129, 0.05);
+    0 0 0 1px rgba(16, 185, 129, 0.06);
 }
 
 body.tradez-page .brand-mark img {
-  filter: drop-shadow(0 0 14px rgba(16, 185, 129, 0.16));
+  filter: drop-shadow(0 0 14px rgba(16, 185, 129, 0.18));
 }
 
 body.tradez-page .brand-copy {
-  gap: 4px;
+  gap: 6px;
+  min-width: 0;
+  align-items: start;
 }
 
 body.tradez-page .brand-copy strong {
-  font-size: 1.28rem;
-  letter-spacing: 0.1em;
-  background: linear-gradient(180deg, #f8fafc 0%, #cbd5e1 56%, #10b981 100%);
+  font-size: 1.86rem;
+  line-height: 0.98;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 40%, #a3e635 100%);
   -webkit-background-clip: text;
   background-clip: text;
   text-shadow: none;
@@ -2605,7 +2610,8 @@ body.tradez-page .brand-copy strong {
 
 body.tradez-page .brand-copy small {
   color: rgba(148, 163, 184, 0.82);
-  letter-spacing: 0.22em;
+  letter-spacing: 0.18em;
+  font-size: 0.78rem;
 }
 
 body.tradez-page .tradez-sidebar-nav {
@@ -2637,7 +2643,7 @@ body.tradez-page .page-tab {
 
 body.tradez-page .page-tab:hover {
   color: #e2e8f0;
-  border-color: rgba(56, 189, 248, 0.18);
+  border-color: rgba(16, 185, 129, 0.18);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 34%),
     rgba(14, 22, 38, 0.9);
@@ -2645,14 +2651,14 @@ body.tradez-page .page-tab:hover {
 
 body.tradez-page .page-tab.is-current {
   color: #f8fafc;
-  border-color: rgba(16, 185, 129, 0.28);
+  border-color: rgba(16, 185, 129, 0.32);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 36%),
-    linear-gradient(90deg, rgba(16, 185, 129, 0.14), rgba(17, 28, 48, 0.96));
+    linear-gradient(90deg, rgba(16, 185, 129, 0.16), rgba(17, 28, 48, 0.96));
   box-shadow:
-    inset 0 0 0 1px rgba(16, 185, 129, 0.05),
+    inset 0 0 0 1px rgba(16, 185, 129, 0.08),
     0 8px 20px rgba(2, 8, 23, 0.24),
-    -2px 0 0 rgba(16, 185, 129, 0.9);
+    -2px 0 0 rgba(16, 185, 129, 0.92);
   transform: none;
 }
 
@@ -2668,11 +2674,11 @@ body.tradez-page .tradez-mini-pill {
   justify-content: center;
   min-height: 38px;
   border-radius: 14px;
-  border-color: rgba(56, 189, 248, 0.16);
+  border-color: rgba(16, 185, 129, 0.18);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 36%),
     rgba(14, 22, 38, 0.96);
-  color: #cbd5e1;
+  color: #dcfce7;
   box-shadow: 0 12px 24px rgba(2, 8, 23, 0.22);
 }
 
@@ -2717,7 +2723,7 @@ body.tradez-page .tradez-hero-form {
 
 body.tradez-page .tradez-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.62fr) minmax(360px, 0.92fr);
+  grid-template-columns: minmax(0, 1.48fr) minmax(500px, 0.98fr);
   gap: 20px;
   align-items: start;
 }
@@ -2729,11 +2735,10 @@ body.tradez-page .tradez-stage {
 }
 
 body.tradez-page .tradez-side-stack {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 20px;
+  display: block;
   min-width: 0;
   align-self: stretch;
+  height: 100%;
 }
 
 body.tradez-page .panel,
@@ -2750,7 +2755,7 @@ body.tradez-page .subpanel {
 
 body.tradez-page .panel::before,
 body.tradez-page .metric-strip::before {
-  background: radial-gradient(circle, rgba(56, 189, 248, 0.08), transparent 72%);
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.08), transparent 72%);
   opacity: 0.3;
 }
 
@@ -2782,7 +2787,7 @@ body.tradez-page .stack-card {
 
 body.tradez-page .panel-label,
 body.tradez-page .eyebrow {
-  color: #10b981;
+  color: #a3e635;
 }
 
 body.tradez-page .hero-copy h1,
@@ -2821,10 +2826,10 @@ body.tradez-page .token-form select {
 
 body.tradez-page .token-form input:focus,
 body.tradez-page .token-form select:focus {
-  border-color: rgba(56, 189, 248, 0.34);
+  border-color: rgba(16, 185, 129, 0.34);
   box-shadow:
-    0 0 0 3px rgba(56, 189, 248, 0.12),
-    0 0 0 1px rgba(56, 189, 248, 0.08);
+    0 0 0 3px rgba(16, 185, 129, 0.12),
+    0 0 0 1px rgba(16, 185, 129, 0.08);
 }
 
 body.tradez-page .token-form button,
@@ -2833,7 +2838,7 @@ body.tradez-page .mini-button {
   color: #f8fafc;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 34%),
-    linear-gradient(180deg, rgba(16, 185, 129, 0.18), rgba(14, 22, 38, 0.96));
+    linear-gradient(180deg, rgba(16, 185, 129, 0.14), rgba(14, 22, 38, 0.96));
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.06),
     0 12px 24px rgba(2, 8, 23, 0.22);
@@ -2841,21 +2846,21 @@ body.tradez-page .mini-button {
 
 body.tradez-page .token-form button:hover,
 body.tradez-page .mini-button:hover {
-  border-color: rgba(56, 189, 248, 0.28);
+  border-color: rgba(16, 185, 129, 0.28);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
     0 16px 28px rgba(2, 8, 23, 0.28),
-    0 0 0 1px rgba(56, 189, 248, 0.08);
+    0 0 0 1px rgba(16, 185, 129, 0.08);
   filter: none;
 }
 
 body.tradez-page .feed-tab.is-active,
 body.tradez-page .page-tab.is-current,
 body.tradez-page .mini-button.is-active {
-  border-color: rgba(16, 185, 129, 0.3);
+  border-color: rgba(16, 185, 129, 0.32);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 30%),
-    linear-gradient(180deg, rgba(16, 185, 129, 0.2), rgba(14, 22, 38, 0.98));
+    linear-gradient(180deg, rgba(16, 185, 129, 0.18), rgba(14, 22, 38, 0.98));
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.07),
     0 14px 28px rgba(2, 8, 23, 0.26),
@@ -2866,7 +2871,7 @@ body.tradez-page .status-banner {
   margin-bottom: 0;
   border-color: rgba(30, 41, 59, 0.95);
   background:
-    linear-gradient(90deg, rgba(56, 189, 248, 0.12), transparent 40%),
+    linear-gradient(90deg, rgba(16, 185, 129, 0.12), transparent 40%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 42%),
     rgba(13, 23, 40, 0.94);
   color: #cbd5e1;
@@ -2986,13 +2991,27 @@ body.tradez-page .tradez-control-note {
 }
 
 body.tradez-page .tradez-feed-panel {
-  min-height: 100%;
-  display: flex;
-  flex-direction: column;
+  min-height: 1180px;
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
 }
 
 body.tradez-page .tradez-feed-panel .panel-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(280px, 0.95fr);
+  align-items: start;
   gap: 16px;
+  margin-bottom: 14px;
+}
+
+body.tradez-page .tradez-feed-panel .panel-head > div:first-child {
+  min-width: 0;
+}
+
+body.tradez-page .tradez-feed-panel .panel-head h2 {
+  max-width: 16ch;
+  line-height: 1.12;
 }
 
 body.tradez-page .tradez-feed-panel .feed-tabs {
@@ -3010,7 +3029,9 @@ body.tradez-page .tradez-feed-panel #tradez-panel-signals,
 body.tradez-page .tradez-feed-panel #tradez-panel-alerts,
 body.tradez-page .tradez-feed-panel #tradez-panel-notes {
   min-height: 0;
-  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 6px;
 }
 
 body.tradez-page .monitor-table,
@@ -3019,6 +3040,57 @@ body.tradez-page .table-card {
   border: 1px solid rgba(30, 41, 59, 0.95);
   background: rgba(9, 17, 32, 0.84);
   min-height: 100%;
+}
+
+body.tradez-page .tradez-feed-board {
+  align-content: start;
+  gap: 14px;
+}
+
+body.tradez-page .tradez-symbol-button {
+  min-width: 0;
+  padding-inline: 12px;
+}
+
+body.tradez-page .tradez-feed-card {
+  min-height: 222px;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+body.tradez-page .tradez-feed-card-head {
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+body.tradez-page .tradez-feed-stamp-block {
+  gap: 6px;
+  justify-content: flex-start;
+  text-align: left;
+  font-size: 0.76rem;
+}
+
+body.tradez-page .tradez-feed-summary-row {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+body.tradez-page .tradez-feed-quality-center {
+  min-width: 0;
+}
+
+body.tradez-page .tradez-feed-plan-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+body.tradez-page .tradez-feed-meta-item strong,
+body.tradez-page .tradez-feed-plan-item strong {
+  font-size: 0.88rem;
+}
+
+body.tradez-page .tradez-feed-qualifiers {
+  font-size: 0.79rem;
+  color: #8fa3bf;
 }
 
 body.tradez-page .tradez-compare-panel,
@@ -3069,6 +3141,7 @@ body.tradez-page .quality-tier-q0 {
   }
 
   body.tradez-page .brand-block-sidebar {
+    display: flex;
     flex-direction: row;
     align-items: center;
   }
@@ -3097,10 +3170,18 @@ body.tradez-page .quality-tier-q0 {
   }
 
   body.tradez-page .tradez-side-stack {
-    grid-template-rows: auto auto;
+    display: block;
   }
 
   body.tradez-page .tradez-pulse-grid {
+    grid-template-columns: 1fr;
+  }
+
+  body.tradez-page .tradez-feed-panel {
+    min-height: 860px;
+  }
+
+  body.tradez-page .tradez-feed-panel .panel-head {
     grid-template-columns: 1fr;
   }
 }
@@ -3122,6 +3203,14 @@ body.tradez-page .quality-tier-q0 {
     justify-items: stretch;
   }
 
+  body.tradez-page .brand-block-sidebar {
+    justify-content: center;
+  }
+
+  body.tradez-page .brand-copy {
+    align-items: center;
+  }
+
   body.tradez-page .tradez-sidebar-foot {
     justify-items: stretch;
   }
@@ -3131,6 +3220,19 @@ body.tradez-page .quality-tier-q0 {
   body.tradez-page .tradez-control-row,
   body.tradez-page .tradez-feed-panel .feed-tabs {
     grid-template-columns: 1fr;
+  }
+
+  body.tradez-page .tradez-feed-summary-row,
+  body.tradez-page .tradez-feed-plan-grid {
+    grid-template-columns: 1fr;
+  }
+
+  body.tradez-page .tradez-feed-card {
+    min-height: 0;
+  }
+
+  body.tradez-page .tradez-feed-panel {
+    min-height: 0;
   }
 
   body.tradez-page .chart-frame {

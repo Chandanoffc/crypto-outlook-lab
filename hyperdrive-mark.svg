@@ -5,20 +5,20 @@
       <stop offset="1" stop-color="#06080C"/>
     </linearGradient>
     <linearGradient id="lime" x1="17" y1="60" x2="77" y2="24" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#A7FF2A"/>
-      <stop offset="1" stop-color="#E8FF7A"/>
+      <stop stop-color="#84CC16"/>
+      <stop offset="1" stop-color="#D9F99D"/>
     </linearGradient>
     <linearGradient id="green" x1="41" y1="67" x2="79" y2="44" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#53D86D"/>
-      <stop offset="1" stop-color="#9AF59B"/>
+      <stop stop-color="#10B981"/>
+      <stop offset="1" stop-color="#A3E635"/>
     </linearGradient>
     <filter id="glowLime" x="0" y="0" width="96" height="96" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
       <feGaussianBlur stdDeviation="3" result="blur"/>
-      <feColorMatrix in="blur" type="matrix" values="1 0 0 0 0.66  0 1 0 0 1  0 0 1 0 0.2  0 0 0 1 0"/>
+      <feColorMatrix in="blur" type="matrix" values="1 0 0 0 0.51  0 1 0 0 0.8  0 0 1 0 0.09  0 0 0 1 0"/>
     </filter>
     <filter id="glowGreen" x="0" y="0" width="96" height="96" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
       <feGaussianBlur stdDeviation="3" result="blur"/>
-      <feColorMatrix in="blur" type="matrix" values="1 0 0 0 0.32  0 1 0 0 0.85  0 0 1 0 0.42  0 0 0 1 0"/>
+      <feColorMatrix in="blur" type="matrix" values="1 0 0 0 0.06  0 1 0 0 0.72  0 0 1 0 0.51  0 0 0 1 0"/>
     </filter>
   </defs>
 
@@ -26,21 +26,21 @@
   <rect x="8.75" y="8.75" width="78.5" height="78.5" rx="23.25" stroke="rgba(255,255,255,0.06)"/>
 
   <g opacity="0.55" filter="url(#glowLime)">
-    <path d="M18 59C30 32 48 24 74 23" stroke="#CFFF4B" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M18 59C30 32 48 24 74 23" stroke="#D9F99D" stroke-width="2.5" stroke-linecap="round"/>
   </g>
   <g opacity="0.55" filter="url(#glowGreen)">
-    <path d="M42 69C56 62 66 53 78 39" stroke="#77EE92" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M42 69C56 62 66 53 78 39" stroke="#34D399" stroke-width="2.5" stroke-linecap="round"/>
   </g>
 
   <path d="M18 60C31 34 48 26 72 24L64 30C61 31 59 34 61 36C63 38 66 37 69 36L82 28L78 43C77 46 78 49 81 50C84 51 86 49 87 46L92 23L69 17C66 16 63 17 62 20C61 23 63 25 66 26L72 28C49 31 30 41 18 60Z" fill="url(#lime)"/>
   <path d="M40 70C53 63 64 56 77 42L72 53C71 56 73 58 75 59C77 60 80 60 82 57L90 43L74 35C72 34 69 35 68 37C67 40 69 42 71 43L76 44C64 54 54 61 41 67L40 70Z" fill="url(#green)"/>
 
-  <g fill="#D8FF4D">
+  <g fill="#D9F99D">
     <rect x="44" y="46" width="6" height="11" rx="1.4"/>
     <rect x="53" y="40" width="6" height="14" rx="1.4"/>
     <rect x="62" y="34" width="6" height="16" rx="1.4"/>
   </g>
-  <g stroke="#D8FF4D" stroke-linecap="round" opacity="0.9">
+  <g stroke="#D9F99D" stroke-linecap="round" opacity="0.9">
     <path d="M47 42V46"/>
     <path d="M47 57V61"/>
     <path d="M56 36V40"/>
