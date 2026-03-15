@@ -509,13 +509,16 @@ function renderCompareCards(cards) {
   dom.compareGrid.innerHTML = cards
     .map(
       (card) => `
-        <article class="subpanel tradez-compare-card ${card.tone || "neutral"}">
+        <article class="subpanel tradez-compare-card ${card.tone || "neutral"} ${card.isOverallLeader ? "is-overall-leader" : ""}">
           <div class="panel-head-inline">
             <div>
               <p class="panel-label">${card.label}</p>
               <h3>${card.title}</h3>
             </div>
-            <div class="quality-chip ${card.qualityClass || "quality-tier-neutral"}">${card.qualityText}</div>
+            <div class="tradez-compare-chip-stack">
+              ${card.isOverallLeader ? `<span class="tradez-compare-overall-ribbon">Overall Leader</span>` : ""}
+              <div class="quality-chip ${card.qualityClass || "quality-tier-neutral"}">${card.qualityText}</div>
+            </div>
           </div>
           ${
             card.leaderTags?.length
@@ -545,6 +548,11 @@ function renderCompareCards(cards) {
               )
               .join("")}
           </div>
+          ${
+            Number.isFinite(card.overallScore)
+              ? `<div class="tradez-compare-overall-note">Weighted edge score ${card.overallScore.toFixed(1)} from return, win rate, and quality.</div>`
+              : ""
+          }
           <p class="monitor-subtle">${card.note}</p>
         </article>
       `
@@ -884,15 +892,34 @@ function readTradezPaperMetrics() {
   };
 }
 
+function normalizedReturnScore(returnPct) {
+  return Math.max(0, Math.min(100, 50 + returnPct * 2));
+}
+
+function normalizedQualityScore(quality) {
+  return Math.max(0, Math.min(100, (quality / 160) * 100));
+}
+
+function overallLeaderScore(metrics) {
+  const returnScore = normalizedReturnScore(metrics.totalReturnPct || 0);
+  const winScore = Math.max(0, Math.min(100, metrics.winRate || 0));
+  const qualityScore = normalizedQualityScore(metrics.averageQuality || 0);
+  return returnScore * 0.45 + winScore * 0.35 + qualityScore * 0.2;
+}
+
 function renderTradezComparison() {
   const house = readHouseTradeMetrics();
   const auto2 = readTradezPaperMetrics();
+  const houseOverallScore = overallLeaderScore(house);
+  const auto2OverallScore = overallLeaderScore(auto2);
   const houseLeadsReturn = house.totalReturnPct > auto2.totalReturnPct;
   const auto2LeadsReturn = auto2.totalReturnPct > house.totalReturnPct;
   const houseLeadsWin = house.winRate > auto2.winRate;
   const auto2LeadsWin = auto2.winRate > house.winRate;
   const houseLeadsQuality = house.averageQuality > auto2.averageQuality;
   const auto2LeadsQuality = auto2.averageQuality > house.averageQuality;
+  const houseOverallLeader = houseOverallScore > auto2OverallScore;
+  const auto2OverallLeader = auto2OverallScore > houseOverallScore;
 
   renderCompareCards([
     {
@@ -901,7 +928,10 @@ function renderTradezComparison() {
       qualityText: `Q${Math.round(house.averageQuality || 0)}`,
       qualityClass: qualityTier(house.averageQuality || 0).className,
       tone: "neutral",
+      overallScore: houseOverallScore,
+      isOverallLeader: houseOverallLeader,
       leaderTags: [
+        houseOverallLeader ? "Overall Leader" : "",
         houseLeadsReturn ? "Leads Return" : "",
         houseLeadsWin ? "Leads Win %" : "",
         houseLeadsQuality ? "Leads Quality" : "",
@@ -932,7 +962,10 @@ function renderTradezComparison() {
       qualityText: `Q${Math.round(auto2.averageQuality || 0)}`,
       qualityClass: qualityTier(auto2.averageQuality || 0).className,
       tone: "neutral",
+      overallScore: auto2OverallScore,
+      isOverallLeader: auto2OverallLeader,
       leaderTags: [
+        auto2OverallLeader ? "Overall Leader" : "",
         auto2LeadsReturn ? "Leads Return" : "",
         auto2LeadsWin ? "Leads Win %" : "",
         auto2LeadsQuality ? "Leads Quality" : "",
