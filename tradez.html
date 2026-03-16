@@ -475,7 +475,32 @@
                   />
                 </label>
 
-                <button id="tradez-alert-save" class="mini-button" type="submit">Save Delivery</button>
+                <label class="tradez-template-field">
+                  Signal Format
+                  <textarea
+                    id="tradez-alert-template"
+                    rows="6"
+                    placeholder="{title}
+Pair: {symbol}
+Side: {side}
+Entry: {entry}
+TP1: {tp1}
+TP2: {tp2}
+SL: {sl}
+Leverage: {leverage}x
+Quality: Q{quality}"
+                    spellcheck="false"
+                  ></textarea>
+                  <small class="tradez-template-help">
+                    Use placeholders like {title}, {symbol}, {side}, {entry}, {tp1}, {tp2}, {sl},
+                    {leverage}, {quality}, {touch}, {detectedAt}, {mode}, {price}, and {notes}.
+                  </small>
+                </label>
+
+                <div class="tradez-delivery-actions">
+                  <button id="tradez-alert-save" class="mini-button" type="submit">Save Delivery</button>
+                  <button id="tradez-alert-test" class="mini-button" type="button">Test Signal</button>
+                </div>
               </form>
             </div>
 

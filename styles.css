@@ -3328,16 +3328,12 @@ body.tradez-page .tradez-grid {
 }
 
 body.tradez-page .tradez-stage {
-  display: grid;
-  gap: 20px;
-  min-width: 0;
+  display: contents;
 }
 
 body.tradez-page .tradez-side-stack {
-  display: block;
+  display: contents;
   min-width: 0;
-  align-self: stretch;
-  height: 100%;
 }
 
 body.tradez-page .panel,
@@ -3593,7 +3589,7 @@ body.tradez-page .tradez-control-note {
 
 body.tradez-page .tradez-feed-panel {
   min-height: 0;
-  height: 100%;
+  height: auto;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
 }
@@ -3679,6 +3675,10 @@ body.tradez-page .tradez-feed-card {
   overflow: hidden;
 }
 
+body.tradez-page .tradez-feed-panel .monitor-table {
+  min-height: 0;
+}
+
 body.tradez-page .tradez-feed-card-head {
   gap: 10px;
   flex-wrap: wrap;
@@ -3728,6 +3728,47 @@ body.tradez-page .tradez-auto2-panel .subpanel {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 30%),
     rgba(14, 22, 38, 0.9);
+}
+
+body.tradez-page .tradez-template-field {
+  grid-column: 1 / -1;
+}
+
+body.tradez-page .mini-form textarea {
+  min-height: 136px;
+  border-radius: 18px;
+  padding: 12px;
+  border: 1px solid rgba(30, 41, 59, 0.95);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 30%),
+    rgba(24, 26, 33, 0.98);
+  color: var(--text-main);
+  font-family: var(--font-stack);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+body.tradez-page .mini-form textarea:focus {
+  outline: none;
+  border-color: rgba(34, 211, 238, 0.34);
+  box-shadow:
+    0 0 0 3px rgba(34, 211, 238, 0.12),
+    0 0 0 1px rgba(34, 211, 238, 0.08);
+}
+
+body.tradez-page .tradez-template-help {
+  display: block;
+  color: var(--text-soft);
+  line-height: 1.45;
+}
+
+body.tradez-page .tradez-delivery-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
 }
 
 body.tradez-page .quality-meter {
@@ -3788,6 +3829,11 @@ body.tradez-page .quality-tier-q0 {
   body.tradez-page .tradez-hero-shell,
   body.tradez-page .tradez-grid {
     grid-template-columns: 1fr;
+  }
+
+  body.tradez-page .tradez-stage,
+  body.tradez-page .tradez-side-stack {
+    display: contents;
   }
 
   body.tradez-page .tradez-chart-panel,

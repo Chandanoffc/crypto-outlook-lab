@@ -13,6 +13,9 @@ async function readJsonBody(req) {
 }
 
 function formatAlertMessage(title, event) {
+  if (event?.formattedMessage) {
+    return String(event.formattedMessage);
+  }
   const when = event?.time ? new Date(event.time).toLocaleString() : new Date().toLocaleString();
   return `${title}\n${event?.message || ""}\n${event?.symbol || "Signal"} • ${when}`;
 }
