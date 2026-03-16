@@ -10,8 +10,10 @@ const STORAGE_KEY = "apex-signals-tradez-state";
 const ALERT_EVENTS_KEY = "apex-signals-tradez-alert-events";
 const SIGNAL_IDS_KEY = "apex-signals-tradez-seen-signal-ids";
 const TICKER_STORAGE_KEY = "apex-signals-tradez-tickers";
+const ALERT_CHANNEL_STORAGE_KEY = "apex-signals-alert-channels";
 const HOUSE_AUTO_STORAGE_KEY = "apex-signals-auto-paper";
 const TRADEZ_AUTO_STORAGE_KEY = "hyperdrive-tradez-auto-paper";
+const TRADEZ_EXECUTION_STORAGE_KEY = "soloris-tradez-execution";
 const HOUSE_AUTO_STRATEGY_VERSION = 5;
 const PAPER_BACKUP_TYPE = "soloris-paper-books-backup";
 const PAPER_BACKUP_VERSION = 1;
@@ -23,6 +25,18 @@ const TRADEZ_AUTO_VERSION = 1;
 const TRADEZ_AUTO_TRADE_COOLDOWN_MS = 4 * 60 * 1000;
 const TICKER_CACHE_MAX_AGE_MS = 30 * 60 * 1000;
 const FRESH_SIGNAL_WINDOW_MS = 10 * 60 * 1000;
+const DEFAULT_ALERT_CHANNELS = {
+  browser: true,
+  discordWebhook: "",
+  telegramToken: "",
+  telegramChatId: "",
+  emailTo: "",
+};
+const DEFAULT_TRADEZ_EXECUTION = {
+  mode: "paper",
+  notifyEntries: true,
+  notifyExits: true,
+};
 
 const dom = {
   form: document.getElementById("tradez-form"),
@@ -89,6 +103,15 @@ const dom = {
   auto2Toggle: document.getElementById("tradez-auto2-toggle"),
   auto2Reset: document.getElementById("tradez-auto2-reset"),
   auto2Note: document.getElementById("tradez-auto2-note"),
+  deliveryForm: document.getElementById("tradez-delivery-form"),
+  deliveryNote: document.getElementById("tradez-delivery-note"),
+  auto2Mode: document.getElementById("tradez-auto2-mode"),
+  alertBrowserEnabled: document.getElementById("tradez-alert-browser-enabled"),
+  alertDiscordWebhook: document.getElementById("tradez-alert-discord-webhook"),
+  alertTelegramToken: document.getElementById("tradez-alert-telegram-token"),
+  alertTelegramChatId: document.getElementById("tradez-alert-telegram-chat-id"),
+  auto2NotifyEntries: document.getElementById("tradez-auto2-notify-entries"),
+  auto2NotifyExits: document.getElementById("tradez-auto2-notify-exits"),
   auto2MetricStart: document.getElementById("tradez-auto2-metric-start"),
   auto2MetricEquity: document.getElementById("tradez-auto2-metric-equity"),
   auto2MetricEquityNote: document.getElementById("tradez-auto2-metric-equity-note"),
@@ -114,6 +137,7 @@ const dom = {
 
 const state = loadState();
 const tradezPaper = loadTradezPaperState();
+const tradezDelivery = loadTradezDeliveryState();
 
 let chart;
 let candleSeries;
@@ -142,6 +166,21 @@ function loadTradezPaperState() {
     activeTab: stored.activeTab || "positions",
     lastScanAt: Number(stored.lastScanAt) || 0,
     strategyVersion: Number(stored.strategyVersion) || 1,
+  };
+}
+
+function loadTradezDeliveryState() {
+  const stored = readStoredJson(TRADEZ_EXECUTION_STORAGE_KEY, {});
+  const sharedChannels = readStoredJson(ALERT_CHANNEL_STORAGE_KEY, {});
+  return {
+    mode: stored?.mode === "shadow" ? "shadow" : DEFAULT_TRADEZ_EXECUTION.mode,
+    notifyEntries: stored?.notifyEntries === false ? false : DEFAULT_TRADEZ_EXECUTION.notifyEntries,
+    notifyExits: stored?.notifyExits === false ? false : DEFAULT_TRADEZ_EXECUTION.notifyExits,
+    browser: sharedChannels?.browser === false ? false : DEFAULT_ALERT_CHANNELS.browser,
+    discordWebhook: String(sharedChannels?.discordWebhook || DEFAULT_ALERT_CHANNELS.discordWebhook),
+    telegramToken: String(sharedChannels?.telegramToken || DEFAULT_ALERT_CHANNELS.telegramToken),
+    telegramChatId: String(sharedChannels?.telegramChatId || DEFAULT_ALERT_CHANNELS.telegramChatId),
+    emailTo: String(sharedChannels?.emailTo || DEFAULT_ALERT_CHANNELS.emailTo),
   };
 }
 
@@ -187,6 +226,21 @@ function persistTradezPaperState() {
   });
 }
 
+function persistTradezDeliveryState() {
+  writeStoredJson(TRADEZ_EXECUTION_STORAGE_KEY, {
+    mode: tradezDelivery.mode,
+    notifyEntries: tradezDelivery.notifyEntries,
+    notifyExits: tradezDelivery.notifyExits,
+  });
+  writeStoredJson(ALERT_CHANNEL_STORAGE_KEY, {
+    browser: tradezDelivery.browser,
+    discordWebhook: tradezDelivery.discordWebhook,
+    telegramToken: tradezDelivery.telegramToken,
+    telegramChatId: tradezDelivery.telegramChatId,
+    emailTo: tradezDelivery.emailTo,
+  });
+}
+
 function readStoredJson(key, fallback) {
   try {
     const raw = window.localStorage.getItem(key);
@@ -202,6 +256,79 @@ function writeStoredJson(key, value) {
   } catch (error) {
     // Ignore storage write failures.
   }
+}
+
+function syncTradezDeliveryInputs() {
+  if (dom.auto2Mode) dom.auto2Mode.value = tradezDelivery.mode;
+  if (dom.alertBrowserEnabled) dom.alertBrowserEnabled.checked = Boolean(tradezDelivery.browser);
+  if (dom.alertDiscordWebhook) dom.alertDiscordWebhook.value = tradezDelivery.discordWebhook || "";
+  if (dom.alertTelegramToken) dom.alertTelegramToken.value = tradezDelivery.telegramToken || "";
+  if (dom.alertTelegramChatId) dom.alertTelegramChatId.value = tradezDelivery.telegramChatId || "";
+  if (dom.auto2NotifyEntries) dom.auto2NotifyEntries.checked = Boolean(tradezDelivery.notifyEntries);
+  if (dom.auto2NotifyExits) dom.auto2NotifyExits.checked = Boolean(tradezDelivery.notifyExits);
+}
+
+function tradezModeLabel() {
+  return tradezDelivery.mode === "shadow" ? "Shadow" : "Paper";
+}
+
+function updateTradezDeliveryNote(message) {
+  if (!dom.deliveryNote) return;
+  dom.deliveryNote.textContent = message;
+}
+
+function refreshTradezDeliverySummary() {
+  const armed = [
+    tradezDelivery.browser ? "browser" : null,
+    tradezDelivery.discordWebhook ? "Discord" : null,
+    tradezDelivery.telegramToken && tradezDelivery.telegramChatId ? "Telegram" : null,
+    tradezDelivery.emailTo ? "email" : null,
+  ].filter(Boolean);
+  updateTradezDeliveryNote(
+    armed.length
+      ? `${tradezModeLabel()} mode armed. Delivery: ${armed.join(", ")}.`
+      : `${tradezModeLabel()} mode armed. No remote delivery destination is saved yet.`
+  );
+}
+
+function tradezRemoteChannelPayload() {
+  return {
+    discordWebhook: String(tradezDelivery.discordWebhook || "").trim(),
+    telegramToken: String(tradezDelivery.telegramToken || "").trim(),
+    telegramChatId: String(tradezDelivery.telegramChatId || "").trim(),
+    emailTo: String(tradezDelivery.emailTo || "").trim(),
+  };
+}
+
+function maybeTriggerTradezBrowserNotification(title, body) {
+  if (!tradezDelivery.browser || typeof Notification === "undefined" || Notification.permission !== "granted") {
+    return;
+  }
+  const notification = new Notification(title, { body });
+  window.setTimeout(() => notification.close(), 9000);
+}
+
+function dispatchTradezDelivery(event, title) {
+  maybeTriggerTradezBrowserNotification(title, event.message || "");
+
+  const destinations = tradezRemoteChannelPayload();
+  if (!destinations.discordWebhook && !(destinations.telegramToken && destinations.telegramChatId) && !destinations.emailTo) {
+    return;
+  }
+
+  fetch("/api/notify", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+    },
+    body: JSON.stringify({
+      title,
+      event,
+      destinations,
+    }),
+  }).catch((error) => {
+    console.error("tradez delivery failed", error);
+  });
 }
 
 function paperBackupFilename() {
@@ -477,6 +604,54 @@ function formatExactDateTime(timestamp) {
     second: "2-digit",
     hour12: false,
   });
+}
+
+function buildTradezNotificationEvent(title, trade, extraLines = [], time = Date.now()) {
+  const precision = trade.pricePrecision || 2;
+  const baseLines = [
+    `Mode: ${trade.executionMode === "shadow" ? "Shadow" : "Paper"}`,
+    `Side: ${trade.side}`,
+    `Entry: ${formatPrice(trade.entryPrice, precision)}`,
+    `TP1: ${formatPrice(trade.tp1, precision)}`,
+    `TP2: ${formatPrice(trade.tp2, precision)}`,
+    `SL: ${formatPrice(trade.stopLoss, precision)}`,
+    `Leverage: ${trade.leverage}x`,
+    `Quality: Q${Math.round(trade.qualityScore || 0)}`,
+  ];
+
+  return {
+    time,
+    symbol: trade.symbol,
+    message: [...baseLines, ...extraLines].filter(Boolean).join("\n"),
+    title,
+  };
+}
+
+function maybeSendTradezEntryNotification(candidate, trade) {
+  if (!tradezDelivery.notifyEntries) return;
+  const touchLabel = [candidate.activeSignal?.touch, candidate.activeSignal?.strength].filter(Boolean).join(" • ");
+  const event = buildTradezNotificationEvent(
+    `EMA Book ${trade.side} ${trade.symbol}`,
+    trade,
+    [
+      touchLabel ? `Setup: ${touchLabel}` : "",
+      `Detected: ${formatExactDateTime(trade.detectedAt || trade.openedAt)}`,
+    ],
+    trade.openedAt
+  );
+  dispatchTradezDelivery(event, event.title);
+}
+
+function maybeSendTradezProgressNotification(kind, trade, extraLines = [], time = Date.now()) {
+  if (!tradezDelivery.notifyExits) return;
+  const titleMap = {
+    tp1: `EMA Book TP1 ${trade.symbol}`,
+    tp: `EMA Book TP ${trade.symbol}`,
+    sl: `EMA Book SL ${trade.symbol}`,
+    be: `EMA Book BE ${trade.symbol}`,
+  };
+  const event = buildTradezNotificationEvent(titleMap[kind] || `EMA Book Update ${trade.symbol}`, trade, extraLines, time);
+  dispatchTradezDelivery(event, event.title);
 }
 
 function isFreshSignal(timestamp) {
@@ -779,7 +954,7 @@ function openTradezPaperTrade(candidate) {
   const quantity = Math.max(0, Math.min(quantityByRisk, quantityByCapital));
   if (!Number.isFinite(quantity) || quantity <= 0) return false;
 
-  tradezPaper.openTrades.push({
+  const trade = {
     id: `${Date.now()}-ema-${candidate.symbol}`,
     strategyLabel: "Auto Trade 2",
     symbol: candidate.symbol,
@@ -802,7 +977,9 @@ function openTradezPaperTrade(candidate) {
     openedAt: Date.now(),
     lastPrice: candidate.currentPrice,
     breakEvenArmed: false,
-  });
+    executionMode: tradezDelivery.mode,
+  };
+  tradezPaper.openTrades.push(trade);
 
   logTradezPaperActivity(
     `Opened Auto Trade 2 ${candidate.activeSignal.side} ${candidate.symbol} • entry ${formatPrice(
@@ -814,12 +991,21 @@ function openTradezPaperTrade(candidate) {
     )} • SL ${formatPrice(candidate.paperTrade.stopLoss, candidate.pricePrecision)} • Q${candidate.qualityScore}.`,
     candidate.activeSignal.tone
   );
-  return true;
+  if (tradezDelivery.mode === "shadow") {
+    logTradezPaperActivity(
+      `Shadow execution staged for ${candidate.symbol} • ${candidate.activeSignal.side} • ${trade.leverage}x • detected ${formatExactDateTime(
+        trade.detectedAt
+      )}.`,
+      candidate.activeSignal.tone
+    );
+  }
+  maybeSendTradezEntryNotification(candidate, trade);
+  return trade;
 }
 
 function closeTradezPaperTrade(tradeId, reason, exitPrice, precisionHint) {
   const index = tradezPaper.openTrades.findIndex((trade) => trade.id === tradeId);
-  if (index === -1) return;
+  if (index === -1) return null;
 
   const trade = tradezPaper.openTrades[index];
   const direction = trade.side === "Short" ? -1 : 1;
@@ -827,7 +1013,7 @@ function closeTradezPaperTrade(tradeId, reason, exitPrice, precisionHint) {
   const returnPct = tradezPaperReturnPct(trade, exitPrice);
   tradezPaper.balance += pnlUsd;
 
-  tradezPaper.closedTrades.unshift({
+  const closedTrade = {
     ...trade,
     exitPrice,
     closedAt: Date.now(),
@@ -835,7 +1021,8 @@ function closeTradezPaperTrade(tradeId, reason, exitPrice, precisionHint) {
     pnlUsd,
     returnPct,
     balanceAfter: tradezPaper.balance,
-  });
+  };
+  tradezPaper.closedTrades.unshift(closedTrade);
   tradezPaper.closedTrades = tradezPaper.closedTrades.slice(0, 100);
   tradezPaper.openTrades.splice(index, 1);
 
@@ -849,6 +1036,7 @@ function closeTradezPaperTrade(tradeId, reason, exitPrice, precisionHint) {
     )}.`,
     reason === "TP" ? "up" : reason === "BE" ? "neutral" : "down"
   );
+  return closedTrade;
 }
 
 function refreshTradezPaperTrades(candidates) {
@@ -881,12 +1069,47 @@ function refreshTradezPaperTrades(candidates) {
         )}.`,
         trade.side === "Long" ? "up" : "down"
       );
+      maybeSendTradezProgressNotification(
+        "tp1",
+        trade,
+        [
+          `TP1 hit: ${formatPrice(trade.tp1, candidate.pricePrecision)}`,
+          `Stop moved to entry: ${formatPrice(trade.entryPrice, candidate.pricePrecision)}`,
+          `Runner target: ${formatPrice(trade.tp2, candidate.pricePrecision)}`,
+        ],
+        Date.now()
+      );
     }
 
     if (hitTp2) {
-      closeTradezPaperTrade(trade.id, "TP", trade.tp2, candidate.pricePrecision);
+      const closedTrade = closeTradezPaperTrade(trade.id, "TP", trade.tp2, candidate.pricePrecision);
+      if (closedTrade) {
+        maybeSendTradezProgressNotification(
+          "tp",
+          closedTrade,
+          [
+            `Exit: ${formatPrice(closedTrade.exitPrice, candidate.pricePrecision)}`,
+            `Return: ${formatPercent(closedTrade.returnPct || 0)}`,
+            `PnL: ${formatCompactUsd(closedTrade.pnlUsd || 0, 2)}`,
+          ],
+          closedTrade.closedAt
+        );
+      }
     } else if (hitStop) {
-      closeTradezPaperTrade(trade.id, trade.tp1Hit ? "BE" : "SL", trade.stopLoss, candidate.pricePrecision);
+      const closeReason = trade.tp1Hit ? "BE" : "SL";
+      const closedTrade = closeTradezPaperTrade(trade.id, closeReason, trade.stopLoss, candidate.pricePrecision);
+      if (closedTrade) {
+        maybeSendTradezProgressNotification(
+          closeReason === "BE" ? "be" : "sl",
+          closedTrade,
+          [
+            `Exit: ${formatPrice(closedTrade.exitPrice, candidate.pricePrecision)}`,
+            `Return: ${formatPercent(closedTrade.returnPct || 0)}`,
+            `PnL: ${formatCompactUsd(closedTrade.pnlUsd || 0, 2)}`,
+          ],
+          closedTrade.closedAt
+        );
+      }
     }
   });
 }
@@ -1138,8 +1361,8 @@ function renderTradezPaperDashboard() {
   if (dom.auto2Toggle) dom.auto2Toggle.textContent = tradezPaper.autoEnabled ? "Pause Auto 2" : "Resume Auto 2";
   if (dom.auto2Note) {
     dom.auto2Note.textContent = tradezPaper.autoEnabled
-      ? `Auto Trade 2 scans every 5 minutes, can open up to ${TRADEZ_AUTO_MAX_NEW_TRADES} fresh trades per pass, and can hold up to ${TRADEZ_AUTO_MAX_CONCURRENT_TRADES} EMA positions.`
-      : "Auto Trade 2 is paused. The feed still monitors EMA setups.";
+      ? `Auto Trade 2 scans every 5 minutes, can open up to ${TRADEZ_AUTO_MAX_NEW_TRADES} fresh trades per pass, can hold up to ${TRADEZ_AUTO_MAX_CONCURRENT_TRADES} EMA positions, and is running in ${tradezModeLabel()} mode.`
+      : `Auto Trade 2 is paused. The feed still monitors EMA setups while ${tradezModeLabel()} mode stays armed.`;
   }
 
   renderAnalysisGrid(
@@ -1154,7 +1377,7 @@ function renderTradezPaperDashboard() {
           )} • TP2 ${formatPrice(trade.tp2, trade.pricePrecision || 2)} • SL ${formatPrice(
             trade.stopLoss,
             trade.pricePrecision || 2
-          )} • ${trade.touch}`,
+          )} • ${trade.touch} • ${trade.executionMode === "shadow" ? "Shadow" : "Paper"}`,
           tone: toneFromNumber(tradezPaperReturnPct(trade, trade.lastPrice || trade.entryPrice), 0.01),
         }))
       : [
@@ -2727,7 +2950,34 @@ async function requestAlertPermission() {
     return;
   }
   state.alertPermission = await Notification.requestPermission();
+  tradezDelivery.browser = state.alertPermission === "granted" ? tradezDelivery.browser : false;
+  persistTradezDeliveryState();
+  syncTradezDeliveryInputs();
+  refreshTradezDeliverySummary();
   updateAlertPermissionButton();
+}
+
+function saveTradezDeliveryFromForm() {
+  if (!dom.deliveryForm) return;
+  tradezDelivery.mode = dom.auto2Mode?.value === "shadow" ? "shadow" : "paper";
+  tradezDelivery.browser = Boolean(dom.alertBrowserEnabled?.checked);
+  tradezDelivery.discordWebhook = String(dom.alertDiscordWebhook?.value || "").trim();
+  tradezDelivery.telegramToken = String(dom.alertTelegramToken?.value || "").trim();
+  tradezDelivery.telegramChatId = String(dom.alertTelegramChatId?.value || "").trim();
+  tradezDelivery.notifyEntries = Boolean(dom.auto2NotifyEntries?.checked);
+  tradezDelivery.notifyExits = Boolean(dom.auto2NotifyExits?.checked);
+  persistTradezDeliveryState();
+  refreshTradezDeliverySummary();
+  renderTradezPaperDashboard();
+
+  if (tradezDelivery.browser && typeof Notification !== "undefined" && Notification.permission === "default") {
+    Notification.requestPermission()
+      .then((permission) => {
+        state.alertPermission = permission;
+        updateAlertPermissionButton();
+      })
+      .catch(() => {});
+  }
 }
 
 async function loadSelectedToken(tokenOrSymbol) {
@@ -2867,6 +3117,13 @@ function bindEvents() {
   });
 
   dom.alertPermissionButton.addEventListener("click", requestAlertPermission);
+  if (dom.deliveryForm) {
+    dom.deliveryForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      saveTradezDeliveryFromForm();
+      setStatus(`Auto Trade 2 delivery saved. ${tradezModeLabel()} mode is ready.`, "up");
+    });
+  }
   if (dom.backupExportButton) {
     dom.backupExportButton.addEventListener("click", () => {
       downloadJsonFile(buildPaperBackupPayload(), paperBackupFilename());
@@ -2962,6 +3219,8 @@ async function init() {
   dom.tokenInput.value = state.selectedToken;
   dom.qualityThreshold.value = `${state.qualityThreshold}`;
   applyTradezPaperUpgradeNotice();
+  syncTradezDeliveryInputs();
+  refreshTradezDeliverySummary();
   updateAlertPermissionButton();
   updateTabs();
   renderStrategyNotes();

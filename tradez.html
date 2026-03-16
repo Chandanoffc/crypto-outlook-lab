@@ -400,6 +400,84 @@
               </div>
             </div>
 
+            <div class="subpanel tradez-auto2-config">
+              <div class="panel-head-inline">
+                <div>
+                  <p class="panel-label">Execution & Delivery</p>
+                  <h3>Safe shadow mode and mobile alerts</h3>
+                </div>
+                <p id="tradez-delivery-note" class="subsection-meta">
+                  Paper mode stays local. Shadow mode simulates exchange execution and can push alerts to Discord or Telegram.
+                </p>
+              </div>
+
+              <form id="tradez-delivery-form" class="mini-form delivery-form tradez-delivery-form">
+                <label>
+                  Execution Mode
+                  <select id="tradez-auto2-mode">
+                    <option value="paper">Paper</option>
+                    <option value="shadow">Shadow</option>
+                  </select>
+                </label>
+
+                <label class="checkbox-card">
+                  <span class="checkbox-inline">
+                    <input id="tradez-alert-browser-enabled" type="checkbox" />
+                    Browser alerts
+                  </span>
+                </label>
+
+                <label class="checkbox-card">
+                  <span class="checkbox-inline">
+                    <input id="tradez-auto2-notify-entries" type="checkbox" />
+                    Notify new entries
+                  </span>
+                </label>
+
+                <label class="checkbox-card">
+                  <span class="checkbox-inline">
+                    <input id="tradez-auto2-notify-exits" type="checkbox" />
+                    Notify TP / SL updates
+                  </span>
+                </label>
+
+                <label>
+                  Discord Webhook
+                  <input
+                    id="tradez-alert-discord-webhook"
+                    type="url"
+                    placeholder="https://discord.com/api/webhooks/..."
+                    autocomplete="off"
+                    spellcheck="false"
+                  />
+                </label>
+
+                <label>
+                  Telegram Bot Token
+                  <input
+                    id="tradez-alert-telegram-token"
+                    type="password"
+                    placeholder="123456:ABC..."
+                    autocomplete="off"
+                    spellcheck="false"
+                  />
+                </label>
+
+                <label>
+                  Telegram Chat ID
+                  <input
+                    id="tradez-alert-telegram-chat-id"
+                    type="text"
+                    placeholder="123456789"
+                    autocomplete="off"
+                    spellcheck="false"
+                  />
+                </label>
+
+                <button id="tradez-alert-save" class="mini-button" type="submit">Save Delivery</button>
+              </form>
+            </div>
+
             <section class="metric-strip tradez-auto2-metrics">
               <article class="metric-card">
                 <span class="metric-label">Starting Balance</span>

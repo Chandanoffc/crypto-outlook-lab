@@ -1751,6 +1751,30 @@ body.paper-trader-page .panel-monitor-large .monitor-symbol {
   align-items: center;
 }
 
+.tradez-auto2-config {
+  margin-top: 18px;
+}
+
+.tradez-delivery-form {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 14px;
+  align-items: end;
+}
+
+.tradez-delivery-form .checkbox-card {
+  align-self: stretch;
+}
+
+.tradez-delivery-form .checkbox-inline {
+  min-height: 48px;
+  justify-content: flex-start;
+}
+
+.tradez-delivery-form button {
+  align-self: end;
+  justify-self: start;
+}
+
 .tradez-auto2-metrics {
   margin-top: 18px;
 }
