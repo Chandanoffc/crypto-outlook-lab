@@ -1,6 +1,8 @@
-# HYPERDRIVE Signals
+# Soloris Signals
 
 Educational crypto dashboard built for perpetual futures analysis on Vercel.
+
+Production URL: [https://soloris-signals.vercel.app](https://soloris-signals.vercel.app)
 
 ## What it shows
 
@@ -30,6 +32,12 @@ vercel dev
 Then open the local URL Vercel prints, usually [http://localhost:3000](http://localhost:3000).
 
 The main analysis dashboard is at `/`, and the automated paper-trader page is at `/paper.html`.
+
+Live deployment:
+- Main: [https://soloris-signals.vercel.app](https://soloris-signals.vercel.app)
+- Auto Trade: [https://soloris-signals.vercel.app/paper.html](https://soloris-signals.vercel.app/paper.html)
+- Signals Arena: [https://soloris-signals.vercel.app/arena.html](https://soloris-signals.vercel.app/arena.html)
+- EMA Signals: [https://soloris-signals.vercel.app/tradez.html](https://soloris-signals.vercel.app/tradez.html)
 
 ## Notes
 
