@@ -1831,6 +1831,20 @@ body.paper-trader-page .panel-monitor-large .monitor-symbol {
   justify-content: center;
 }
 
+.tradez-feed-token-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tradez-feed-tab-new {
+  font-style: normal;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: #d7fb7b;
+}
+
 .tradez-feed-board {
   display: grid;
   gap: 12px;
@@ -1866,6 +1880,13 @@ body.paper-trader-page .panel-monitor-large .monitor-symbol {
 
 .tradez-feed-symbol-block {
   display: grid;
+  gap: 8px;
+}
+
+.tradez-feed-symbol-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
 }
 
@@ -3614,8 +3635,28 @@ body.tradez-page .tradez-symbol-button {
   padding-inline: 12px;
 }
 
+body.tradez-page .tradez-feed-token-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+body.tradez-page .tradez-feed-token-tabs .tradez-symbol-button {
+  min-width: 0;
+  padding-inline: 14px;
+}
+
+body.tradez-page .tradez-feed-token-tabs .tradez-symbol-button.is-active {
+  border-color: rgba(34, 211, 238, 0.72);
+  background:
+    linear-gradient(180deg, rgba(34, 211, 238, 0.18), rgba(14, 22, 38, 0.92)),
+    rgba(20, 22, 30, 0.9);
+  box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.18), 0 12px 28px rgba(34, 211, 238, 0.12);
+}
+
 body.tradez-page .tradez-feed-card {
-  min-height: 222px;
+  min-height: 0;
   max-width: 100%;
   overflow: hidden;
 }

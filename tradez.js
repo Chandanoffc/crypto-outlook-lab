@@ -196,6 +196,7 @@ function loadState() {
   return {
     selectedToken: stored.selectedToken || DEFAULT_TOKEN,
     selectedSymbol: stored.selectedSymbol || null,
+    selectedFeedSymbol: stored.selectedFeedSymbol || null,
     qualityThreshold: Number(stored.qualityThreshold) || DEFAULT_QUALITY_THRESHOLD,
     activeTab: stored.activeTab || "signals",
     lastScanAt: Number(stored.lastScanAt) || 0,
@@ -212,6 +213,7 @@ function persistState() {
   writeStoredJson(STORAGE_KEY, {
     selectedToken: state.selectedToken,
     selectedSymbol: state.selectedSymbol,
+    selectedFeedSymbol: state.selectedFeedSymbol,
     qualityThreshold: state.qualityThreshold,
     activeTab: state.activeTab,
     lastScanAt: state.lastScanAt,
@@ -1533,7 +1535,10 @@ function renderTradezPaperDashboard() {
       ? tradezPaper.openTrades.slice(0, 6).map((trade) => ({
           label: `${trade.symbol} ${trade.side}`,
           value: `${formatPercent(tradezPaperReturnPct(trade, trade.lastPrice || trade.entryPrice))} live`,
-          note: `Entry ${formatPrice(trade.entryPrice, trade.pricePrecision || 2)} • TP1 ${formatPrice(
+          note: `Opened ${formatExactDateTime(trade.openedAt)} • Entered ${formatPrice(
+            trade.entryPrice,
+            trade.pricePrecision || 2
+          )} • Current ${formatPrice(trade.lastPrice || trade.entryPrice, trade.pricePrecision || 2)} • TP1 ${formatPrice(
             trade.tp1,
             trade.pricePrecision || 2
           )} • TP2 ${formatPrice(trade.tp2, trade.pricePrecision || 2)} • SL ${formatPrice(
@@ -2892,6 +2897,7 @@ function renderSignalFeed() {
     });
 
   if (!qualified.length) {
+    state.selectedFeedSymbol = null;
     dom.signalTable.innerHTML = `
       <div class="monitor-empty">
         No EMA20/50 pullback setup currently clears the active quality threshold.
@@ -2900,74 +2906,108 @@ function renderSignalFeed() {
     return;
   }
 
+  const selectedCandidate =
+    qualified.find((candidate) => candidate.symbol === state.selectedFeedSymbol) || qualified[0];
+  const selectedSignal = selectedCandidate.activeSignal;
+  const seenAt = selectedCandidate.identifiedAt || selectedSignal.detectedAt;
+  const isNew = isFreshSignal(seenAt);
+  const sideClass = selectedSignal.side === "Long" ? "is-long" : "is-short";
+  const quality = qualityTier(selectedCandidate.qualityScore);
+  state.selectedFeedSymbol = selectedCandidate.symbol;
+  persistState();
+
   dom.signalTable.innerHTML = `
     <div class="tradez-feed-board">
-      ${qualified
-        .map((candidate) => {
-          const quality = qualityTier(candidate.qualityScore);
-          const signal = candidate.activeSignal;
-          const seenAt = candidate.identifiedAt || signal.detectedAt;
-          const isNew = isFreshSignal(seenAt);
-          const sideClass = signal.side === "Long" ? "is-long" : "is-short";
-          return `
-            <article class="tradez-feed-card ${sideClass}">
-              <div class="tradez-feed-card-head">
-                <div class="tradez-feed-symbol-block">
-                  <button class="mini-button tradez-symbol-button" type="button" data-symbol="${candidate.symbol}">
-                    ${candidate.symbol}
-                  </button>
-                  <div class="monitor-subtle">${volumeTier(universeTickerMap.get(candidate.symbol)?.quoteVolume || 0).label}</div>
-                </div>
-                <div class="tradez-feed-stamp-block">
-                  ${isNew ? '<span class="tradez-feed-new">NEW</span>' : ""}
-                  <time datetime="${new Date(seenAt).toISOString()}">${formatExactDateTime(seenAt)}</time>
-                </div>
-              </div>
+      <div class="tradez-feed-token-tabs" role="tablist" aria-label="Qualified Tradez pairs">
+        ${qualified
+          .map((candidate) => {
+            const signal = candidate.activeSignal;
+            const candidateSeenAt = candidate.identifiedAt || signal.detectedAt;
+            const candidateIsNew = isFreshSignal(candidateSeenAt);
+            const isSelected = candidate.symbol === selectedCandidate.symbol;
+            return `
+              <button
+                class="mini-button tradez-symbol-button ${isSelected ? "is-active" : ""}"
+                type="button"
+                role="tab"
+                aria-selected="${isSelected ? "true" : "false"}"
+                data-feed-symbol="${candidate.symbol}"
+              >
+                <span>${candidate.symbol}</span>
+                ${candidateIsNew ? '<em class="tradez-feed-tab-new">NEW</em>' : ""}
+              </button>
+            `;
+          })
+          .join("")}
+      </div>
 
-              <div class="tradez-feed-summary-row">
-                <div class="tradez-feed-meta-item">
-                  <span>Setup</span>
-                  <strong class="${signal.tone}">${signal.side}</strong>
-                </div>
-                <div class="tradez-feed-quality-center">
-                  <span class="tradez-feed-quality-caption">Quality Score</span>
-                  <div class="tradez-feed-quality-badge ${sideClass}">
-                    Q${candidate.qualityScore}
-                  </div>
-                  <span class="tradez-feed-quality-tier">${quality.label}</span>
-                </div>
-                <div class="tradez-feed-meta-item tradez-feed-meta-item-right">
-                  <span>Touch</span>
-                  <strong>${signal.touch}</strong>
-                </div>
-              </div>
+      <article class="tradez-feed-card ${sideClass}">
+        <div class="tradez-feed-card-head">
+          <div class="tradez-feed-symbol-block">
+            <div class="tradez-feed-symbol-row">
+              <button class="mini-button tradez-symbol-button tradez-symbol-button-open" type="button" data-symbol="${selectedCandidate.symbol}">
+                ${selectedCandidate.symbol}
+              </button>
+              <div class="monitor-subtle">${volumeTier(universeTickerMap.get(selectedCandidate.symbol)?.quoteVolume || 0).label}</div>
+            </div>
+          </div>
+          <div class="tradez-feed-stamp-block">
+            ${isNew ? '<span class="tradez-feed-new">NEW</span>' : ""}
+            <time datetime="${new Date(seenAt).toISOString()}">${formatExactDateTime(seenAt)}</time>
+          </div>
+        </div>
 
-              <div class="tradez-feed-plan-grid">
-                <div class="tradez-feed-plan-item">
-                  <span>Price</span>
-                  <strong>${formatPrice(candidate.currentPrice, candidate.pricePrecision)}</strong>
-                </div>
-                <div class="tradez-feed-plan-item">
-                  <span>Entry</span>
-                  <strong>${formatPrice(signal.entryLow, candidate.pricePrecision)} - ${formatPrice(signal.entryHigh, candidate.pricePrecision)}</strong>
-                </div>
-                <div class="tradez-feed-plan-item">
-                  <span>Stop</span>
-                  <strong>${formatPrice(signal.stopLoss, candidate.pricePrecision)}</strong>
-                </div>
-                <div class="tradez-feed-plan-item">
-                  <span>Targets</span>
-                  <strong>${formatPrice(signal.tp1, candidate.pricePrecision)} / ${formatPrice(signal.tp2, candidate.pricePrecision)}</strong>
-                </div>
-              </div>
+        <div class="tradez-feed-summary-row">
+          <div class="tradez-feed-meta-item">
+            <span>Setup</span>
+            <strong class="${selectedSignal.tone}">${selectedSignal.side}</strong>
+          </div>
+          <div class="tradez-feed-quality-center">
+            <span class="tradez-feed-quality-caption">Quality Score</span>
+            <div class="tradez-feed-quality-badge ${sideClass}">
+              Q${selectedCandidate.qualityScore}
+            </div>
+            <span class="tradez-feed-quality-tier">${quality.label}</span>
+          </div>
+          <div class="tradez-feed-meta-item tradez-feed-meta-item-right">
+            <span>Touch</span>
+            <strong>${selectedSignal.touch}</strong>
+          </div>
+        </div>
 
-              <div class="tradez-feed-qualifiers">${signal.reasonParts.slice(0, 4).join(" • ")}</div>
-            </article>
-          `;
-        })
-        .join("")}
+        <div class="tradez-feed-plan-grid">
+          <div class="tradez-feed-plan-item">
+            <span>Price</span>
+            <strong>${formatPrice(selectedCandidate.currentPrice, selectedCandidate.pricePrecision)}</strong>
+          </div>
+          <div class="tradez-feed-plan-item">
+            <span>Entry</span>
+            <strong>${formatPrice(selectedSignal.entryLow, selectedCandidate.pricePrecision)} - ${formatPrice(selectedSignal.entryHigh, selectedCandidate.pricePrecision)}</strong>
+          </div>
+          <div class="tradez-feed-plan-item">
+            <span>Stop</span>
+            <strong>${formatPrice(selectedSignal.stopLoss, selectedCandidate.pricePrecision)}</strong>
+          </div>
+          <div class="tradez-feed-plan-item">
+            <span>Targets</span>
+            <strong>${formatPrice(selectedSignal.tp1, selectedCandidate.pricePrecision)} / ${formatPrice(selectedSignal.tp2, selectedCandidate.pricePrecision)}</strong>
+          </div>
+        </div>
+
+        <div class="tradez-feed-qualifiers">${selectedSignal.reasonParts.slice(0, 4).join(" • ")}</div>
+      </article>
     </div>
   `;
+
+  dom.signalTable.querySelectorAll("[data-feed-symbol]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const symbol = button.getAttribute("data-feed-symbol");
+      if (!symbol) return;
+      state.selectedFeedSymbol = symbol;
+      persistState();
+      renderSignalFeed();
+    });
+  });
 
   dom.signalTable.querySelectorAll("[data-symbol]").forEach((button) => {
     button.addEventListener("click", async () => {
