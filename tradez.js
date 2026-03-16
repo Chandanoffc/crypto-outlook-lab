@@ -14,6 +14,7 @@ const ALERT_CHANNEL_STORAGE_KEY = "apex-signals-alert-channels";
 const HOUSE_AUTO_STORAGE_KEY = "apex-signals-auto-paper";
 const TRADEZ_AUTO_STORAGE_KEY = "hyperdrive-tradez-auto-paper";
 const TRADEZ_EXECUTION_STORAGE_KEY = "soloris-tradez-execution";
+const TRADEZ_EXECUTION_PREFERENCES_VERSION = 2;
 const HOUSE_AUTO_STRATEGY_VERSION = 5;
 const PAPER_BACKUP_TYPE = "soloris-paper-books-backup";
 const PAPER_BACKUP_VERSION = 1;
@@ -35,7 +36,7 @@ const DEFAULT_ALERT_CHANNELS = {
 const DEFAULT_TRADEZ_EXECUTION = {
   mode: "paper",
   notifyEntries: true,
-  notifyExits: false,
+  notifyExits: true,
 };
 const DEFAULT_TRADEZ_SIGNAL_TEMPLATE = `{title}
 Pair: {symbol}
@@ -190,13 +191,19 @@ function loadTradezPaperState() {
 function loadTradezDeliveryState() {
   const stored = readStoredJson(TRADEZ_EXECUTION_STORAGE_KEY, {});
   const sharedChannels = readStoredJson(ALERT_CHANNEL_STORAGE_KEY, {});
+  const storedVersion = Number(stored?.preferencesVersion) || 0;
   return {
     mode:
       stored?.mode === "shadow" || stored?.mode === "demo"
         ? stored.mode
         : DEFAULT_TRADEZ_EXECUTION.mode,
     notifyEntries: stored?.notifyEntries === false ? false : DEFAULT_TRADEZ_EXECUTION.notifyEntries,
-    notifyExits: stored?.notifyExits === false ? false : DEFAULT_TRADEZ_EXECUTION.notifyExits,
+    notifyExits:
+      typeof stored?.notifyExits === "boolean"
+        ? storedVersion >= TRADEZ_EXECUTION_PREFERENCES_VERSION
+          ? stored.notifyExits
+          : true
+        : DEFAULT_TRADEZ_EXECUTION.notifyExits,
     template: String(stored?.template || DEFAULT_TRADEZ_SIGNAL_TEMPLATE),
     browser: sharedChannels?.browser === false ? false : DEFAULT_ALERT_CHANNELS.browser,
     discordWebhook: String(sharedChannels?.discordWebhook || DEFAULT_ALERT_CHANNELS.discordWebhook),
@@ -253,6 +260,7 @@ function persistTradezPaperState() {
 
 function persistTradezDeliveryState() {
   writeStoredJson(TRADEZ_EXECUTION_STORAGE_KEY, {
+    preferencesVersion: TRADEZ_EXECUTION_PREFERENCES_VERSION,
     mode: tradezDelivery.mode,
     notifyEntries: tradezDelivery.notifyEntries,
     notifyExits: tradezDelivery.notifyExits,
@@ -825,7 +833,48 @@ function maybeSendTradezProgressNotification(kind, trade, extraLines = [], time 
     sl: `EMA Book SL ${trade.symbol}`,
     be: `EMA Book BE ${trade.symbol}`,
   };
-  const event = buildTradezNotificationEvent(titleMap[kind] || `EMA Book Update ${trade.symbol}`, trade, extraLines, time);
+  const precision = trade.pricePrecision || 2;
+  const baseLine = `${trade.symbol} • ${trade.side} • ${trade.leverage || TRADEZ_AUTO_LEVERAGE}x`;
+  const detectedLine = `At ${formatExactDateTime(time)}`;
+  const shortMessageMap = {
+    tp1: [
+      "SUCCESS.. TP1 Hit✅",
+      baseLine,
+      `Entry ${formatPrice(trade.entryPrice, precision)} • TP1 ${formatPrice(trade.tp1, precision)}`,
+      `SL moved to entry ${formatPrice(trade.entryPrice, precision)}`,
+      detectedLine,
+    ],
+    tp: [
+      "SUCCESS.. TP2 Hit✅",
+      baseLine,
+      `Entry ${formatPrice(trade.entryPrice, precision)} • TP2 ${formatPrice(trade.tp2, precision)}`,
+      `Exit ${formatPrice(trade.exitPrice || trade.tp2, precision)}`,
+      detectedLine,
+    ],
+    sl: [
+      "Oh No, SL HIT❌",
+      baseLine,
+      `Entry ${formatPrice(trade.entryPrice, precision)} • SL ${formatPrice(trade.stopLoss, precision)}`,
+      `Exit ${formatPrice(trade.exitPrice || trade.stopLoss, precision)}`,
+      detectedLine,
+    ],
+    be: [
+      "Protected at Entry🛡️",
+      baseLine,
+      `Breakeven exit ${formatPrice(trade.exitPrice || trade.entryPrice, precision)}`,
+      detectedLine,
+    ],
+  };
+  const shortLines = shortMessageMap[kind] || [
+    titleMap[kind] || `EMA Book Update ${trade.symbol}`,
+    baseLine,
+    detectedLine,
+  ];
+  const event = {
+    ...buildTradezNotificationEvent(titleMap[kind] || `EMA Book Update ${trade.symbol}`, trade, extraLines, time),
+    message: [...shortLines, ...extraLines.filter(Boolean)].join("\n"),
+    formattedMessage: [...shortLines, ...extraLines.filter(Boolean)].join("\n"),
+  };
   dispatchTradezDelivery(event, event.title);
 }
 
