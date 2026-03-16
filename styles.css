@@ -1604,11 +1604,18 @@ body.paper-trader-page .panel-monitor-large .monitor-symbol {
 
 .tradez-grid {
   grid-template-columns: minmax(0, 1.42fr) minmax(360px, 0.98fr);
+  align-items: start;
+}
+
+.tradez-stage,
+.tradez-side-stack {
+  display: contents;
 }
 
 .tradez-chart-panel {
   min-height: 0;
   grid-column: 1;
+  grid-row: 1;
 }
 
 .tradez-trade-card {
@@ -1617,7 +1624,9 @@ body.paper-trader-page .panel-monitor-large .monitor-symbol {
 
 .tradez-feed-panel {
   grid-column: 2;
+  grid-row: 1;
   min-height: 0;
+  align-self: stretch;
 }
 
 .tradez-feed-panel .panel-head {
@@ -1631,7 +1640,14 @@ body.paper-trader-page .panel-monitor-large .monitor-symbol {
 }
 
 .tradez-pulse-panel {
-  grid-column: 1 / -1;
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.tradez-control-panel {
+  grid-column: 2;
+  grid-row: 2;
+  align-self: start;
 }
 
 .tradez-compare-panel,
@@ -3538,6 +3554,7 @@ body.tradez-page .chart-hud-item {
 
 body.tradez-page .tradez-pulse-panel {
   padding-top: 18px;
+  height: fit-content;
 }
 
 body.tradez-page .tradez-pulse-grid {
@@ -3557,6 +3574,7 @@ body.tradez-page .tradez-pulse-score {
 
 body.tradez-page .tradez-control-panel {
   padding: 18px;
+  height: fit-content;
 }
 
 body.tradez-page .tradez-control-row {
@@ -3574,7 +3592,7 @@ body.tradez-page .tradez-control-note {
 }
 
 body.tradez-page .tradez-feed-panel {
-  min-height: 1180px;
+  min-height: 0;
   height: 100%;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
@@ -3772,8 +3790,12 @@ body.tradez-page .quality-tier-q0 {
     grid-template-columns: 1fr;
   }
 
-  body.tradez-page .tradez-side-stack {
-    display: block;
+  body.tradez-page .tradez-chart-panel,
+  body.tradez-page .tradez-feed-panel,
+  body.tradez-page .tradez-pulse-panel,
+  body.tradez-page .tradez-control-panel {
+    grid-column: 1 / -1;
+    grid-row: auto;
   }
 
   body.tradez-page .tradez-pulse-grid {
@@ -3781,6 +3803,7 @@ body.tradez-page .quality-tier-q0 {
   }
 
   body.tradez-page .tradez-feed-panel {
+    height: auto;
     min-height: 860px;
   }
 
