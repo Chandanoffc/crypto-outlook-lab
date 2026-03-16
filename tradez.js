@@ -125,13 +125,16 @@ const dom = {
   auto2MetricLastScanNote: document.getElementById("tradez-auto2-metric-last-scan-note"),
   auto2TabPositions: document.getElementById("tradez-auto2-tab-positions"),
   auto2TabTrades: document.getElementById("tradez-auto2-tab-trades"),
+  auto2TabDemo: document.getElementById("tradez-auto2-tab-demo"),
   auto2TabActivity: document.getElementById("tradez-auto2-tab-activity"),
   auto2TabNote: document.getElementById("tradez-auto2-tab-note"),
   auto2PanelPositions: document.getElementById("tradez-auto2-panel-positions"),
   auto2PanelTrades: document.getElementById("tradez-auto2-panel-trades"),
+  auto2PanelDemo: document.getElementById("tradez-auto2-panel-demo"),
   auto2PanelActivity: document.getElementById("tradez-auto2-panel-activity"),
   auto2OpenGrid: document.getElementById("tradez-auto2-open-grid"),
   auto2TradeTable: document.getElementById("tradez-auto2-trade-table"),
+  auto2DemoTable: document.getElementById("tradez-auto2-demo-table"),
   auto2ActivityTable: document.getElementById("tradez-auto2-activity-table"),
 };
 
@@ -162,6 +165,7 @@ function loadTradezPaperState() {
     autoEnabled: stored.autoEnabled !== false,
     openTrades: Array.isArray(stored.openTrades) ? stored.openTrades : [],
     closedTrades: Array.isArray(stored.closedTrades) ? stored.closedTrades : [],
+    demoOrders: Array.isArray(stored.demoOrders) ? stored.demoOrders : [],
     activity: Array.isArray(stored.activity) ? stored.activity : [],
     activeTab: stored.activeTab || "positions",
     lastScanAt: Number(stored.lastScanAt) || 0,
@@ -222,6 +226,7 @@ function persistTradezPaperState() {
     autoEnabled: tradezPaper.autoEnabled,
     openTrades: tradezPaper.openTrades,
     closedTrades: tradezPaper.closedTrades,
+    demoOrders: tradezPaper.demoOrders,
     activity: tradezPaper.activity,
     activeTab: tradezPaper.activeTab,
     lastScanAt: tradezPaper.lastScanAt,
@@ -281,6 +286,40 @@ function tradeExecutionLabel(mode) {
   if (mode === "demo") return "Binance Demo";
   if (mode === "shadow") return "Shadow";
   return "Paper";
+}
+
+function formatDemoOrderStatus(status) {
+  const normalized = String(status || "PENDING").toUpperCase();
+  if (normalized === "FILLED") return { label: "Filled", tone: "up" };
+  if (normalized === "NEW" || normalized === "PARTIALLY_FILLED") return { label: normalized.replace("_", " "), tone: "neutral" };
+  if (normalized === "SUBMITTING") return { label: "Submitting", tone: "neutral" };
+  if (normalized === "ERROR" || normalized === "CANCELED" || normalized === "EXPIRED" || normalized === "REJECTED") {
+    return { label: normalized.replace("_", " "), tone: "down" };
+  }
+  return { label: normalized.replace(/_/g, " "), tone: "neutral" };
+}
+
+function trimTradezDemoOrders() {
+  tradezPaper.demoOrders = tradezPaper.demoOrders.slice(0, 80);
+}
+
+function pushTradezDemoOrder(record) {
+  tradezPaper.demoOrders.unshift(record);
+  trimTradezDemoOrders();
+}
+
+function updateTradezDemoOrder(recordId, updater) {
+  const index = tradezPaper.demoOrders.findIndex((record) => record.id === recordId);
+  if (index === -1) return;
+  tradezPaper.demoOrders[index] = updater({ ...tradezPaper.demoOrders[index] });
+}
+
+function describeDemoBracket(order) {
+  if (!order) return "-";
+  const status = formatDemoOrderStatus(order.status);
+  const id = order.orderId ? `#${order.orderId}` : "pending";
+  const price = Number.isFinite(order.price) ? ` @ ${formatPrice(order.price, order.pricePrecision || 2)}` : "";
+  return `${id} • ${status.label}${price}`;
 }
 
 function updateTradezDeliveryNote(message) {
@@ -872,9 +911,11 @@ function renderTradezAutoTabs() {
   if (!dom.auto2TabPositions) return;
   dom.auto2TabPositions.classList.toggle("is-active", tradezPaper.activeTab === "positions");
   dom.auto2TabTrades.classList.toggle("is-active", tradezPaper.activeTab === "trades");
+  dom.auto2TabDemo?.classList.toggle("is-active", tradezPaper.activeTab === "demo");
   dom.auto2TabActivity.classList.toggle("is-active", tradezPaper.activeTab === "activity");
   dom.auto2PanelPositions.hidden = tradezPaper.activeTab !== "positions";
   dom.auto2PanelTrades.hidden = tradezPaper.activeTab !== "trades";
+  if (dom.auto2PanelDemo) dom.auto2PanelDemo.hidden = tradezPaper.activeTab !== "demo";
   dom.auto2PanelActivity.hidden = tradezPaper.activeTab !== "activity";
 
   if (dom.auto2TabNote) {
@@ -883,6 +924,8 @@ function renderTradezAutoTabs() {
         ? "Live EMA Signals positions stay visible with entry, TP1, TP2, SL, and live return."
         : tradezPaper.activeTab === "trades"
           ? "The journal records each closed Auto Trade 2 position with planned levels and realized result."
+          : tradezPaper.activeTab === "demo"
+            ? "Binance demo entry and bracket orders stay visible here with order ids, staging status, and exchange feedback."
           : "Engine actions log detections, entries, TP1 protection, exits, and network retries.";
   }
 }
@@ -920,6 +963,7 @@ function applyTradezPaperUpgradeNotice() {
   tradezPaper.balance = TRADEZ_AUTO_START_BALANCE;
   tradezPaper.openTrades = [];
   tradezPaper.closedTrades = [];
+  tradezPaper.demoOrders = [];
   tradezPaper.activity = [];
   tradezPaper.lastScanAt = 0;
   tradezPaper.strategyVersion = TRADEZ_AUTO_VERSION;
@@ -1041,19 +1085,74 @@ function openTradezPaperTrade(candidate) {
       candidate.activeSignal.tone
     );
   } else if (tradezDelivery.mode === "demo") {
+    const demoRecordId = `demo-${trade.id}`;
+    trade.demoJournalId = demoRecordId;
+    trade.demoStatus = "SUBMITTING";
+    pushTradezDemoOrder({
+      id: demoRecordId,
+      createdAt: Date.now(),
+      detectedAt: trade.detectedAt,
+      symbol: trade.symbol,
+      side: trade.side,
+      touch: trade.touch,
+      qualityScore: trade.qualityScore,
+      leverage: trade.leverage,
+      quantity: trade.quantity,
+      status: "SUBMITTING",
+      pricePrecision: candidate.pricePrecision,
+      entryPrice: trade.entryPrice,
+      tp1: trade.tp1,
+      tp2: trade.tp2,
+      stopLoss: trade.stopLoss,
+      executionMode: "demo",
+      entryOrder: null,
+      tp1Order: null,
+      tp2Order: null,
+      stopOrder: null,
+      warnings: [],
+      error: "",
+    });
+    persistTradezPaperState();
+    renderTradezPaperDashboard();
     sendTradezDemoOrder(candidate, trade)
       .then((result) => {
-        trade.demoOrderId = result.orderId || null;
-        trade.demoStatus = result.status || "NEW";
+        trade.demoOrderId = result.entryOrder?.orderId || result.orderId || null;
+        trade.demoStatus = result.overallStatus || result.entryOrder?.status || result.status || "NEW";
+        trade.demoEnvironment = result.environment || "binance-demo";
+        updateTradezDemoOrder(demoRecordId, (record) => ({
+          ...record,
+          status: result.overallStatus || record.status,
+          entryOrder: result.entryOrder || record.entryOrder,
+          tp1Order: result.tp1Order || record.tp1Order,
+          tp2Order: result.tp2Order || record.tp2Order,
+          stopOrder: result.stopOrder || record.stopOrder,
+          warnings: Array.isArray(result.warnings) ? result.warnings : [],
+          error: "",
+          leverage: result.leverage || record.leverage,
+          quantity: Number(result.executedQty) || record.quantity,
+        }));
         persistTradezPaperState();
         logTradezPaperActivity(
-          `Binance demo order staged for ${candidate.symbol} • order ${result.orderId || "pending"} • status ${result.status || "NEW"}.`,
+          `Binance demo bracket staged for ${candidate.symbol} • entry ${result.entryOrder?.orderId || "pending"} • status ${
+            result.overallStatus || result.entryOrder?.status || "NEW"
+          }.`,
           candidate.activeSignal.tone
         );
+        if (Array.isArray(result.warnings) && result.warnings.length) {
+          logTradezPaperActivity(
+            `Binance demo warnings for ${candidate.symbol} • ${result.warnings.join(" • ")}`,
+            "down"
+          );
+        }
         renderTradezPaperDashboard();
       })
       .catch((error) => {
         trade.demoStatus = "ERROR";
+        updateTradezDemoOrder(demoRecordId, (record) => ({
+          ...record,
+          status: "ERROR",
+          error: error.message,
+        }));
         persistTradezPaperState();
         logTradezPaperActivity(
           `Binance demo order failed for ${candidate.symbol} • ${error.message}`,
@@ -1474,6 +1573,25 @@ function renderTradezPaperDashboard() {
       tone: trade.reason === "TP" ? "up" : trade.reason === "BE" ? "neutral" : "down",
     })),
     "No closed Auto Trade 2 trades yet"
+  );
+
+  renderTable(
+    dom.auto2DemoTable,
+    tradezPaper.demoOrders.slice(0, 14).map((record) => {
+      const statusTone = formatDemoOrderStatus(record.status).tone;
+      const warnings = Array.isArray(record.warnings) && record.warnings.length ? ` • warnings ${record.warnings.length}` : "";
+      const error = record.error ? ` • ${record.error}` : "";
+      return {
+        label: `${record.symbol} ${record.side} • ${formatDemoOrderStatus(record.status).label}`,
+        primary: `${formatDateTime(record.createdAt)} • ${tradeExecutionLabel(record.executionMode)} • ${record.leverage}x • Q${Math.round(record.qualityScore || 0)}`,
+        secondaryLabel: "Orders",
+        secondary: `Entry ${describeDemoBracket(record.entryOrder)} • TP1 ${describeDemoBracket(record.tp1Order)} • TP2 ${describeDemoBracket(record.tp2Order)} • SL ${describeDemoBracket(record.stopOrder)}`,
+        tertiaryLabel: "Levels",
+        tertiary: `Entry ${formatPrice(record.entryPrice, record.pricePrecision || 2)} • TP1 ${formatPrice(record.tp1, record.pricePrecision || 2)} • TP2 ${formatPrice(record.tp2, record.pricePrecision || 2)} • SL ${formatPrice(record.stopLoss, record.pricePrecision || 2)}${warnings}${error}`,
+        tone: statusTone,
+      };
+    }),
+    "No Binance demo orders staged yet"
   );
 
   renderTable(
@@ -3249,6 +3367,7 @@ function bindEvents() {
       tradezPaper.balance = TRADEZ_AUTO_START_BALANCE;
       tradezPaper.openTrades = [];
       tradezPaper.closedTrades = [];
+      tradezPaper.demoOrders = [];
       tradezPaper.activity = [];
       tradezPaper.lastScanAt = 0;
       logTradezPaperActivity("Auto Trade 2 reset to the $200 EMA Signals book.", "neutral");
@@ -3269,6 +3388,14 @@ function bindEvents() {
   if (dom.auto2TabTrades) {
     dom.auto2TabTrades.addEventListener("click", () => {
       tradezPaper.activeTab = "trades";
+      persistTradezPaperState();
+      renderTradezAutoTabs();
+    });
+  }
+
+  if (dom.auto2TabDemo) {
+    dom.auto2TabDemo.addEventListener("click", () => {
+      tradezPaper.activeTab = "demo";
       persistTradezPaperState();
       renderTradezAutoTabs();
     });

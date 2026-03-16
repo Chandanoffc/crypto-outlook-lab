@@ -1783,6 +1783,13 @@ body.paper-trader-page .panel-monitor-large .monitor-symbol {
   margin-top: 18px;
 }
 
+.tradez-auto2-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  width: min(520px, 100%);
+}
+
 .tradez-pulse-head {
   display: flex;
   justify-content: space-between;
@@ -2991,6 +2998,13 @@ body.arena-shell-page .conviction-columns {
   body.shell-page:not(.tradez-page) .shell-sidebar-foot {
     justify-items: end;
     align-content: center;
+  }
+}
+
+@media (max-width: 900px) {
+  .tradez-auto2-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
   }
 }
 
