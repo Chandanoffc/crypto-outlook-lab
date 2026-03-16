@@ -12,6 +12,9 @@ const SIGNAL_IDS_KEY = "apex-signals-tradez-seen-signal-ids";
 const TICKER_STORAGE_KEY = "apex-signals-tradez-tickers";
 const HOUSE_AUTO_STORAGE_KEY = "apex-signals-auto-paper";
 const TRADEZ_AUTO_STORAGE_KEY = "hyperdrive-tradez-auto-paper";
+const HOUSE_AUTO_STRATEGY_VERSION = 5;
+const PAPER_BACKUP_TYPE = "soloris-paper-books-backup";
+const PAPER_BACKUP_VERSION = 1;
 const TRADEZ_AUTO_START_BALANCE = 200;
 const TRADEZ_AUTO_LEVERAGE = 5;
 const TRADEZ_AUTO_MAX_CONCURRENT_TRADES = 6;
@@ -28,6 +31,9 @@ const dom = {
   refreshSubmit: document.getElementById("tradez-refresh-submit"),
   scanButton: document.getElementById("tradez-scan-button"),
   alertPermissionButton: document.getElementById("tradez-alert-permission"),
+  backupExportButton: document.getElementById("tradez-backup-export"),
+  backupImportButton: document.getElementById("tradez-backup-import"),
+  backupFileInput: document.getElementById("tradez-backup-file"),
   autoNote: document.getElementById("tradez-auto-note"),
   statusBanner: document.getElementById("tradez-status-banner"),
   metricSelected: document.getElementById("tradez-metric-selected"),
@@ -196,6 +202,91 @@ function writeStoredJson(key, value) {
   } catch (error) {
     // Ignore storage write failures.
   }
+}
+
+function paperBackupFilename() {
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  return `soloris-paper-backup-${stamp}.json`;
+}
+
+function buildPaperBackupPayload() {
+  return {
+    type: PAPER_BACKUP_TYPE,
+    version: PAPER_BACKUP_VERSION,
+    exportedAt: new Date().toISOString(),
+    origin: window.location.origin,
+    books: {
+      autoTrade: readStoredJson(HOUSE_AUTO_STORAGE_KEY, null),
+      emaSignalsAuto2: readStoredJson(TRADEZ_AUTO_STORAGE_KEY, null),
+    },
+  };
+}
+
+function downloadJsonFile(payload, filename) {
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const objectUrl = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = objectUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 0);
+}
+
+function normalizeImportedHouseBook(rawBook) {
+  if (!rawBook || typeof rawBook !== "object") return null;
+  return {
+    ...rawBook,
+    strategyVersion: HOUSE_AUTO_STRATEGY_VERSION,
+  };
+}
+
+function normalizeImportedTradezBook(rawBook) {
+  if (!rawBook || typeof rawBook !== "object") return null;
+  return {
+    ...rawBook,
+    strategyVersion: TRADEZ_AUTO_VERSION,
+  };
+}
+
+async function importPaperBackup(file) {
+  if (!file) return;
+  let parsed;
+
+  try {
+    parsed = JSON.parse(await file.text());
+  } catch (error) {
+    throw new Error("Backup file could not be read. Please choose a valid JSON export.");
+  }
+
+  if (!parsed || parsed.type !== PAPER_BACKUP_TYPE || !parsed.books) {
+    throw new Error("This file is not a valid Soloris paper-trade backup.");
+  }
+
+  const restoredBooks = [];
+  const houseBook = normalizeImportedHouseBook(parsed.books.autoTrade);
+  const emaBook = normalizeImportedTradezBook(parsed.books.emaSignalsAuto2);
+
+  if (houseBook) {
+    writeStoredJson(HOUSE_AUTO_STORAGE_KEY, houseBook);
+    restoredBooks.push("Auto Trade");
+  }
+
+  if (emaBook) {
+    writeStoredJson(TRADEZ_AUTO_STORAGE_KEY, emaBook);
+    restoredBooks.push("Auto Trade 2");
+  }
+
+  if (!restoredBooks.length) {
+    throw new Error("The backup file did not contain any paper-trade books to restore.");
+  }
+
+  Object.assign(tradezPaper, loadTradezPaperState());
+  persistTradezPaperState();
+  renderTradezPaperDashboard();
+  renderTradezComparison();
+  setStatus(`Backup restored for ${restoredBooks.join(" and ")}.`, "up");
 }
 
 function formatCompactUsd(value, digits = 2) {
@@ -2776,6 +2867,30 @@ function bindEvents() {
   });
 
   dom.alertPermissionButton.addEventListener("click", requestAlertPermission);
+  if (dom.backupExportButton) {
+    dom.backupExportButton.addEventListener("click", () => {
+      downloadJsonFile(buildPaperBackupPayload(), paperBackupFilename());
+      setStatus("Paper-trade backup exported.", "up");
+    });
+  }
+
+  if (dom.backupImportButton && dom.backupFileInput) {
+    dom.backupImportButton.addEventListener("click", () => {
+      dom.backupFileInput.click();
+    });
+
+    dom.backupFileInput.addEventListener("change", async (event) => {
+      const file = event.target.files?.[0];
+      try {
+        await importPaperBackup(file);
+      } catch (error) {
+        setStatus(error.message || "Backup import failed.", "down");
+      } finally {
+        event.target.value = "";
+      }
+    });
+  }
+
   dom.tabSignals.addEventListener("click", () => {
     state.activeTab = "signals";
     persistState();
