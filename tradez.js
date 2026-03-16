@@ -35,7 +35,7 @@ const DEFAULT_ALERT_CHANNELS = {
 const DEFAULT_TRADEZ_EXECUTION = {
   mode: "paper",
   notifyEntries: true,
-  notifyExits: true,
+  notifyExits: false,
 };
 
 const dom = {
@@ -173,7 +173,10 @@ function loadTradezDeliveryState() {
   const stored = readStoredJson(TRADEZ_EXECUTION_STORAGE_KEY, {});
   const sharedChannels = readStoredJson(ALERT_CHANNEL_STORAGE_KEY, {});
   return {
-    mode: stored?.mode === "shadow" ? "shadow" : DEFAULT_TRADEZ_EXECUTION.mode,
+    mode:
+      stored?.mode === "shadow" || stored?.mode === "demo"
+        ? stored.mode
+        : DEFAULT_TRADEZ_EXECUTION.mode,
     notifyEntries: stored?.notifyEntries === false ? false : DEFAULT_TRADEZ_EXECUTION.notifyEntries,
     notifyExits: stored?.notifyExits === false ? false : DEFAULT_TRADEZ_EXECUTION.notifyExits,
     browser: sharedChannels?.browser === false ? false : DEFAULT_ALERT_CHANNELS.browser,
@@ -269,7 +272,15 @@ function syncTradezDeliveryInputs() {
 }
 
 function tradezModeLabel() {
-  return tradezDelivery.mode === "shadow" ? "Shadow" : "Paper";
+  if (tradezDelivery.mode === "demo") return "Binance Demo";
+  if (tradezDelivery.mode === "shadow") return "Shadow";
+  return "Paper";
+}
+
+function tradeExecutionLabel(mode) {
+  if (mode === "demo") return "Binance Demo";
+  if (mode === "shadow") return "Shadow";
+  return "Paper";
 }
 
 function updateTradezDeliveryNote(message) {
@@ -329,6 +340,37 @@ function dispatchTradezDelivery(event, title) {
   }).catch((error) => {
     console.error("tradez delivery failed", error);
   });
+}
+
+async function sendTradezDemoOrder(candidate, trade) {
+  const response = await fetch("/api/binance-demo-order", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+    },
+    body: JSON.stringify({
+      symbol: trade.symbol,
+      side: trade.side,
+      quantity: trade.quantity,
+      leverage: trade.leverage,
+      entryPrice: trade.entryPrice,
+      stopLoss: trade.stopLoss,
+      tp1: trade.tp1,
+      tp2: trade.tp2,
+      qualityScore: trade.qualityScore,
+      touch: trade.touch,
+      detectedAt: trade.detectedAt,
+      pricePrecision: candidate.pricePrecision,
+      quantityPrecision: candidate.quantityPrecision,
+    }),
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || "Binance demo order failed.");
+  }
+
+  return payload;
 }
 
 function paperBackupFilename() {
@@ -998,6 +1040,27 @@ function openTradezPaperTrade(candidate) {
       )}.`,
       candidate.activeSignal.tone
     );
+  } else if (tradezDelivery.mode === "demo") {
+    sendTradezDemoOrder(candidate, trade)
+      .then((result) => {
+        trade.demoOrderId = result.orderId || null;
+        trade.demoStatus = result.status || "NEW";
+        persistTradezPaperState();
+        logTradezPaperActivity(
+          `Binance demo order staged for ${candidate.symbol} • order ${result.orderId || "pending"} • status ${result.status || "NEW"}.`,
+          candidate.activeSignal.tone
+        );
+        renderTradezPaperDashboard();
+      })
+      .catch((error) => {
+        trade.demoStatus = "ERROR";
+        persistTradezPaperState();
+        logTradezPaperActivity(
+          `Binance demo order failed for ${candidate.symbol} • ${error.message}`,
+          "down"
+        );
+        renderTradezPaperDashboard();
+      });
   }
   maybeSendTradezEntryNotification(candidate, trade);
   return trade;
@@ -1377,7 +1440,7 @@ function renderTradezPaperDashboard() {
           )} • TP2 ${formatPrice(trade.tp2, trade.pricePrecision || 2)} • SL ${formatPrice(
             trade.stopLoss,
             trade.pricePrecision || 2
-          )} • ${trade.touch} • ${trade.executionMode === "shadow" ? "Shadow" : "Paper"}`,
+          )} • ${trade.touch} • ${tradeExecutionLabel(trade.executionMode)}`,
           tone: toneFromNumber(tradezPaperReturnPct(trade, trade.lastPrice || trade.entryPrice), 0.01),
         }))
       : [
@@ -2959,7 +3022,12 @@ async function requestAlertPermission() {
 
 function saveTradezDeliveryFromForm() {
   if (!dom.deliveryForm) return;
-  tradezDelivery.mode = dom.auto2Mode?.value === "shadow" ? "shadow" : "paper";
+  tradezDelivery.mode =
+    dom.auto2Mode?.value === "demo"
+      ? "demo"
+      : dom.auto2Mode?.value === "shadow"
+        ? "shadow"
+        : "paper";
   tradezDelivery.browser = Boolean(dom.alertBrowserEnabled?.checked);
   tradezDelivery.discordWebhook = String(dom.alertDiscordWebhook?.value || "").trim();
   tradezDelivery.telegramToken = String(dom.alertTelegramToken?.value || "").trim();
