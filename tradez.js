@@ -2319,6 +2319,17 @@ function selectUniverseBatch(universe) {
     return (rightTicker?.quoteVolume || 0) - (leftTicker?.quoteVolume || 0);
   });
 
+  const mustTrackSymbols = new Set(
+    [
+      state.selectedSymbol,
+      `${normalizeToken(state.selectedToken || DEFAULT_TOKEN)}${QUOTE_ASSET}`,
+      ...tradezPaper.openTrades.map((trade) => trade.symbol),
+      ...tradezPaper.demoOrders
+        .filter((record) => record?.status && !["FILLED", "CANCELED", "EXPIRED", "REJECTED"].includes(String(record.status).toUpperCase()))
+        .map((record) => record.symbol),
+    ].filter(Boolean)
+  );
+  const mustTrack = ranked.filter((item) => mustTrackSymbols.has(item.symbol));
   const priority = ranked.slice(0, PRIORITY_SCAN_COUNT);
   const rotationPool = ranked.slice(PRIORITY_SCAN_COUNT);
   const rotationBatch = [];
@@ -2331,7 +2342,7 @@ function selectUniverseBatch(universe) {
     scanCursor = (start + ROTATION_SCAN_COUNT) % rotationPool.length;
   }
 
-  return Array.from(new Map([...priority, ...rotationBatch].map((item) => [item.symbol, item])).values());
+  return Array.from(new Map([...mustTrack, ...priority, ...rotationBatch].map((item) => [item.symbol, item])).values());
 }
 
 function touchLabel(touch20, touch50) {
@@ -3407,21 +3418,21 @@ async function scanUniverse(manual = false) {
       candidate.identifiedAt = preservedIdentifiedAt || scanIdentifiedAt;
     });
 
-    latestBatchMap = new Map(analyses.filter(Boolean).map((candidate) => [candidate.symbol, candidate]));
+    const analyzedCandidates = analyses.filter(Boolean);
+    latestBatchMap = new Map(analyzedCandidates.map((candidate) => [candidate.symbol, candidate]));
 
-    state.candidates = analyses
-      .filter(Boolean)
+    state.candidates = analyzedCandidates
       .filter((candidate) => candidate.activeSignal && candidate.activeSignal.sinceTouchBars <= 3)
       .sort((left, right) => right.qualityScore - left.qualityScore)
       .slice(0, 28);
 
-    candidateMap = new Map(state.candidates.map((candidate) => [candidate.symbol, candidate]));
+    candidateMap = new Map(analyzedCandidates.map((candidate) => [candidate.symbol, candidate]));
     state.lastScanAt = Date.now();
     tradezPaper.lastScanAt = state.lastScanAt;
     persistState();
 
     state.candidates.forEach(pushAlertEvent);
-    refreshTradezPaperTrades(state.candidates);
+    refreshTradezPaperTrades(analyzedCandidates);
     const openedTrades = tradezPaper.autoEnabled ? openTradezQualifiedTrades(state.candidates) : [];
     renderSignalFeed();
     renderAlertFeed();
