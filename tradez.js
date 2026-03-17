@@ -14,7 +14,7 @@ const ALERT_CHANNEL_STORAGE_KEY = "apex-signals-alert-channels";
 const HOUSE_AUTO_STORAGE_KEY = "apex-signals-auto-paper";
 const TRADEZ_AUTO_STORAGE_KEY = "hyperdrive-tradez-auto-paper";
 const TRADEZ_EXECUTION_STORAGE_KEY = "soloris-tradez-execution";
-const TRADEZ_EXECUTION_PREFERENCES_VERSION = 3;
+const TRADEZ_EXECUTION_PREFERENCES_VERSION = 4;
 const HOUSE_AUTO_STRATEGY_VERSION = 5;
 const PAPER_BACKUP_TYPE = "soloris-paper-books-backup";
 const PAPER_BACKUP_VERSION = 1;
@@ -51,7 +51,7 @@ Quality: Q{quality}
 Touch: {touch}
 Detected: {detectedAt}
 Mode: {mode}`;
-const DEFAULT_TRADEZ_SIGNAL_TEMPLATE = `{title}
+const PREVIOUS_TRADEZ_SIGNAL_TEMPLATE = `{title}
 Pair: {symbol}
 Side: {side}
 Entry: {entry}
@@ -66,6 +66,21 @@ First detected: {firstDetectedAt}
 Alerted: {alertedAt}
 Mode: {mode}
 Binance: {binanceLink}`;
+const DEFAULT_TRADEZ_SIGNAL_TEMPLATE = `{title}
+Pair: {symbol}
+Side: {side}
+Entry: {entry}
+Entry Zone: {entryZone}
+TP1: {tp1}
+TP2: {tp2}
+SL: {sl}
+Leverage: {leverage}x
+Quality: Q{quality}
+Touch: {touch}
+First detected: {firstDetectedAt}
+Opened: {openedAt}
+Mode: {mode}
+Open on Binance: {binanceLink}`;
 
 const dom = {
   form: document.getElementById("tradez-form"),
@@ -212,7 +227,8 @@ function loadTradezDeliveryState() {
   const useFreshTemplate =
     !storedTemplate.trim() ||
     (storedVersion < TRADEZ_EXECUTION_PREFERENCES_VERSION &&
-      storedTemplate.trim() === LEGACY_TRADEZ_SIGNAL_TEMPLATE.trim());
+      (storedTemplate.trim() === LEGACY_TRADEZ_SIGNAL_TEMPLATE.trim() ||
+        storedTemplate.trim() === PREVIOUS_TRADEZ_SIGNAL_TEMPLATE.trim()));
   return {
     mode:
       stored?.mode === "shadow" || stored?.mode === "demo"
@@ -423,8 +439,18 @@ function binanceFuturesLink(symbol) {
 function finalizeTradezSignalMessage(message, templateData) {
   let finalMessage = String(message || "").trim();
   if (!finalMessage) finalMessage = DEFAULT_TRADEZ_SIGNAL_TEMPLATE;
+  const trailingLines = [];
+  if (!/first detected:/i.test(finalMessage) && templateData?.firstDetectedAt) {
+    trailingLines.push(`First detected: ${templateData.firstDetectedAt}`);
+  }
+  if (!/\b(opened|alerted):/i.test(finalMessage) && templateData?.openedAt) {
+    trailingLines.push(`Opened: ${templateData.openedAt}`);
+  }
   if (!/binance\.com\/en\/futures\//i.test(finalMessage) && templateData?.binanceLink) {
-    finalMessage = `${finalMessage}\nBinance: ${templateData.binanceLink}`;
+    trailingLines.push(`Open on Binance: ${templateData.binanceLink}`);
+  }
+  if (trailingLines.length) {
+    finalMessage = `${finalMessage}\n${trailingLines.join("\n")}`;
   }
   return finalMessage;
 }
@@ -852,7 +878,7 @@ function buildTradezNotificationEvent(title, trade, extraLines = [], time = Date
         )}`
       : formatPrice(trade.entryPrice, precision);
   const firstDetectedAt = formatExactDateTime(trade.detectedAt || trade.openedAt || time);
-  const alertedAt = formatExactDateTime(time);
+  const openedAt = formatExactDateTime(time);
   const binanceLink = binanceFuturesLink(trade.symbol);
   const baseLines = [
     `Mode: ${tradeExecutionLabel(trade.executionMode)}`,
@@ -865,8 +891,8 @@ function buildTradezNotificationEvent(title, trade, extraLines = [], time = Date
     `Leverage: ${trade.leverage}x`,
     `Quality: Q${Math.round(trade.qualityScore || 0)}`,
     `First detected: ${firstDetectedAt}`,
-    `Alerted: ${alertedAt}`,
-    `Binance: ${binanceLink}`,
+    `Opened: ${openedAt}`,
+    `Open on Binance: ${binanceLink}`,
   ];
   const templateData = {
     title,
@@ -882,7 +908,8 @@ function buildTradezNotificationEvent(title, trade, extraLines = [], time = Date
     touch: trade.touch || "-",
     detectedAt: firstDetectedAt,
     firstDetectedAt,
-    alertedAt,
+    alertedAt: openedAt,
+    openedAt,
     mode: tradeExecutionLabel(trade.executionMode),
     price: formatPrice(trade.lastPrice || trade.entryPrice, precision),
     binanceLink,
@@ -906,8 +933,7 @@ function maybeSendTradezEntryNotification(candidate, trade) {
     trade,
     [
       touchLabel ? `Setup: ${touchLabel}` : "",
-      `First detected: ${formatExactDateTime(trade.detectedAt || trade.openedAt)}`,
-      `Alerted: ${formatExactDateTime(trade.openedAt)}`,
+      `Status: Trade opened after the entry zone retest confirmed.`,
     ],
     trade.openedAt
   );
@@ -932,7 +958,7 @@ function maybeSendTradezProgressNotification(kind, trade, extraLines = [], time 
       `Entry ${formatPrice(trade.entryPrice, precision)} • TP1 ${formatPrice(trade.tp1, precision)}`,
       `SL moved to entry ${formatPrice(trade.entryPrice, precision)}`,
       detectedLine,
-      `Binance: ${binanceFuturesLink(trade.symbol)}`,
+      `Open on Binance: ${binanceFuturesLink(trade.symbol)}`,
     ],
     tp: [
       "SUCCESS.. TP2 Hit✅",
@@ -940,7 +966,7 @@ function maybeSendTradezProgressNotification(kind, trade, extraLines = [], time 
       `Entry ${formatPrice(trade.entryPrice, precision)} • TP2 ${formatPrice(trade.tp2, precision)}`,
       `Exit ${formatPrice(trade.exitPrice || trade.tp2, precision)}`,
       detectedLine,
-      `Binance: ${binanceFuturesLink(trade.symbol)}`,
+      `Open on Binance: ${binanceFuturesLink(trade.symbol)}`,
     ],
     sl: [
       "Oh No, SL HIT❌",
@@ -948,14 +974,14 @@ function maybeSendTradezProgressNotification(kind, trade, extraLines = [], time 
       `Entry ${formatPrice(trade.entryPrice, precision)} • SL ${formatPrice(trade.stopLoss, precision)}`,
       `Exit ${formatPrice(trade.exitPrice || trade.stopLoss, precision)}`,
       detectedLine,
-      `Binance: ${binanceFuturesLink(trade.symbol)}`,
+      `Open on Binance: ${binanceFuturesLink(trade.symbol)}`,
     ],
     be: [
       "Protected at Entry🛡️",
       baseLine,
       `Breakeven exit ${formatPrice(trade.exitPrice || trade.entryPrice, precision)}`,
       detectedLine,
-      `Binance: ${binanceFuturesLink(trade.symbol)}`,
+      `Open on Binance: ${binanceFuturesLink(trade.symbol)}`,
     ],
   };
   const shortLines = shortMessageMap[kind] || [
