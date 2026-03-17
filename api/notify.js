@@ -1,3 +1,6 @@
+const crypto = require("crypto");
+const { insertAlertDelivery } = require("../lib/neon-db");
+
 function buildJsonResponse(res, statusCode, payload) {
   res.statusCode = statusCode;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
@@ -78,6 +81,29 @@ async function sendEmail(emailTo, title, event) {
   }
 }
 
+async function recordDelivery(destination, status, errorText, title, event, meta = {}) {
+  try {
+    await insertAlertDelivery({
+      deliveryId: `${destination}:${meta?.eventType || "notification"}:${meta?.symbol || event?.symbol || "unknown"}:${crypto.randomUUID()}`,
+      source: meta?.source || "notify_api",
+      strategy: meta?.strategy || null,
+      eventType: meta?.eventType || null,
+      symbol: meta?.symbol || event?.symbol || null,
+      title,
+      destination,
+      status,
+      error: errorText || null,
+      sentAt: Date.now(),
+      payload: {
+        event,
+        meta,
+      },
+    });
+  } catch (error) {
+    // Alert logging is non-blocking and should never break delivery.
+  }
+}
+
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
     buildJsonResponse(res, 405, {
@@ -90,6 +116,7 @@ module.exports = async function handler(req, res) {
     const body = await readJsonBody(req);
     const title = String(body?.title || "Soloris Alert").slice(0, 140);
     const event = body?.event || {};
+    const meta = body?.meta || {};
     const destinations = body?.destinations || {};
     const results = {};
 
@@ -97,8 +124,10 @@ module.exports = async function handler(req, res) {
       try {
         await sendDiscord(String(destinations.discordWebhook).trim(), title, event);
         results.discord = "sent";
+        await recordDelivery("discord", "sent", "", title, event, meta);
       } catch (error) {
         results.discord = error.message;
+        await recordDelivery("discord", "failed", error.message, title, event, meta);
       }
     }
 
@@ -111,8 +140,10 @@ module.exports = async function handler(req, res) {
           event
         );
         results.telegram = "sent";
+        await recordDelivery("telegram", "sent", "", title, event, meta);
       } catch (error) {
         results.telegram = error.message;
+        await recordDelivery("telegram", "failed", error.message, title, event, meta);
       }
     }
 
@@ -120,8 +151,10 @@ module.exports = async function handler(req, res) {
       try {
         await sendEmail(String(destinations.emailTo).trim(), title, event);
         results.email = "sent";
+        await recordDelivery("email", "sent", "", title, event, meta);
       } catch (error) {
         results.email = error.message;
+        await recordDelivery("email", "failed", error.message, title, event, meta);
       }
     }
 

@@ -57,6 +57,24 @@ Set this GitHub Actions secret too:
 
 The 24/7 server-side Upbit listing alerts use these server-side values, not the browser-saved alert fields.
 
+## Neon event logging
+
+The app can now persist signal, trade, and alert-delivery events into Neon Postgres for later analysis.
+
+Set this Vercel environment variable to activate it:
+
+- `DATABASE_URL`
+
+Once `DATABASE_URL` is present, the app will lazily create these tables on first write:
+
+- `signal_events`
+- `trade_events`
+- `alert_deliveries`
+
+Reference schema: [`db/schema.sql`](/tmp/crypto-outlook-lab-fix/db/schema.sql)
+
+If `DATABASE_URL` is not configured, the logging hooks stay dormant and the platform keeps running normally.
+
 ## Notes
 
 - The dashboard resolves tokens against Binance USDT perpetual futures, not spot.

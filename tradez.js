@@ -478,10 +478,119 @@ function dispatchTradezDelivery(event, title) {
     body: JSON.stringify({
       title,
       event,
+      meta: {
+        source: "ema_signals",
+        strategy: "ema_book",
+        eventType: event.deliveryType || "notification",
+      },
       destinations,
     }),
   }).catch((error) => {
     console.error("tradez delivery failed", error);
+  });
+}
+
+function emitServerLog(stream, event) {
+  fetch("/api/log-event", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+    },
+    body: JSON.stringify({
+      stream,
+      event,
+    }),
+    keepalive: true,
+  }).catch(() => {
+    // Database logging is observational only and must never interrupt the UI.
+  });
+}
+
+function logTradezSignalOpened(candidate, trade) {
+  const quoteVolume = Number(universeTickerMap.get(candidate.symbol)?.quoteVolume) || 0;
+  emitServerLog("signal", {
+    eventId: `${trade.id}:signal-opened`,
+    source: "ema_signals",
+    strategy: "ema_book",
+    strategyVersion: TRADEZ_AUTO_VERSION,
+    signalType: "ema_pullback_confluence",
+    symbol: trade.symbol,
+    token: trade.token,
+    side: trade.side,
+    interval: STRATEGY_INTERVAL,
+    touch: trade.touch,
+    strength: trade.strength,
+    qualityScore: trade.qualityScore,
+    detectedAt: trade.detectedAt,
+    openedAt: trade.openedAt,
+    eventTime: trade.openedAt,
+    entryLow: trade.entryZoneLow,
+    entryHigh: trade.entryZoneHigh,
+    entryPrice: trade.entryPrice,
+    tp1: trade.tp1,
+    tp2: trade.tp2,
+    stopLoss: trade.stopLoss,
+    leverage: trade.leverage,
+    pricePrecision: trade.pricePrecision,
+    metadata: {
+      note: candidate.activeSignal?.note || null,
+      reasonParts: candidate.activeSignal?.reasonParts || [],
+      setupBias: candidate.setupBias?.label || null,
+      setupBiasTone: candidate.setupBias?.tone || null,
+      rr: candidate.paperTrade?.rr || null,
+      targetMarginPct: candidate.paperTrade?.targetMarginPct || null,
+      stopMarginPct: candidate.paperTrade?.stopMarginPct || null,
+      change24h: candidate.change24h,
+      currentPrice: candidate.currentPrice,
+      fundingRate: candidate.fundingRate,
+      oiChange1h: candidate.oiChange1h,
+      latestRsi: candidate.latestRsi,
+      latestAtr: candidate.latestAtr,
+      latestVolume: candidate.latestVolume,
+      volumeTier: volumeTier(quoteVolume).label,
+      quoteVolume,
+      executionMode: trade.executionMode,
+    },
+  });
+}
+
+function logTradezTradeEvent(eventType, trade, extra = {}) {
+  emitServerLog("trade", {
+    eventId: `${trade.id}:${eventType}:${extra.eventSuffix || Number(extra.eventTime || Date.now())}`,
+    tradeId: trade.id,
+    source: "ema_signals",
+    strategy: "ema_book",
+    strategyVersion: TRADEZ_AUTO_VERSION,
+    eventType,
+    symbol: trade.symbol,
+    side: trade.side,
+    eventTime: extra.eventTime || Date.now(),
+    detectedAt: trade.detectedAt,
+    openedAt: trade.openedAt,
+    closedAt: extra.closedAt || trade.closedAt || null,
+    entryPrice: trade.entryPrice,
+    exitPrice: extra.exitPrice ?? trade.exitPrice ?? null,
+    tp1: trade.tp1,
+    tp2: trade.tp2,
+    stopLoss: trade.stopLoss,
+    leverage: trade.leverage,
+    quantity: trade.quantity,
+    marginUsed: trade.marginUsed,
+    qualityScore: trade.qualityScore,
+    returnPct: extra.returnPct ?? trade.returnPct ?? null,
+    pnlUsd: extra.pnlUsd ?? trade.pnlUsd ?? null,
+    balanceAfter: extra.balanceAfter ?? trade.balanceAfter ?? null,
+    metadata: {
+      touch: trade.touch,
+      strength: trade.strength,
+      entryZoneLow: trade.entryZoneLow,
+      entryZoneHigh: trade.entryZoneHigh,
+      lastPrice: extra.lastPrice ?? trade.lastPrice ?? null,
+      executionMode: trade.executionMode,
+      demoStatus: trade.demoStatus || null,
+      demoJournalId: trade.demoJournalId || null,
+      ...extra.metadata,
+    },
   });
 }
 
@@ -530,6 +639,7 @@ async function sendTradezTestSignal() {
     ["This is a delivery test from Soloris EMA Signals."],
     testTime
   );
+  event.deliveryType = "test_signal";
   dispatchTradezDelivery(event, event.title);
   setStatus("Test signal sent to the currently saved delivery channels.", "up");
 }
@@ -928,6 +1038,7 @@ function maybeSendTradezEntryNotification(candidate, trade) {
     ],
     trade.openedAt
   );
+  event.deliveryType = "entry_opened";
   dispatchTradezDelivery(event, event.title);
 }
 
@@ -984,6 +1095,14 @@ function maybeSendTradezProgressNotification(kind, trade, extraLines = [], time 
     ...buildTradezNotificationEvent(titleMap[kind] || `EMA Book Update ${trade.symbol}`, trade, extraLines, time),
     message: [...shortLines, ...extraLines.filter(Boolean)].join("\n"),
     formattedMessage: [...shortLines, ...extraLines.filter(Boolean)].join("\n"),
+    deliveryType:
+      kind === "tp1"
+        ? "tp1_hit"
+        : kind === "tp"
+          ? "tp_hit"
+          : kind === "sl"
+            ? "sl_hit"
+            : "break_even_exit",
   };
   dispatchTradezDelivery(event, event.title);
 }
@@ -1003,6 +1122,16 @@ function markTradezDemoTp1(trade, candidate, statusRecord) {
     `${trade.symbol} hit TP1 on Binance Demo. The runner stays open while TP2 remains the next objective.`,
     trade.side === "Long" ? "up" : "down"
   );
+  logTradezTradeEvent("tp1_hit", trade, {
+    eventSuffix: "tp1",
+    eventTime: Number(statusRecord?.tp1Order?.updateTime) || Date.now(),
+    metadata: {
+      exitType: "tp1",
+      demoSync: true,
+      markPrice,
+      runnerTarget: trade.tp2,
+    },
+  });
   maybeSendTradezProgressNotification(
     "tp1",
     trade,
@@ -1500,6 +1629,19 @@ function openTradezPaperTrade(candidate) {
     executionMode: tradezDelivery.mode,
   };
   tradezPaper.openTrades.push(trade);
+  logTradezSignalOpened(candidate, trade);
+  logTradezTradeEvent("opened", trade, {
+    eventSuffix: "opened",
+    eventTime: trade.openedAt,
+    metadata: {
+      quoteVolume: Number(universeTickerMap.get(candidate.symbol)?.quoteVolume) || 0,
+      rr: candidate.paperTrade?.rr || null,
+      targetMarginPct: candidate.paperTrade?.targetMarginPct || null,
+      stopMarginPct: candidate.paperTrade?.stopMarginPct || null,
+      reasonParts: candidate.activeSignal?.reasonParts || [],
+      identifiedAt: candidate.identifiedAt || candidate.activeSignal?.detectedAt || null,
+    },
+  });
 
   logTradezPaperActivity(
     `Opened Auto Trade 2 ${candidate.activeSignal.side} ${candidate.symbol} • entry ${formatPrice(
@@ -1621,6 +1763,22 @@ function closeTradezPaperTrade(tradeId, reason, exitPrice, precisionHint) {
   tradezPaper.closedTrades.unshift(closedTrade);
   tradezPaper.closedTrades = tradezPaper.closedTrades.slice(0, 100);
   tradezPaper.openTrades.splice(index, 1);
+  logTradezTradeEvent(
+    reason === "TP" ? "tp_hit" : reason === "BE" ? "break_even_exit" : "sl_hit",
+    closedTrade,
+    {
+      eventSuffix: reason.toLowerCase(),
+      eventTime: closedTrade.closedAt,
+      closedAt: closedTrade.closedAt,
+      exitPrice: closedTrade.exitPrice,
+      returnPct: closedTrade.returnPct,
+      pnlUsd: closedTrade.pnlUsd,
+      balanceAfter: closedTrade.balanceAfter,
+      metadata: {
+        closeReason: reason,
+      },
+    }
+  );
 
   logTradezPaperActivity(
     `${reason} closed Auto Trade 2 ${trade.side} ${trade.symbol} • entry ${formatPrice(
@@ -1686,6 +1844,15 @@ function refreshTradezPaperTrades(candidates) {
         )}.`,
         trade.side === "Long" ? "up" : "down"
       );
+      logTradezTradeEvent("tp1_hit", trade, {
+        eventSuffix: "tp1",
+        eventTime: Date.now(),
+        metadata: {
+          exitType: "tp1",
+          demoSync: trade.executionMode === "demo",
+          runnerTarget: trade.tp2,
+        },
+      });
       maybeSendTradezProgressNotification(
         "tp1",
         trade,

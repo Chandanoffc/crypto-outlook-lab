@@ -207,6 +207,88 @@ function writeStoredJson(key, value) {
   }
 }
 
+function emitServerLog(stream, event) {
+  fetch("/api/log-event", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+    },
+    body: JSON.stringify({
+      stream,
+      event,
+    }),
+    keepalive: true,
+  }).catch(() => {
+    // Logging must never interrupt the trading surface.
+  });
+}
+
+function logHouseSignalOpened(candidate, trade) {
+  emitServerLog("signal", {
+    eventId: `${trade.id}:signal-opened`,
+    source: "auto_trade",
+    strategy: "house_trend",
+    strategyVersion: STRATEGY_VERSION,
+    signalType: "trend_continuation",
+    symbol: trade.symbol,
+    token: trade.token,
+    side: trade.side,
+    interval: state.interval,
+    touch: candidate.trade?.touch || null,
+    strength: candidate.trade?.strength || null,
+    qualityScore: candidate.refinedQualityScore ?? candidate.qualityScore,
+    biasScore: candidate.biasScore,
+    detectedAt: trade.detectedAt,
+    openedAt: trade.openedAt,
+    eventTime: trade.openedAt,
+    entryLow: candidate.trade?.entry,
+    entryHigh: candidate.trade?.entry,
+    entryPrice: trade.entryPrice,
+    tp1: trade.takeProfit,
+    tp2: trade.takeProfit,
+    stopLoss: trade.stopLoss,
+    leverage: trade.leverage,
+    pricePrecision: trade.pricePrecision,
+    metadata: {
+      projectedMovePct: candidate.trade?.projectedMovePct,
+      targetReturnPct: trade.targetReturnPct,
+      stopReturnPct: trade.stopReturnPct,
+      rr: candidate.trade?.rr,
+      currentPrice: candidate.currentPrice,
+    },
+  });
+}
+
+function logHouseTradeEvent(eventType, trade, extra = {}) {
+  emitServerLog("trade", {
+    eventId: `${trade.id}:${eventType}:${extra.eventSuffix || Number(extra.eventTime || Date.now())}`,
+    tradeId: trade.id,
+    source: "auto_trade",
+    strategy: "house_trend",
+    strategyVersion: STRATEGY_VERSION,
+    eventType,
+    symbol: trade.symbol,
+    side: trade.side,
+    eventTime: extra.eventTime || Date.now(),
+    detectedAt: trade.detectedAt,
+    openedAt: trade.openedAt,
+    closedAt: extra.closedAt || trade.closedAt || null,
+    entryPrice: trade.entryPrice,
+    exitPrice: extra.exitPrice ?? trade.exitPrice ?? null,
+    tp1: trade.takeProfit,
+    tp2: trade.takeProfit,
+    stopLoss: trade.stopLoss,
+    leverage: trade.leverage,
+    quantity: trade.quantity,
+    marginUsed: trade.marginUsed,
+    qualityScore: trade.qualityScore,
+    returnPct: extra.returnPct ?? trade.returnPct ?? null,
+    pnlUsd: extra.pnlUsd ?? trade.pnlUsd ?? null,
+    balanceAfter: extra.balanceAfter ?? trade.balanceAfter ?? null,
+    metadata: extra.metadata || {},
+  });
+}
+
 function paperBackupFilename() {
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   return `soloris-paper-backup-${stamp}.json`;
@@ -2155,6 +2237,20 @@ function openTradeFromCandidate(candidate) {
     lastPrice: candidate.currentPrice,
   });
 
+  const openedTrade = state.openTrades[state.openTrades.length - 1];
+  logHouseSignalOpened(candidate, openedTrade);
+  logHouseTradeEvent("opened", openedTrade, {
+    eventTime: openedTrade.openedAt,
+    eventSuffix: "opened",
+    metadata: {
+      projectedMovePct: candidate.trade?.projectedMovePct,
+      targetReturnPct: candidate.trade?.targetReturnPct,
+      stopReturnPct: candidate.trade?.stopReturnPct,
+      rr: candidate.trade?.rr,
+      currentPrice: candidate.currentPrice,
+    },
+  });
+
   logActivity(
     `Opened ${spec.label} ${candidate.trade.stance} ${candidate.symbol} • entry ${formatPrice(
       candidate.trade.entry,
@@ -2208,11 +2304,25 @@ function closeTrade(tradeId, reason, exitPrice, precisionHint) {
     quantity: trade.quantity,
     pricePrecision: trade.pricePrecision,
   });
+  const closedTrade = state.closedTrades[0];
   state.closedTrades = state.closedTrades.slice(0, 90);
   state.strategyBalances[trade.strategyId] =
     (Number(state.strategyBalances[trade.strategyId]) || STRATEGY_START_BALANCE) + pnlUsd;
   recomputeTotalBalance();
   state.openTrades.splice(tradeIndex, 1);
+
+  logHouseTradeEvent(reason === "TP" ? "tp" : "sl", closedTrade, {
+    eventTime: closedTrade.closedAt,
+    eventSuffix: reason.toLowerCase(),
+    closedAt: closedTrade.closedAt,
+    exitPrice: closedTrade.exitPrice,
+    returnPct: closedTrade.returnPct,
+    pnlUsd: closedTrade.pnlUsd,
+    balanceAfter: closedTrade.balanceAfter,
+    metadata: {
+      reason,
+    },
+  });
 
   logActivity(
     `${reason} closed ${trade.strategyLabel} ${trade.side} ${trade.symbol} • entry ${formatPrice(
@@ -2237,6 +2347,13 @@ function tightenTradeProtection(trade, candidate) {
   if (progress >= 0.45 && !trade.breakEvenArmed) {
     trade.stopLoss = breakevenStop;
     trade.breakEvenArmed = true;
+    logHouseTradeEvent("break_even_armed", trade, {
+      eventSuffix: "be",
+      metadata: {
+        progress,
+        newStopLoss: trade.stopLoss,
+      },
+    });
     logActivity(
       `Protected ${trade.symbol} by moving the stop to breakeven after early follow-through.`,
       "neutral"
@@ -2246,6 +2363,13 @@ function tightenTradeProtection(trade, candidate) {
   if (progress >= 0.75 && !trade.profitLockArmed) {
     trade.stopLoss = lockedStop;
     trade.profitLockArmed = true;
+    logHouseTradeEvent("profit_lock_armed", trade, {
+      eventSuffix: "lock",
+      metadata: {
+        progress,
+        newStopLoss: trade.stopLoss,
+      },
+    });
     logActivity(
       `Locked profit on ${trade.symbol}; stop advanced to ${formatPrice(
         trade.stopLoss,
