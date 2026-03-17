@@ -231,7 +231,7 @@ async function getUpbitNotices() {
   return notices;
 }
 
-module.exports = async function handler(req, res) {
+async function handler(req, res) {
   const token = normalizeToken(firstQueryValue(req.query?.token) || DEFAULT_TOKEN);
   const tokenTicker = token.replace(/^\d+/, "");
 
@@ -259,4 +259,7 @@ module.exports = async function handler(req, res) {
       error: error.message || "Unable to fetch Upbit notices.",
     });
   }
-};
+}
+
+module.exports = handler;
+module.exports.getUpbitNotices = getUpbitNotices;

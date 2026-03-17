@@ -39,6 +39,24 @@ Live deployment:
 - Signals Arena: [https://soloris-signals.vercel.app/arena.html](https://soloris-signals.vercel.app/arena.html)
 - EMA Signals: [https://soloris-signals.vercel.app/tradez.html](https://soloris-signals.vercel.app/tradez.html)
 
+## Upbit 24/7 alerts
+
+The repo includes a GitHub Actions scheduler at `.github/workflows/upbit-listing-alerts.yml` that triggers
+`/api/upbit-cron` every 5 minutes so Upbit listing notices can be delivered even when the dashboard is closed.
+
+Set these Vercel environment variables:
+
+- `UPBIT_CRON_SECRET`
+- `UPBIT_DISCORD_WEBHOOK` optional
+- `UPBIT_TELEGRAM_TOKEN` optional
+- `UPBIT_TELEGRAM_CHAT_ID` optional
+
+Set this GitHub Actions secret too:
+
+- `UPBIT_CRON_SECRET`
+
+The 24/7 server-side Upbit listing alerts use these server-side values, not the browser-saved alert fields.
+
 ## Notes
 
 - The dashboard resolves tokens against Binance USDT perpetual futures, not spot.

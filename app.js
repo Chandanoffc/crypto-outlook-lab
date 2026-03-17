@@ -1339,41 +1339,6 @@ function pushAlertEvent(event, title) {
   dispatchAlertChannels(event, title);
 }
 
-function dispatchUpbitListingChannels(notice) {
-  const destinations = remoteChannelPayload();
-  const remoteDestinations = {
-    discordWebhook: destinations.discordWebhook,
-    telegramToken: destinations.telegramToken,
-    telegramChatId: destinations.telegramChatId,
-  };
-  if (!remoteDestinations.discordWebhook && !(remoteDestinations.telegramToken && remoteDestinations.telegramChatId)) {
-    return;
-  }
-
-  const tokenLabel = notice.tokenLabel || notice.ticker || notice.title || "Upbit listing";
-  const event = {
-    type: "upbit_market_support",
-    symbol: notice.ticker || "UPBIT",
-    message: tokenLabel,
-    formattedMessage: `⭐️UPBIT LISTING ALERT\n${tokenLabel}\n${notice.url}`,
-    time: Date.now(),
-  };
-
-  fetch("/api/notify", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json; charset=utf-8",
-    },
-    body: JSON.stringify({
-      title: "⭐️UPBIT LISTING ALERT",
-      event,
-      destinations: remoteDestinations,
-    }),
-  }).catch((error) => {
-    console.error("upbit alert delivery failed", error);
-  });
-}
-
 function evaluateAlerts(derived, precisionHint) {
   if (!state.snapshot) return;
 
@@ -1484,7 +1449,6 @@ function processUpbitNoticeUpdates(notices) {
       time: Date.now(),
     };
     appendAlertEvent(event);
-    dispatchUpbitListingChannels(notice);
   });
   if (freshSupportNotices.length) persistAlerts();
 }
