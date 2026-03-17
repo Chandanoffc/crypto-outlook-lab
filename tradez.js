@@ -26,6 +26,7 @@ const TRADEZ_AUTO_VERSION = 1;
 const TRADEZ_AUTO_TRADE_COOLDOWN_MS = 4 * 60 * 1000;
 const TICKER_CACHE_MAX_AGE_MS = 30 * 60 * 1000;
 const FRESH_SIGNAL_WINDOW_MS = 10 * 60 * 1000;
+const DEMO_STATUS_SYNC_BATCH = 20;
 const DEFAULT_ALERT_CHANNELS = {
   browser: true,
   discordWebhook: "",
@@ -318,6 +319,11 @@ function tradeExecutionLabel(mode) {
 function formatDemoOrderStatus(status) {
   const normalized = String(status || "PENDING").toUpperCase();
   if (normalized === "FILLED") return { label: "Filled", tone: "up" };
+  if (normalized === "TP1_FILLED") return { label: "TP1 Filled", tone: "up" };
+  if (normalized === "TP2_FILLED") return { label: "TP2 Filled", tone: "up" };
+  if (normalized === "SL_FILLED") return { label: "SL Filled", tone: "down" };
+  if (normalized === "LIVE") return { label: "Live", tone: "neutral" };
+  if (normalized === "WATCHING") return { label: "Watching", tone: "neutral" };
   if (normalized === "NEW" || normalized === "PARTIALLY_FILLED") return { label: normalized.replace("_", " "), tone: "neutral" };
   if (normalized === "SUBMITTING") return { label: "Submitting", tone: "neutral" };
   if (normalized === "ERROR" || normalized === "CANCELED" || normalized === "EXPIRED" || normalized === "REJECTED") {
@@ -339,6 +345,15 @@ function updateTradezDemoOrder(recordId, updater) {
   const index = tradezPaper.demoOrders.findIndex((record) => record.id === recordId);
   if (index === -1) return;
   tradezPaper.demoOrders[index] = updater({ ...tradezPaper.demoOrders[index] });
+}
+
+function findTradezDemoOrder(recordId) {
+  return tradezPaper.demoOrders.find((record) => record.id === recordId) || null;
+}
+
+function isTradezDemoFinalStatus(status) {
+  const normalized = String(status || "").toUpperCase();
+  return ["TP2_FILLED", "SL_FILLED", "ERROR", "CANCELED", "EXPIRED", "REJECTED"].includes(normalized);
 }
 
 function describeDemoBracket(order) {
@@ -495,6 +510,25 @@ async function sendTradezDemoOrder(candidate, trade) {
   }
 
   return payload;
+}
+
+async function fetchTradezDemoStatuses(records) {
+  const response = await fetch("/api/binance-demo-status", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+    },
+    body: JSON.stringify({
+      records: records.slice(0, DEMO_STATUS_SYNC_BATCH),
+    }),
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || "Unable to sync Binance demo statuses.");
+  }
+
+  return Array.isArray(payload.records) ? payload.records : [];
 }
 
 function paperBackupFilename() {
@@ -876,6 +910,167 @@ function maybeSendTradezProgressNotification(kind, trade, extraLines = [], time 
     formattedMessage: [...shortLines, ...extraLines.filter(Boolean)].join("\n"),
   };
   dispatchTradezDelivery(event, event.title);
+}
+
+function markTradezDemoTp1(trade, candidate, statusRecord) {
+  if (trade.tp1Hit) return;
+  trade.tp1Hit = true;
+  trade.currentTarget = trade.tp2;
+  trade.demoTp1Notified = true;
+  const markPrice =
+    Number(statusRecord?.position?.markPrice) ||
+    Number(statusRecord?.tp1Order?.avgPrice) ||
+    Number(statusRecord?.tp1Order?.price) ||
+    trade.tp1;
+  trade.lastPrice = markPrice;
+  logTradezPaperActivity(
+    `${trade.symbol} hit TP1 on Binance Demo. The runner stays open while TP2 remains the next objective.`,
+    trade.side === "Long" ? "up" : "down"
+  );
+  maybeSendTradezProgressNotification(
+    "tp1",
+    trade,
+    [
+      `TP1 hit: ${formatPrice(trade.tp1, candidate?.pricePrecision || trade.pricePrecision)}`,
+      `Demo mark: ${formatPrice(markPrice, candidate?.pricePrecision || trade.pricePrecision)}`,
+      `Runner target: ${formatPrice(trade.tp2, candidate?.pricePrecision || trade.pricePrecision)}`,
+    ],
+    Number(statusRecord?.tp1Order?.updateTime) || Date.now()
+  );
+}
+
+function closeTradezDemoSyncedTrade(trade, reason, exitPrice, precisionHint, extraLines = [], time = Date.now()) {
+  const closedTrade = closeTradezPaperTrade(
+    trade.id,
+    reason,
+    exitPrice,
+    precisionHint || trade.pricePrecision || 2
+  );
+  if (!closedTrade) return null;
+  const kind = reason === "TP" ? "tp" : reason === "BE" ? "be" : "sl";
+  maybeSendTradezProgressNotification(kind, closedTrade, extraLines, time);
+  return closedTrade;
+}
+
+async function syncTradezDemoStatuses(candidates) {
+  const demoTrades = tradezPaper.openTrades.filter(
+    (trade) => trade.executionMode === "demo" && trade.demoJournalId
+  );
+  if (!demoTrades.length && !tradezPaper.demoOrders.some((record) => !isTradezDemoFinalStatus(record.status))) {
+    return;
+  }
+
+  const candidateLookup = new Map(candidates.map((candidate) => [candidate.symbol, candidate]));
+  const recordsToSync = [];
+
+  demoTrades.forEach((trade) => {
+    const record = findTradezDemoOrder(trade.demoJournalId);
+    if (!record) return;
+    recordsToSync.push({
+      id: record.id,
+      symbol: trade.symbol,
+      entryOrderId: record.entryOrder?.orderId || trade.demoOrderId || null,
+      tp1OrderId: record.tp1Order?.orderId || null,
+      tp2OrderId: record.tp2Order?.orderId || null,
+      stopOrderId: record.stopOrder?.orderId || null,
+    });
+  });
+
+  if (!recordsToSync.length) return;
+
+  let statusRecords;
+  try {
+    statusRecords = await fetchTradezDemoStatuses(recordsToSync);
+  } catch (error) {
+    logTradezPaperActivity(`Binance demo sync failed • ${error.message}`, "down");
+    return;
+  }
+
+  statusRecords.forEach((statusRecord) => {
+    updateTradezDemoOrder(statusRecord.id, (record) => ({
+      ...record,
+      checkedAt: statusRecord.checkedAt || Date.now(),
+      status: statusRecord.overallStatus || record.status,
+      entryOrder: statusRecord.entryOrder || record.entryOrder,
+      tp1Order: statusRecord.tp1Order || record.tp1Order,
+      tp2Order: statusRecord.tp2Order || record.tp2Order,
+      stopOrder: statusRecord.stopOrder || record.stopOrder,
+      position: statusRecord.position || record.position,
+      warnings: Array.isArray(statusRecord.warnings) ? statusRecord.warnings : record.warnings || [],
+      error: "",
+    }));
+
+    const trade = tradezPaper.openTrades.find((item) => item.demoJournalId === statusRecord.id);
+    if (!trade) return;
+
+    const candidate = candidateLookup.get(trade.symbol);
+    const precision = candidate?.pricePrecision || trade.pricePrecision || 2;
+    const markPrice =
+      Number(statusRecord.position?.markPrice) ||
+      candidate?.currentPrice ||
+      trade.lastPrice ||
+      trade.entryPrice;
+
+    trade.lastPrice = markPrice;
+    trade.pricePrecision = precision;
+    trade.demoStatus = statusRecord.overallStatus || trade.demoStatus || "WATCHING";
+
+    if (
+      String(statusRecord.tp1Order?.status || "").toUpperCase() === "FILLED" &&
+      !trade.tp1Hit
+    ) {
+      markTradezDemoTp1(trade, candidate, statusRecord);
+    }
+
+    if (String(statusRecord.tp2Order?.status || "").toUpperCase() === "FILLED") {
+      closeTradezDemoSyncedTrade(
+        trade,
+        "TP",
+        Number(statusRecord.tp2Order?.avgPrice) ||
+          Number(statusRecord.tp2Order?.price) ||
+          trade.tp2,
+        precision,
+        [
+          `Exchange status: TP2 filled`,
+          `Exit: ${formatPrice(Number(statusRecord.tp2Order?.avgPrice) || Number(statusRecord.tp2Order?.price) || trade.tp2, precision)}`,
+        ],
+        Number(statusRecord.tp2Order?.updateTime) || Date.now()
+      );
+      updateTradezDemoOrder(statusRecord.id, (record) => ({
+        ...record,
+        status: "TP2_FILLED",
+      }));
+      return;
+    }
+
+    if (String(statusRecord.stopOrder?.status || "").toUpperCase() === "FILLED") {
+      const stopExit =
+        Number(statusRecord.stopOrder?.avgPrice) ||
+        Number(statusRecord.stopOrder?.stopPrice) ||
+        Number(statusRecord.stopOrder?.price) ||
+        trade.stopLoss;
+      const closeReason =
+        Math.abs((stopExit - trade.entryPrice) / Math.max(Math.abs(trade.entryPrice), 0.0000001)) <
+        0.0005
+          ? "BE"
+          : "SL";
+      closeTradezDemoSyncedTrade(
+        trade,
+        closeReason,
+        stopExit,
+        precision,
+        [
+          `Exchange status: ${closeReason === "BE" ? "breakeven stop" : "stop filled"}`,
+          `Exit: ${formatPrice(stopExit, precision)}`,
+        ],
+        Number(statusRecord.stopOrder?.updateTime) || Date.now()
+      );
+      updateTradezDemoOrder(statusRecord.id, (record) => ({
+        ...record,
+        status: "SL_FILLED",
+      }));
+    }
+  });
 }
 
 function isFreshSignal(timestamp) {
@@ -1260,6 +1455,10 @@ function openTradezPaperTrade(candidate) {
     sendTradezDemoOrder(candidate, trade)
       .then((result) => {
         trade.demoOrderId = result.entryOrder?.orderId || result.orderId || null;
+        trade.demoEntryOrderId = result.entryOrder?.orderId || null;
+        trade.demoTp1OrderId = result.tp1Order?.orderId || null;
+        trade.demoTp2OrderId = result.tp2Order?.orderId || null;
+        trade.demoStopOrderId = result.stopOrder?.orderId || null;
         trade.demoStatus = result.overallStatus || result.entryOrder?.status || result.status || "NEW";
         trade.demoEnvironment = result.environment || "binance-demo";
         updateTradezDemoOrder(demoRecordId, (record) => ({
@@ -1354,6 +1553,9 @@ function refreshTradezPaperTrades(candidates) {
 
     trade.lastPrice = candidate.currentPrice;
     trade.pricePrecision = candidate.pricePrecision;
+    if (trade.executionMode === "demo") {
+      return;
+    }
     const currentPrice = candidate.currentPrice;
     const hitTp1 =
       !trade.tp1Hit &&
@@ -1727,13 +1929,17 @@ function renderTradezPaperDashboard() {
       const statusTone = formatDemoOrderStatus(record.status).tone;
       const warnings = Array.isArray(record.warnings) && record.warnings.length ? ` • warnings ${record.warnings.length}` : "";
       const error = record.error ? ` • ${record.error}` : "";
+      const positionAmt = Number(record.position?.positionAmt) || 0;
+      const positionSummary = Number.isFinite(positionAmt)
+        ? ` • Pos ${positionAmt.toFixed(4)} @ ${formatPrice(Number(record.position?.markPrice) || 0, record.pricePrecision || 2)}`
+        : "";
       return {
         label: `${record.symbol} ${record.side} • ${formatDemoOrderStatus(record.status).label}`,
-        primary: `${formatDateTime(record.createdAt)} • ${tradeExecutionLabel(record.executionMode)} • ${record.leverage}x • Q${Math.round(record.qualityScore || 0)}`,
+        primary: `${formatDateTime(record.createdAt)} • ${tradeExecutionLabel(record.executionMode)} • ${record.leverage}x • Q${Math.round(record.qualityScore || 0)}${positionSummary}`,
         secondaryLabel: "Orders",
         secondary: `Entry ${describeDemoBracket(record.entryOrder)} • TP1 ${describeDemoBracket(record.tp1Order)} • TP2 ${describeDemoBracket(record.tp2Order)} • SL ${describeDemoBracket(record.stopOrder)}`,
         tertiaryLabel: "Levels",
-        tertiary: `Entry ${formatPrice(record.entryPrice, record.pricePrecision || 2)} • TP1 ${formatPrice(record.tp1, record.pricePrecision || 2)} • TP2 ${formatPrice(record.tp2, record.pricePrecision || 2)} • SL ${formatPrice(record.stopLoss, record.pricePrecision || 2)}${warnings}${error}`,
+        tertiary: `Entry ${formatPrice(record.entryPrice, record.pricePrecision || 2)} • TP1 ${formatPrice(record.tp1, record.pricePrecision || 2)} • TP2 ${formatPrice(record.tp2, record.pricePrecision || 2)} • SL ${formatPrice(record.stopLoss, record.pricePrecision || 2)} • Sync ${formatDateTime(record.checkedAt || record.createdAt)}${warnings}${error}`,
         tone: statusTone,
       };
     }),
@@ -3432,6 +3638,7 @@ async function scanUniverse(manual = false) {
     persistState();
 
     state.candidates.forEach(pushAlertEvent);
+    await syncTradezDemoStatuses(analyzedCandidates);
     refreshTradezPaperTrades(analyzedCandidates);
     const openedTrades = tradezPaper.autoEnabled ? openTradezQualifiedTrades(state.candidates) : [];
     renderSignalFeed();
