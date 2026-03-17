@@ -1,0 +1,19 @@
+name: Upbit Listing Alerts
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping-upbit-cron:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Upbit alert endpoint
+        env:
+          UPBIT_CRON_SECRET: ${{ secrets.UPBIT_CRON_SECRET }}
+        run: |
+          curl --fail --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer ${UPBIT_CRON_SECRET}" \
+            "https://soloris-signals.vercel.app/api/upbit-cron"
