@@ -14,7 +14,7 @@ const ALERT_CHANNEL_STORAGE_KEY = "apex-signals-alert-channels";
 const HOUSE_AUTO_STORAGE_KEY = "apex-signals-auto-paper";
 const TRADEZ_AUTO_STORAGE_KEY = "hyperdrive-tradez-auto-paper";
 const TRADEZ_EXECUTION_STORAGE_KEY = "soloris-tradez-execution";
-const TRADEZ_EXECUTION_PREFERENCES_VERSION = 4;
+const TRADEZ_EXECUTION_PREFERENCES_VERSION = 5;
 const HOUSE_AUTO_STRATEGY_VERSION = 5;
 const PAPER_BACKUP_TYPE = "soloris-paper-books-backup";
 const PAPER_BACKUP_VERSION = 1;
@@ -35,7 +35,7 @@ const DEFAULT_ALERT_CHANNELS = {
   emailTo: "",
 };
 const DEFAULT_TRADEZ_EXECUTION = {
-  mode: "paper",
+  mode: "demo",
   notifyEntries: true,
   notifyExits: true,
 };
@@ -149,7 +149,6 @@ const dom = {
   auto2Note: document.getElementById("tradez-auto2-note"),
   deliveryForm: document.getElementById("tradez-delivery-form"),
   deliveryNote: document.getElementById("tradez-delivery-note"),
-  auto2Mode: document.getElementById("tradez-auto2-mode"),
   alertBrowserEnabled: document.getElementById("tradez-alert-browser-enabled"),
   alertDiscordWebhook: document.getElementById("tradez-alert-discord-webhook"),
   alertTelegramToken: document.getElementById("tradez-alert-telegram-token"),
@@ -230,10 +229,7 @@ function loadTradezDeliveryState() {
       (storedTemplate.trim() === LEGACY_TRADEZ_SIGNAL_TEMPLATE.trim() ||
         storedTemplate.trim() === PREVIOUS_TRADEZ_SIGNAL_TEMPLATE.trim()));
   return {
-    mode:
-      stored?.mode === "shadow" || stored?.mode === "demo"
-        ? stored.mode
-        : DEFAULT_TRADEZ_EXECUTION.mode,
+    mode: DEFAULT_TRADEZ_EXECUTION.mode,
     notifyEntries: stored?.notifyEntries === false ? false : DEFAULT_TRADEZ_EXECUTION.notifyEntries,
     notifyExits:
       typeof stored?.notifyExits === "boolean"
@@ -330,7 +326,6 @@ function writeStoredJson(key, value) {
 }
 
 function syncTradezDeliveryInputs() {
-  if (dom.auto2Mode) dom.auto2Mode.value = tradezDelivery.mode;
   if (dom.alertBrowserEnabled) dom.alertBrowserEnabled.checked = Boolean(tradezDelivery.browser);
   if (dom.alertDiscordWebhook) dom.alertDiscordWebhook.value = tradezDelivery.discordWebhook || "";
   if (dom.alertTelegramToken) dom.alertTelegramToken.value = tradezDelivery.telegramToken || "";
@@ -341,15 +336,11 @@ function syncTradezDeliveryInputs() {
 }
 
 function tradezModeLabel() {
-  if (tradezDelivery.mode === "demo") return "Binance Demo";
-  if (tradezDelivery.mode === "shadow") return "Shadow";
-  return "Paper";
+  return "Binance Sync";
 }
 
-function tradeExecutionLabel(mode) {
-  if (mode === "demo") return "Binance Demo";
-  if (mode === "shadow") return "Shadow";
-  return "Paper";
+function tradeExecutionLabel() {
+  return "Binance Sync";
 }
 
 function formatDemoOrderStatus(status) {
@@ -414,8 +405,8 @@ function refreshTradezDeliverySummary() {
   ].filter(Boolean);
   updateTradezDeliveryNote(
     armed.length
-      ? `${tradezModeLabel()} mode armed. Delivery: ${armed.join(", ")}.`
-      : `${tradezModeLabel()} mode armed. No remote delivery destination is saved yet.`
+      ? `${tradezModeLabel()} is armed. Delivery: ${armed.join(", ")}.`
+      : `${tradezModeLabel()} is armed. No remote delivery destination is saved yet.`
   );
 }
 
@@ -1438,6 +1429,13 @@ function candidateIsAtLiveEntry(candidate) {
   return candidate.currentPrice >= plan.entryZoneLow && candidate.currentPrice <= plan.entryZoneHigh;
 }
 
+function signalIsAtLiveEntry(signal, currentPrice) {
+  if (!signal || !Number.isFinite(currentPrice)) return false;
+  const entryLow = Math.min(signal.entryLow, signal.entryHigh);
+  const entryHigh = Math.max(signal.entryLow, signal.entryHigh);
+  return currentPrice >= entryLow && currentPrice <= entryHigh;
+}
+
 function highQualityTradezAutoCandidates(candidates, threshold) {
   return candidates
     .map(buildTradezAutoCandidate)
@@ -1516,14 +1514,7 @@ function openTradezPaperTrade(candidate) {
     )} • SL ${formatPrice(candidate.paperTrade.stopLoss, candidate.pricePrecision)} • Q${candidate.qualityScore}.`,
     candidate.activeSignal.tone
   );
-  if (tradezDelivery.mode === "shadow") {
-    logTradezPaperActivity(
-      `Shadow execution staged for ${candidate.symbol} • ${candidate.activeSignal.side} • ${trade.leverage}x • detected ${formatExactDateTime(
-        trade.detectedAt
-      )}.`,
-      candidate.activeSignal.tone
-    );
-  } else if (tradezDelivery.mode === "demo") {
+  if (tradezDelivery.mode === "demo") {
     const demoRecordId = `demo-${trade.id}`;
     trade.demoJournalId = demoRecordId;
     trade.demoStatus = "SUBMITTING";
@@ -1644,6 +1635,18 @@ function closeTradezPaperTrade(tradeId, reason, exitPrice, precisionHint) {
   return closedTrade;
 }
 
+function markTradezLocalDemoStatus(trade, status, checkedAt = Date.now(), warning = "") {
+  if (!trade?.demoJournalId) return;
+  updateTradezDemoOrder(trade.demoJournalId, (record) => ({
+    ...record,
+    status,
+    checkedAt,
+    warnings: warning
+      ? uniqueValues([...(Array.isArray(record.warnings) ? record.warnings : []), warning])
+      : record.warnings || [],
+  }));
+}
+
 function refreshTradezPaperTrades(candidates) {
   if (!tradezPaper.openTrades.length) return;
   const candidateLookup = new Map(candidates.map((candidate) => [candidate.symbol, candidate]));
@@ -1654,9 +1657,6 @@ function refreshTradezPaperTrades(candidates) {
 
     trade.lastPrice = candidate.currentPrice;
     trade.pricePrecision = candidate.pricePrecision;
-    if (trade.executionMode === "demo") {
-      return;
-    }
     const currentPrice = candidate.currentPrice;
     const hitTp1 =
       !trade.tp1Hit &&
@@ -1670,6 +1670,15 @@ function refreshTradezPaperTrades(candidates) {
       trade.tp1Hit = true;
       trade.stopLoss = trade.entryPrice;
       trade.currentTarget = trade.tp2;
+      if (trade.executionMode === "demo") {
+        trade.demoTp1Notified = true;
+        markTradezLocalDemoStatus(
+          trade,
+          "TP1_FILLED",
+          Date.now(),
+          "Local price crossed TP1 before exchange sync confirmed the fill."
+        );
+      }
       logTradezPaperActivity(
         `${trade.symbol} hit TP1. Stop moved to entry while the runner targets ${formatPrice(
           trade.tp2,
@@ -1692,6 +1701,14 @@ function refreshTradezPaperTrades(candidates) {
     if (hitTp2) {
       const closedTrade = closeTradezPaperTrade(trade.id, "TP", trade.tp2, candidate.pricePrecision);
       if (closedTrade) {
+        if (trade.executionMode === "demo") {
+          markTradezLocalDemoStatus(
+            trade,
+            "TP2_FILLED",
+            closedTrade.closedAt,
+            "Local price crossed TP2 before exchange sync confirmed the fill."
+          );
+        }
         maybeSendTradezProgressNotification(
           "tp",
           closedTrade,
@@ -1707,6 +1724,14 @@ function refreshTradezPaperTrades(candidates) {
       const closeReason = trade.tp1Hit ? "BE" : "SL";
       const closedTrade = closeTradezPaperTrade(trade.id, closeReason, trade.stopLoss, candidate.pricePrecision);
       if (closedTrade) {
+        if (trade.executionMode === "demo") {
+          markTradezLocalDemoStatus(
+            trade,
+            closeReason === "BE" ? "SL_FILLED" : "SL_FILLED",
+            closedTrade.closedAt,
+            "Local price crossed the stop before exchange sync confirmed the fill."
+          );
+        }
         maybeSendTradezProgressNotification(
           closeReason === "BE" ? "be" : "sl",
           closedTrade,
@@ -3232,25 +3257,30 @@ function renderSelectedAnalysis(analysis, snapshot) {
     : analysis.setupBias.summary;
 
   const quality = qualityTier(analysis.qualityScore);
+  const active = analysis.activeSignal;
   dom.qualityBadge.textContent = `${analysis.qualityScore}`;
   dom.qualityBadge.className = analysis.activeSignal
     ? `score-badge ${analysis.setupBias.tone} ${quality.className}`
     : "score-badge neutral";
   setQualityMeter(analysis.qualityScore);
+  const waitingForRetest = active ? !signalIsAtLiveEntry(active, analysis.currentPrice) : false;
   setStreamStatus(
     analysis.activeSignal
-      ? `${analysis.activeSignal.side} setup found on ${analysis.activeSignal.touch} confluence`
+      ? waitingForRetest
+        ? `${analysis.activeSignal.side} setup detected • waiting for entry zone retest`
+        : `${analysis.activeSignal.side} setup live in entry zone`
       : "No fresh 1H EMA + S/R confluence signal right now",
-    analysis.activeSignal ? analysis.activeSignal.tone : "neutral"
+    analysis.activeSignal ? (waitingForRetest ? "waiting" : analysis.activeSignal.tone) : "neutral"
   );
 
-  const active = analysis.activeSignal;
   dom.summaryCopy.textContent = active
-    ? `${snapshot.symbol} is showing a ${active.side.toLowerCase()} continuation setup after a ${active.touch} confluence with strong volume. Quality ${active.qualityScore} reflects trend stack, level strength, candle confirmation, liquidity, order flow, and room to target.`
+    ? waitingForRetest
+      ? `${snapshot.symbol} has a valid ${active.side.toLowerCase()} continuation setup after a ${active.touch} confluence, but price is still outside the entry zone. Quality ${active.qualityScore} reflects trend stack, level strength, candle confirmation, liquidity, order flow, and room to target while the engine waits for the retest.`
+      : `${snapshot.symbol} is showing a ${active.side.toLowerCase()} continuation setup after a ${active.touch} confluence with strong volume. Quality ${active.qualityScore} reflects trend stack, level strength, candle confirmation, liquidity, order flow, and room to target.`
     : `${snapshot.symbol} still shows ${analysis.setupBias.label.toLowerCase()} structure, but the latest candles have not produced a fresh support/resistance confluence worth promoting.`;
 
-  dom.stancePill.textContent = active ? active.side : "Waiting";
-  dom.stancePill.className = `pill ${active ? active.tone : "neutral"}`;
+  dom.stancePill.textContent = active ? (waitingForRetest ? "Waiting" : active.side) : "Waiting";
+  dom.stancePill.className = `pill ${active ? (waitingForRetest ? "waiting" : active.tone) : "neutral"}`;
   dom.entryZone.textContent = active
     ? `${formatPrice(active.entryLow, analysis.pricePrecision)} - ${formatPrice(active.entryHigh, analysis.pricePrecision)}`
     : "-";
@@ -3258,10 +3288,14 @@ function renderSelectedAnalysis(analysis, snapshot) {
   dom.tp1.textContent = active ? formatPrice(active.tp1, analysis.pricePrecision) : "-";
   dom.tp2.textContent = active ? formatPrice(active.tp2, analysis.pricePrecision) : "-";
   dom.planNote.textContent = active
-    ? `${active.touch} • detected ${formatDateTime(active.detectedAt)} • ${active.sinceTouchBars} bars since touch`
+    ? waitingForRetest
+      ? `${active.touch} • detected ${formatDateTime(active.detectedAt)} • waiting for price to retest ${formatPrice(active.entryLow, analysis.pricePrecision)} - ${formatPrice(active.entryHigh, analysis.pricePrecision)}`
+      : `${active.touch} • detected ${formatDateTime(active.detectedAt)} • ${active.sinceTouchBars} bars since touch`
     : "Need a fresh EMA + S1/S2 or R1/R2 confluence with confirmation";
   dom.tradeSummary.textContent = active
-    ? `${active.note} Entry zone centers on the reaction into the tested level and nearby EMA confluence. Initial invalidation sits beyond the touched support or resistance plus an ATR buffer.`
+    ? waitingForRetest
+      ? `${active.note} The setup is valid, but no entry should be taken until price actually returns into the entry zone. Initial invalidation still sits beyond the touched support or resistance plus an ATR buffer.`
+      : `${active.note} Entry zone centers on the reaction into the tested level and nearby EMA confluence. Initial invalidation sits beyond the touched support or resistance plus an ATR buffer.`
     : "Tradez is waiting for a fresh trend pullback that reacts at S1/S2 or R1/R2, ideally with EMA confluence and strong volume.";
 
   renderSignalList(buildSignalCards(analysis));
@@ -3370,6 +3404,7 @@ function renderSignalFeed() {
   const selectedSignal = selectedCandidate.activeSignal;
   const seenAt = selectedCandidate.identifiedAt || selectedSignal.detectedAt;
   const isNew = isFreshSignal(seenAt);
+  const waitingForRetest = !signalIsAtLiveEntry(selectedSignal, selectedCandidate.currentPrice);
   const sideClass = selectedSignal.side === "Long" ? "is-long" : "is-short";
   const quality = qualityTier(selectedCandidate.qualityScore);
   state.selectedFeedSymbol = selectedCandidate.symbol;
@@ -3432,6 +3467,12 @@ function renderSignalFeed() {
             <span>Touch</span>
             <strong>${selectedSignal.touch}</strong>
           </div>
+        </div>
+
+        <div class="tradez-feed-entry-state ${waitingForRetest ? "waiting" : selectedSignal.tone}">
+          ${waitingForRetest
+            ? `Waiting for entry zone retest • live price ${formatPrice(selectedCandidate.currentPrice, selectedCandidate.pricePrecision)} is still outside ${formatPrice(selectedSignal.entryLow, selectedCandidate.pricePrecision)} - ${formatPrice(selectedSignal.entryHigh, selectedCandidate.pricePrecision)}`
+            : `Live entry now • price ${formatPrice(selectedCandidate.currentPrice, selectedCandidate.pricePrecision)} is inside the planned entry zone`}
         </div>
 
         <div class="tradez-feed-plan-grid">
@@ -3639,12 +3680,7 @@ async function requestAlertPermission() {
 
 function saveTradezDeliveryFromForm() {
   if (!dom.deliveryForm) return;
-  tradezDelivery.mode =
-    dom.auto2Mode?.value === "demo"
-      ? "demo"
-      : dom.auto2Mode?.value === "shadow"
-        ? "shadow"
-        : "paper";
+  tradezDelivery.mode = "demo";
   tradezDelivery.browser = Boolean(dom.alertBrowserEnabled?.checked);
   tradezDelivery.discordWebhook = String(dom.alertDiscordWebhook?.value || "").trim();
   tradezDelivery.telegramToken = String(dom.alertTelegramToken?.value || "").trim();
@@ -3808,7 +3844,7 @@ function bindEvents() {
     dom.deliveryForm.addEventListener("submit", (event) => {
       event.preventDefault();
       saveTradezDeliveryFromForm();
-      setStatus(`Auto Trade 2 delivery saved. ${tradezModeLabel()} mode is ready.`, "up");
+      setStatus(`Auto Trade 2 delivery saved. ${tradezModeLabel()} is ready.`, "up");
     });
   }
   if (dom.alertTestButton) {

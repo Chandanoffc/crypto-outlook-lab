@@ -47,7 +47,7 @@
         <div class="tradez-sidebar-foot">
           <div class="app-pill">EMA Pullback</div>
           <div class="tradez-sidebar-card">
-            <span class="stack-label">Execution Mode</span>
+            <span class="stack-label">Execution</span>
             <strong>1H EMA Continuation</strong>
             <small>Dense signal terminal tuned for review, comparison, and active trade management.</small>
           </div>
@@ -373,7 +373,7 @@
                 <h3>Auto Trade vs Auto Trade 2</h3>
               </div>
               <p class="subsection-meta">
-                House strategy benchmark versus the EMA Signals paper engine.
+                House strategy benchmark versus the EMA Signals Binance-synced execution engine.
               </p>
             </div>
 
@@ -384,10 +384,11 @@
             <div class="panel-head">
               <div>
                 <p class="panel-label">Auto Trade 2</p>
-                <h2>EMA Signals paper execution desk</h2>
+                <h2>EMA Signals execution desk</h2>
                 <p class="subtitle-inline">
-                  Independent paper engine dedicated to EMA Signals. It runs in parallel with Auto
-                  Trade so we can compare both systems honestly over time.
+                  Independent EMA engine dedicated to Binance-synced entries, bracket tracking, and
+                  mobile alerts. It runs in parallel with Auto Trade so we can compare both systems
+                  honestly over time.
                 </p>
               </div>
 
@@ -404,21 +405,17 @@
               <div class="panel-head-inline">
                 <div>
                   <p class="panel-label">Execution & Delivery</p>
-                  <h3>Safe shadow mode and mobile alerts</h3>
+                  <h3>Binance-synced execution and mobile alerts</h3>
                 </div>
                 <p id="tradez-delivery-note" class="subsection-meta">
-                  Paper stays local. Shadow simulates execution. Binance Demo can stage safe testnet futures orders and push alerts to Discord or Telegram.
+                  Auto Trade 2 now uses one Binance-synced path for entry timing, demo bracket staging, and Discord or Telegram alerts.
                 </p>
               </div>
 
               <form id="tradez-delivery-form" class="mini-form delivery-form tradez-delivery-form">
                 <label>
-                  Execution Mode
-                  <select id="tradez-auto2-mode">
-                    <option value="paper">Paper</option>
-                    <option value="shadow">Shadow</option>
-                    <option value="demo">Binance Demo</option>
-                  </select>
+                  Execution Path
+                  <input type="text" value="Binance Sync" readonly />
                 </label>
 
                 <label class="checkbox-card">
