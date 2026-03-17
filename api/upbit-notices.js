@@ -71,6 +71,29 @@ function extractTicker(title) {
   return match ? match[1] : "";
 }
 
+function extractTokenName(title, ticker) {
+  const cleaned = cleanText(title);
+  const englishMatch = cleaned.match(
+    /(?:new\s+)?market support for\s+(.+?)\s*\(([A-Z0-9]{2,15})\)/i
+  );
+  if (englishMatch) return englishMatch[1].trim();
+
+  const koreanMatch = cleaned.match(/(.+?)\s*\(([A-Z0-9]{2,15})\)\s*(?:신규\s*)?(?:거래지원|마켓\s*지원)/);
+  if (koreanMatch) return koreanMatch[1].trim();
+
+  if (ticker) {
+    return cleaned.replace(new RegExp(`\\(${ticker}\\)`, "i"), "").trim();
+  }
+  return cleaned;
+}
+
+function buildTokenLabel(title) {
+  const ticker = extractTicker(title);
+  const tokenName = extractTokenName(title, ticker);
+  if (tokenName && ticker) return `${tokenName} (${ticker})`;
+  return tokenName || ticker || cleanText(title);
+}
+
 function isMarketSupportTitle(title) {
   const normalized = String(title || "").toLowerCase();
   return (
@@ -113,6 +136,8 @@ function anchorNoticeCandidates(html) {
       url,
       publishedAt: normalizeDateString(dateMatch?.[1]),
       ticker: extractTicker(title),
+      tokenName: extractTokenName(title, extractTicker(title)),
+      tokenLabel: buildTokenLabel(title),
       isMarketSupport: isMarketSupportTitle(title),
       source: "Upbit Notice",
     });
@@ -144,12 +169,15 @@ function collectJsonNoticeCandidates(node, notices = []) {
     const url = hrefCandidate
       ? normalizeUrl(hrefCandidate)
       : `${UPBIT_NOTICE_URL}?id=${String(idCandidate)}`;
+    const ticker = extractTicker(titleCandidate);
     notices.push({
       id: String(idCandidate || buildNoticeId(url, titleCandidate)),
       title: cleanText(titleCandidate),
       url,
       publishedAt: normalizeDateString(String(dateCandidate || "")),
-      ticker: extractTicker(titleCandidate),
+      ticker,
+      tokenName: extractTokenName(titleCandidate, ticker),
+      tokenLabel: buildTokenLabel(titleCandidate),
       isMarketSupport: isMarketSupportTitle(titleCandidate),
       source: "Upbit Notice",
     });

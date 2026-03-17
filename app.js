@@ -1329,10 +1329,49 @@ function dispatchAlertChannels(event, title) {
   });
 }
 
-function pushAlertEvent(event, title) {
+function appendAlertEvent(event) {
   state.alertEvents.unshift(event);
   state.alertEvents = state.alertEvents.slice(0, 24);
+}
+
+function pushAlertEvent(event, title) {
+  appendAlertEvent(event);
   dispatchAlertChannels(event, title);
+}
+
+function dispatchUpbitListingChannels(notice) {
+  const destinations = remoteChannelPayload();
+  const remoteDestinations = {
+    discordWebhook: destinations.discordWebhook,
+    telegramToken: destinations.telegramToken,
+    telegramChatId: destinations.telegramChatId,
+  };
+  if (!remoteDestinations.discordWebhook && !(remoteDestinations.telegramToken && remoteDestinations.telegramChatId)) {
+    return;
+  }
+
+  const tokenLabel = notice.tokenLabel || notice.ticker || notice.title || "Upbit listing";
+  const event = {
+    type: "upbit_market_support",
+    symbol: notice.ticker || "UPBIT",
+    message: tokenLabel,
+    formattedMessage: `⭐️UPBIT LISTING ALERT\n${tokenLabel}\n${notice.url}`,
+    time: Date.now(),
+  };
+
+  fetch("/api/notify", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+    },
+    body: JSON.stringify({
+      title: "⭐️UPBIT LISTING ALERT",
+      event,
+      destinations: remoteDestinations,
+    }),
+  }).catch((error) => {
+    console.error("upbit alert delivery failed", error);
+  });
 }
 
 function evaluateAlerts(derived, precisionHint) {
@@ -1436,17 +1475,16 @@ function processUpbitNoticeUpdates(notices) {
 
   freshSupportNotices.forEach((notice) => {
     const symbol = notice.ticker || "UPBIT";
-    pushAlertEvent(
-      {
-        id: `upbit-${notice.id}-${Date.now()}`,
-        type: "upbit_market_support",
-        symbol,
-        message: notice.title,
-        tone: "up",
-        time: Date.now(),
-      },
-      `Upbit market support • ${symbol}`
-    );
+    const event = {
+      id: `upbit-${notice.id}-${Date.now()}`,
+      type: "upbit_market_support",
+      symbol,
+      message: notice.tokenLabel || notice.title,
+      tone: "up",
+      time: Date.now(),
+    };
+    appendAlertEvent(event);
+    dispatchUpbitListingChannels(notice);
   });
   if (freshSupportNotices.length) persistAlerts();
 }
