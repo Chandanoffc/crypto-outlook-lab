@@ -14,7 +14,7 @@ const ALERT_CHANNEL_STORAGE_KEY = "apex-signals-alert-channels";
 const HOUSE_AUTO_STORAGE_KEY = "apex-signals-auto-paper";
 const TRADEZ_AUTO_STORAGE_KEY = "hyperdrive-tradez-auto-paper";
 const TRADEZ_EXECUTION_STORAGE_KEY = "soloris-tradez-execution";
-const TRADEZ_EXECUTION_PREFERENCES_VERSION = 2;
+const TRADEZ_EXECUTION_PREFERENCES_VERSION = 3;
 const HOUSE_AUTO_STRATEGY_VERSION = 5;
 const PAPER_BACKUP_TYPE = "soloris-paper-books-backup";
 const PAPER_BACKUP_VERSION = 1;
@@ -39,7 +39,7 @@ const DEFAULT_TRADEZ_EXECUTION = {
   notifyEntries: true,
   notifyExits: true,
 };
-const DEFAULT_TRADEZ_SIGNAL_TEMPLATE = `{title}
+const LEGACY_TRADEZ_SIGNAL_TEMPLATE = `{title}
 Pair: {symbol}
 Side: {side}
 Entry: {entry}
@@ -51,6 +51,21 @@ Quality: Q{quality}
 Touch: {touch}
 Detected: {detectedAt}
 Mode: {mode}`;
+const DEFAULT_TRADEZ_SIGNAL_TEMPLATE = `{title}
+Pair: {symbol}
+Side: {side}
+Entry: {entry}
+Entry Zone: {entryZone}
+TP1: {tp1}
+TP2: {tp2}
+SL: {sl}
+Leverage: {leverage}x
+Quality: Q{quality}
+Touch: {touch}
+First detected: {firstDetectedAt}
+Alerted: {alertedAt}
+Mode: {mode}
+Binance: {binanceLink}`;
 
 const dom = {
   form: document.getElementById("tradez-form"),
@@ -193,6 +208,11 @@ function loadTradezDeliveryState() {
   const stored = readStoredJson(TRADEZ_EXECUTION_STORAGE_KEY, {});
   const sharedChannels = readStoredJson(ALERT_CHANNEL_STORAGE_KEY, {});
   const storedVersion = Number(stored?.preferencesVersion) || 0;
+  const storedTemplate = String(stored?.template || "");
+  const useFreshTemplate =
+    !storedTemplate.trim() ||
+    (storedVersion < TRADEZ_EXECUTION_PREFERENCES_VERSION &&
+      storedTemplate.trim() === LEGACY_TRADEZ_SIGNAL_TEMPLATE.trim());
   return {
     mode:
       stored?.mode === "shadow" || stored?.mode === "demo"
@@ -205,7 +225,7 @@ function loadTradezDeliveryState() {
           ? stored.notifyExits
           : true
         : DEFAULT_TRADEZ_EXECUTION.notifyExits,
-    template: String(stored?.template || DEFAULT_TRADEZ_SIGNAL_TEMPLATE),
+    template: useFreshTemplate ? DEFAULT_TRADEZ_SIGNAL_TEMPLATE : storedTemplate,
     browser: sharedChannels?.browser === false ? false : DEFAULT_ALERT_CHANNELS.browser,
     discordWebhook: String(sharedChannels?.discordWebhook || DEFAULT_ALERT_CHANNELS.discordWebhook),
     telegramToken: String(sharedChannels?.telegramToken || DEFAULT_ALERT_CHANNELS.telegramToken),
@@ -396,11 +416,25 @@ function activeTradezSignalTemplate() {
   return String(tradezDelivery.template || DEFAULT_TRADEZ_SIGNAL_TEMPLATE).trim() || DEFAULT_TRADEZ_SIGNAL_TEMPLATE;
 }
 
+function binanceFuturesLink(symbol) {
+  return `https://www.binance.com/en/futures/${encodeURIComponent(String(symbol || "").trim())}`;
+}
+
+function finalizeTradezSignalMessage(message, templateData) {
+  let finalMessage = String(message || "").trim();
+  if (!finalMessage) finalMessage = DEFAULT_TRADEZ_SIGNAL_TEMPLATE;
+  if (!/binance\.com\/en\/futures\//i.test(finalMessage) && templateData?.binanceLink) {
+    finalMessage = `${finalMessage}\nBinance: ${templateData.binanceLink}`;
+  }
+  return finalMessage;
+}
+
 function renderTradezSignalTemplate(templateData) {
-  return activeTradezSignalTemplate().replace(/\{([a-zA-Z0-9_]+)\}/g, (match, key) => {
+  const rendered = activeTradezSignalTemplate().replace(/\{([a-zA-Z0-9_]+)\}/g, (match, key) => {
     const value = templateData?.[key];
     return value === undefined || value === null || value === "" ? "-" : String(value);
   });
+  return finalizeTradezSignalMessage(rendered, templateData);
 }
 
 function maybeTriggerTradezBrowserNotification(title, body) {
@@ -459,6 +493,8 @@ async function sendTradezTestSignal() {
     symbol,
     side: "Long",
     entryPrice: basePrice,
+    entryZoneLow: basePrice * 0.996,
+    entryZoneHigh: basePrice * 1.004,
     tp1: basePrice * 1.018,
     tp2: basePrice * 1.033,
     stopLoss: basePrice * 0.99,
@@ -808,30 +844,48 @@ function formatExactDateTime(timestamp) {
 
 function buildTradezNotificationEvent(title, trade, extraLines = [], time = Date.now()) {
   const precision = trade.pricePrecision || 2;
+  const entryZone =
+    Number.isFinite(trade.entryZoneLow) && Number.isFinite(trade.entryZoneHigh)
+      ? `${formatPrice(Math.min(trade.entryZoneLow, trade.entryZoneHigh), precision)} - ${formatPrice(
+          Math.max(trade.entryZoneLow, trade.entryZoneHigh),
+          precision
+        )}`
+      : formatPrice(trade.entryPrice, precision);
+  const firstDetectedAt = formatExactDateTime(trade.detectedAt || trade.openedAt || time);
+  const alertedAt = formatExactDateTime(time);
+  const binanceLink = binanceFuturesLink(trade.symbol);
   const baseLines = [
-    `Mode: ${trade.executionMode === "shadow" ? "Shadow" : "Paper"}`,
+    `Mode: ${tradeExecutionLabel(trade.executionMode)}`,
     `Side: ${trade.side}`,
     `Entry: ${formatPrice(trade.entryPrice, precision)}`,
+    `Entry Zone: ${entryZone}`,
     `TP1: ${formatPrice(trade.tp1, precision)}`,
     `TP2: ${formatPrice(trade.tp2, precision)}`,
     `SL: ${formatPrice(trade.stopLoss, precision)}`,
     `Leverage: ${trade.leverage}x`,
     `Quality: Q${Math.round(trade.qualityScore || 0)}`,
+    `First detected: ${firstDetectedAt}`,
+    `Alerted: ${alertedAt}`,
+    `Binance: ${binanceLink}`,
   ];
   const templateData = {
     title,
     symbol: trade.symbol,
     side: trade.side,
     entry: formatPrice(trade.entryPrice, precision),
+    entryZone,
     tp1: formatPrice(trade.tp1, precision),
     tp2: formatPrice(trade.tp2, precision),
     sl: formatPrice(trade.stopLoss, precision),
     leverage: `${trade.leverage}`,
     quality: `${Math.round(trade.qualityScore || 0)}`,
     touch: trade.touch || "-",
-    detectedAt: formatExactDateTime(trade.detectedAt || trade.openedAt || time),
+    detectedAt: firstDetectedAt,
+    firstDetectedAt,
+    alertedAt,
     mode: tradeExecutionLabel(trade.executionMode),
     price: formatPrice(trade.lastPrice || trade.entryPrice, precision),
+    binanceLink,
     notes: extraLines.filter(Boolean).join(" • "),
   };
 
@@ -852,7 +906,8 @@ function maybeSendTradezEntryNotification(candidate, trade) {
     trade,
     [
       touchLabel ? `Setup: ${touchLabel}` : "",
-      `Detected: ${formatExactDateTime(trade.detectedAt || trade.openedAt)}`,
+      `First detected: ${formatExactDateTime(trade.detectedAt || trade.openedAt)}`,
+      `Alerted: ${formatExactDateTime(trade.openedAt)}`,
     ],
     trade.openedAt
   );
@@ -877,6 +932,7 @@ function maybeSendTradezProgressNotification(kind, trade, extraLines = [], time 
       `Entry ${formatPrice(trade.entryPrice, precision)} • TP1 ${formatPrice(trade.tp1, precision)}`,
       `SL moved to entry ${formatPrice(trade.entryPrice, precision)}`,
       detectedLine,
+      `Binance: ${binanceFuturesLink(trade.symbol)}`,
     ],
     tp: [
       "SUCCESS.. TP2 Hit✅",
@@ -884,6 +940,7 @@ function maybeSendTradezProgressNotification(kind, trade, extraLines = [], time 
       `Entry ${formatPrice(trade.entryPrice, precision)} • TP2 ${formatPrice(trade.tp2, precision)}`,
       `Exit ${formatPrice(trade.exitPrice || trade.tp2, precision)}`,
       detectedLine,
+      `Binance: ${binanceFuturesLink(trade.symbol)}`,
     ],
     sl: [
       "Oh No, SL HIT❌",
@@ -891,12 +948,14 @@ function maybeSendTradezProgressNotification(kind, trade, extraLines = [], time 
       `Entry ${formatPrice(trade.entryPrice, precision)} • SL ${formatPrice(trade.stopLoss, precision)}`,
       `Exit ${formatPrice(trade.exitPrice || trade.stopLoss, precision)}`,
       detectedLine,
+      `Binance: ${binanceFuturesLink(trade.symbol)}`,
     ],
     be: [
       "Protected at Entry🛡️",
       baseLine,
       `Breakeven exit ${formatPrice(trade.exitPrice || trade.entryPrice, precision)}`,
       detectedLine,
+      `Binance: ${binanceFuturesLink(trade.symbol)}`,
     ],
   };
   const shortLines = shortMessageMap[kind] || [
@@ -1313,27 +1372,29 @@ function buildTradezAutoCandidate(candidate) {
   const signal = candidate.activeSignal;
   if (!signal) return null;
 
-  const entry = average([signal.entryLow, signal.entryHigh]);
+  const plannedEntry = average([signal.entryLow, signal.entryHigh]);
   const structuralStop = signal.stopLoss;
   const maxMarginStopPct = 10 / TRADEZ_AUTO_LEVERAGE;
   const cappedStop =
     signal.side === "Long"
-      ? entry * (1 - maxMarginStopPct / 100)
-      : entry * (1 + maxMarginStopPct / 100);
+      ? plannedEntry * (1 - maxMarginStopPct / 100)
+      : plannedEntry * (1 + maxMarginStopPct / 100);
   const stopLoss =
     signal.side === "Long"
       ? Math.max(structuralStop, cappedStop)
       : Math.min(structuralStop, cappedStop);
-  const stopMarginPct = Math.abs(pctChange(entry, stopLoss)) * TRADEZ_AUTO_LEVERAGE;
+  const stopMarginPct = Math.abs(pctChange(plannedEntry, stopLoss)) * TRADEZ_AUTO_LEVERAGE;
   const tp1 = signal.tp1;
   const tp2 = signal.tp2;
-  const tp2MarginPct = Math.abs(pctChange(entry, tp2)) * TRADEZ_AUTO_LEVERAGE;
-  const rr = Math.abs(tp1 - entry) / Math.max(Math.abs(entry - stopLoss), 0.0000001);
+  const tp2MarginPct = Math.abs(pctChange(plannedEntry, tp2)) * TRADEZ_AUTO_LEVERAGE;
+  const rr = Math.abs(tp1 - plannedEntry) / Math.max(Math.abs(plannedEntry - stopLoss), 0.0000001);
 
   return {
     ...candidate,
     paperTrade: {
-      entry,
+      plannedEntry,
+      entryZoneLow: Math.min(signal.entryLow, signal.entryHigh),
+      entryZoneHigh: Math.max(signal.entryLow, signal.entryHigh),
       stopLoss,
       tp1,
       tp2,
@@ -1345,6 +1406,12 @@ function buildTradezAutoCandidate(candidate) {
   };
 }
 
+function candidateIsAtLiveEntry(candidate) {
+  const plan = candidate.paperTrade;
+  if (!plan || !Number.isFinite(candidate.currentPrice)) return false;
+  return candidate.currentPrice >= plan.entryZoneLow && candidate.currentPrice <= plan.entryZoneHigh;
+}
+
 function highQualityTradezAutoCandidates(candidates, threshold) {
   return candidates
     .map(buildTradezAutoCandidate)
@@ -1352,6 +1419,7 @@ function highQualityTradezAutoCandidates(candidates, threshold) {
     .filter((candidate) => candidate.qualityScore >= threshold)
     .filter((candidate) => candidate.paperTrade.targetMarginPct >= 20 && candidate.paperTrade.targetMarginPct <= 55)
     .filter((candidate) => candidate.paperTrade.rr >= 1.2)
+    .filter(candidateIsAtLiveEntry)
     .sort((left, right) => {
       const rightSeen = right.identifiedAt || right.activeSignal?.detectedAt || 0;
       const leftSeen = left.identifiedAt || left.activeSignal?.detectedAt || 0;
@@ -1362,19 +1430,21 @@ function highQualityTradezAutoCandidates(candidates, threshold) {
 function openTradezPaperTrade(candidate) {
   if (tradezPaperHasOpenTrade(candidate.symbol)) return false;
   if (tradezPaper.openTrades.length >= TRADEZ_AUTO_MAX_CONCURRENT_TRADES) return false;
+  if (!candidateIsAtLiveEntry(candidate)) return false;
 
   const freeCapital = Math.max(tradezPaper.balance - tradezPaperReservedMargin(), 0);
   if (freeCapital < 10) return false;
 
+  const actualEntry = candidate.currentPrice;
   const slotsRemaining = Math.max(1, TRADEZ_AUTO_MAX_CONCURRENT_TRADES - tradezPaper.openTrades.length);
   const marginBudget = Math.min(
     freeCapital,
     Math.max(tradezPaper.startingBalance * 0.16, freeCapital / slotsRemaining)
   );
   const riskCapital = Math.max(marginBudget * 0.12, 2);
-  const stopDistance = Math.abs(candidate.paperTrade.entry - candidate.paperTrade.stopLoss);
+  const stopDistance = Math.abs(actualEntry - candidate.paperTrade.stopLoss);
   const quantityByRisk = stopDistance > 0 ? riskCapital / stopDistance : 0;
-  const quantityByCapital = (marginBudget * candidate.paperTrade.leverage) / candidate.paperTrade.entry;
+  const quantityByCapital = (marginBudget * candidate.paperTrade.leverage) / actualEntry;
   const quantity = Math.max(0, Math.min(quantityByRisk, quantityByCapital));
   if (!Number.isFinite(quantity) || quantity <= 0) return false;
 
@@ -1386,7 +1456,9 @@ function openTradezPaperTrade(candidate) {
     side: candidate.activeSignal.side,
     touch: candidate.activeSignal.touch,
     strength: candidate.activeSignal.strength,
-    entryPrice: candidate.paperTrade.entry,
+    entryPrice: actualEntry,
+    entryZoneLow: candidate.paperTrade.entryZoneLow,
+    entryZoneHigh: candidate.paperTrade.entryZoneHigh,
     stopLoss: candidate.paperTrade.stopLoss,
     tp1: candidate.paperTrade.tp1,
     tp2: candidate.paperTrade.tp2,
@@ -1407,7 +1479,10 @@ function openTradezPaperTrade(candidate) {
 
   logTradezPaperActivity(
     `Opened Auto Trade 2 ${candidate.activeSignal.side} ${candidate.symbol} • entry ${formatPrice(
-      candidate.paperTrade.entry,
+      actualEntry,
+      candidate.pricePrecision
+    )} • zone ${formatPrice(candidate.paperTrade.entryZoneLow, candidate.pricePrecision)} - ${formatPrice(
+      candidate.paperTrade.entryZoneHigh,
       candidate.pricePrecision
     )} • TP1 ${formatPrice(candidate.paperTrade.tp1, candidate.pricePrecision)} • TP2 ${formatPrice(
       candidate.paperTrade.tp2,
