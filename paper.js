@@ -26,6 +26,7 @@ const TICKER_STORAGE_KEY = "apex-signals-auto-paper-tickers";
 const SHARED_TRADEZ_AUTO_STORAGE_KEY = "hyperdrive-tradez-auto-paper";
 const PAPER_BACKUP_TYPE = "soloris-paper-books-backup";
 const PAPER_BACKUP_VERSION = 1;
+const REPORT_LOOKBACK_MS = 24 * 60 * 60 * 1000;
 const TICKER_CACHE_MAX_AGE_MS = 30 * 60 * 1000;
 const HTF_CONFIRMATION_CONFIG = [
   { key: "1h", label: "1H", interval: "1h" },
@@ -42,6 +43,7 @@ const dom = {
   scanButton: document.getElementById("scan-button"),
   autoToggleButton: document.getElementById("auto-toggle-button"),
   resetSimButton: document.getElementById("reset-sim-button"),
+  reportExportButton: document.getElementById("paper-report-export"),
   backupExportButton: document.getElementById("paper-backup-export"),
   backupImportButton: document.getElementById("paper-backup-import"),
   backupFileInput: document.getElementById("paper-backup-file"),
@@ -317,6 +319,226 @@ function downloadJsonFile(payload, filename) {
   link.click();
   link.remove();
   window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 0);
+}
+
+function downloadTextFile(text, filename, mimeType = "text/markdown;charset=utf-8") {
+  const blob = new Blob([text], { type: mimeType });
+  const objectUrl = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = objectUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 0);
+}
+
+function formatExactDateTime(timestamp) {
+  if (!timestamp) return "—";
+  return new Date(timestamp).toLocaleString([], {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+function withinLast24Hours(timestamp, now = Date.now()) {
+  const value = Number(timestamp);
+  return Number.isFinite(value) && value > 0 && now >= value && now - value <= REPORT_LOOKBACK_MS;
+}
+
+function paperReportFilename(now = Date.now()) {
+  const stamp = new Date(now).toISOString().replace(/:/g, "-").replace(/\..+/, "");
+  return `soloris-auto-trade-24h-${stamp}.md`;
+}
+
+function houseTradePnlUsd(trade, exitPrice) {
+  const direction = trade.side === "Short" ? -1 : 1;
+  return (exitPrice - trade.entryPrice) * trade.quantity * direction;
+}
+
+function buildHouseEntryReason(candidate) {
+  const trendLabel = candidate.trade?.stance === "Short" ? "bearish continuation" : "bullish continuation";
+  const emaLabel = candidate.ema20 >= candidate.ema50 ? "EMA20 above EMA50" : "EMA20 below EMA50";
+  const confirmation1h = candidate.confirmation?.["1h"]?.label || "Queue";
+  const confirmation4h = candidate.confirmation?.["4h"]?.label || "Queue";
+  const flowLabel =
+    candidate.trade?.stance === "Short"
+      ? candidate.cvdSlope < 0
+        ? "seller-led flow"
+        : "mixed flow"
+      : candidate.cvdSlope > 0
+        ? "buyer-led flow"
+        : "mixed flow";
+  return `${trendLabel} setup with ${emaLabel}, ${confirmation1h} / ${confirmation4h} confirmation, and ${flowLabel}.`;
+}
+
+function buildHouseKeyDetails(candidate) {
+  const details = [
+    candidate.ema20 >= candidate.ema50 ? "EMA bull" : "EMA bear",
+    Number.isFinite(candidate.rsi) ? `RSI ${candidate.rsi.toFixed(0)}` : null,
+    Number.isFinite(candidate.cvdSlope) ? `CVD ${formatPercent(candidate.cvdSlope)}` : null,
+    Number.isFinite(candidate.oiChange1h) ? `OI ${formatPercent(candidate.oiChange1h)}` : null,
+    Number.isFinite(candidate.rr) ? `RR ${candidate.rr.toFixed(2)}` : null,
+    Number.isFinite(candidate.trade?.targetReturnPct)
+      ? `target ${candidate.trade.targetReturnPct}% on margin`
+      : null,
+    Number.isFinite(candidate.trade?.projectedMovePct)
+      ? `move ${formatPercent(candidate.trade.projectedMovePct)}`
+      : null,
+    candidate.confirmation?.["1h"]?.label ? `1H ${candidate.confirmation["1h"].label}` : null,
+    candidate.confirmation?.["4h"]?.label ? `4H ${candidate.confirmation["4h"].label}` : null,
+    Number.isFinite(candidate.entryScore) ? `entry score ${candidate.entryScore}` : null,
+  ];
+  return details.filter(Boolean).join(" • ");
+}
+
+function houseTradeReason(trade) {
+  if (trade.entryReason) return trade.entryReason;
+  const trendLabel = trade.side === "Short" ? "bearish continuation" : "bullish continuation";
+  return `${trendLabel} setup tracked by the house strategy.`;
+}
+
+function houseTradeDetails(trade) {
+  if (trade.keyDetails) return trade.keyDetails;
+  const details = [
+    Number.isFinite(trade.qualityScore) ? `Quality Q${Math.round(trade.qualityScore)}` : null,
+    Number.isFinite(trade.leverage) ? `Leverage ${trade.leverage}x` : null,
+    Number.isFinite(trade.targetReturnPct) ? `target ${trade.targetReturnPct}% on margin` : null,
+    Number.isFinite(trade.stopReturnPct) ? `stop ${trade.stopReturnPct}% on margin` : null,
+  ];
+  return details.filter(Boolean).join(" • ") || "House strategy context unavailable.";
+}
+
+function renderHouseTradeReportSection(trade, options = {}) {
+  const precision = trade.pricePrecision || 2;
+  const statusLabel = options.statusLabel || "Open";
+  const comparisonLabel = options.comparisonLabel || "Current";
+  const comparisonPrice = options.comparisonPrice;
+  const returnPct =
+    options.returnPct ??
+    (Number.isFinite(comparisonPrice) ? tradeReturnPct(trade, comparisonPrice) : Number(trade.returnPct));
+  const pnlUsd =
+    options.pnlUsd ??
+    (Number.isFinite(comparisonPrice) ? houseTradePnlUsd(trade, comparisonPrice) : Number(trade.pnlUsd));
+  const lines = [
+    `### ${trade.symbol} • ${trade.side} • ${statusLabel}`,
+    `- Timestamp: ${formatExactDateTime(trade.openedAt || trade.detectedAt)}`,
+    trade.detectedAt ? `- Detected: ${formatExactDateTime(trade.detectedAt)}` : null,
+    trade.openedAt ? `- Opened: ${formatExactDateTime(trade.openedAt)}` : null,
+    trade.closedAt ? `- Closed: ${formatExactDateTime(trade.closedAt)}` : null,
+    `- Token: ${trade.token || trade.symbol.replace(/USDT$/i, "")}`,
+    `- Entry: ${formatPrice(trade.entryPrice, precision)}`,
+    Number.isFinite(comparisonPrice)
+      ? `- ${comparisonLabel}: ${formatPrice(comparisonPrice, precision)}`
+      : null,
+    Number.isFinite(trade.takeProfit) ? `- Take Profit: ${formatPrice(trade.takeProfit, precision)}` : null,
+    Number.isFinite(trade.stopLoss) ? `- Stop Loss: ${formatPrice(trade.stopLoss, precision)}` : null,
+    Number.isFinite(trade.leverage) ? `- Leverage: ${trade.leverage}x` : null,
+    Number.isFinite(trade.marginUsed) ? `- Margin Used: ${formatCompactUsd(trade.marginUsed, 2)}` : null,
+    Number.isFinite(trade.quantity) ? `- Quantity: ${trade.quantity.toFixed(6)}` : null,
+    Number.isFinite(returnPct) ? `- Profit/Loss: ${formatPercent(returnPct)} on margin` : null,
+    Number.isFinite(pnlUsd) ? `- PnL USD: ${formatCompactUsd(pnlUsd, 2)}` : null,
+    trade.reason ? `- Close Reason: ${trade.reason}` : null,
+    `- Reason of entering: ${houseTradeReason(trade)}`,
+    `- Key details: ${houseTradeDetails(trade)}`,
+  ];
+  return lines.filter(Boolean).join("\n");
+}
+
+function buildPaper24hReport(now = Date.now()) {
+  const realizedPnl = state.balance - state.startingBalance;
+  const openTrades = [...state.openTrades];
+  const closedTrades = [...state.closedTrades];
+  const openedLast24h = [...openTrades, ...closedTrades].filter((trade) =>
+    withinLast24Hours(trade.openedAt || trade.detectedAt, now)
+  );
+  const closedLast24h = closedTrades.filter((trade) => withinLast24Hours(trade.closedAt, now));
+  const activityLast24h = state.activity.filter((event) => withinLast24Hours(event.time, now));
+  const unrealizedUsd = openTrades.reduce((sum, trade) => {
+    if (!Number.isFinite(trade.lastPrice)) return sum;
+    return sum + houseTradePnlUsd(trade, trade.lastPrice);
+  }, 0);
+  const currentEquity = state.balance + unrealizedUsd;
+  const tpCount = closedLast24h.filter((trade) => trade.reason === "TP").length;
+  const slCount = closedLast24h.filter((trade) => trade.reason === "SL").length;
+  const report = [
+    "# Soloris Signals — Auto Trade 24H Review",
+    "",
+    `Exported at: ${formatExactDateTime(now)}`,
+    `Window: last 24 hours ending ${formatExactDateTime(now)}`,
+    "",
+    "## Summary",
+    `- Starting balance: ${formatPrice(state.startingBalance, 2)}`,
+    `- Current balance: ${formatPrice(state.balance, 2)}`,
+    `- Current equity: ${formatPrice(currentEquity, 2)}`,
+    `- Realized PnL: ${formatCompactUsd(realizedPnl, 2)}`,
+    `- Unrealized PnL: ${formatCompactUsd(unrealizedUsd, 2)}`,
+    `- Open positions now: ${openTrades.length}`,
+    `- Trades opened in last 24H: ${openedLast24h.length}`,
+    `- Trades closed in last 24H: ${closedLast24h.length}`,
+    `- TP hits in last 24H: ${tpCount}`,
+    `- SL hits in last 24H: ${slCount}`,
+    `- Last scan: ${state.lastScanAt ? formatExactDateTime(state.lastScanAt) : "—"}`,
+    "",
+    "## Trades Opened In Last 24 Hours",
+    openedLast24h.length
+      ? openedLast24h
+          .sort((left, right) => (right.openedAt || right.detectedAt || 0) - (left.openedAt || left.detectedAt || 0))
+          .map((trade) =>
+            renderHouseTradeReportSection(trade, {
+              statusLabel: closedTrades.includes(trade) ? "Closed" : "Open",
+              comparisonLabel: closedTrades.includes(trade) ? "Exit" : "Current",
+              comparisonPrice: closedTrades.includes(trade) ? trade.exitPrice : trade.lastPrice,
+            })
+          )
+          .join("\n\n")
+      : "_No trades opened in the last 24 hours._",
+    "",
+    "## Trades Closed In Last 24 Hours",
+    closedLast24h.length
+      ? closedLast24h
+          .sort((left, right) => (right.closedAt || 0) - (left.closedAt || 0))
+          .map((trade) =>
+            renderHouseTradeReportSection(trade, {
+              statusLabel: "Closed",
+              comparisonLabel: "Exit",
+              comparisonPrice: trade.exitPrice,
+              returnPct: trade.returnPct,
+              pnlUsd: trade.pnlUsd,
+            })
+          )
+          .join("\n\n")
+      : "_No trades closed in the last 24 hours._",
+    "",
+    "## Current Open Positions Snapshot",
+    openTrades.length
+      ? openTrades
+          .sort((left, right) => (right.openedAt || 0) - (left.openedAt || 0))
+          .map((trade) =>
+            renderHouseTradeReportSection(trade, {
+              statusLabel: "Open",
+              comparisonLabel: "Current",
+              comparisonPrice: trade.lastPrice,
+            })
+          )
+          .join("\n\n")
+      : "_No live open positions._",
+    "",
+    "## Recent Engine Activity (24H)",
+    activityLast24h.length
+      ? activityLast24h
+          .sort((left, right) => (right.time || 0) - (left.time || 0))
+          .map((event) => `- ${formatExactDateTime(event.time)} • ${event.message}`)
+          .join("\n")
+      : "_No activity events in the last 24 hours._",
+    "",
+  ];
+
+  return report.join("\n");
 }
 
 function normalizeImportedAutoTrade(rawBook) {
@@ -2227,6 +2449,11 @@ function openTradeFromCandidate(candidate) {
     biasScore: candidate.biasScore,
     targetReturnPct: candidate.trade.targetReturnPct,
     stopReturnPct: candidate.trade.stopReturnPct,
+    projectedMovePct: candidate.trade.projectedMovePct,
+    rr: candidate.rr,
+    entryScore: candidate.entryScore,
+    entryReason: buildHouseEntryReason(candidate),
+    keyDetails: buildHouseKeyDetails(candidate),
     pricePrecision: candidate.pricePrecision,
     breakEvenArmed: false,
     profitLockArmed: false,
@@ -2285,11 +2512,24 @@ function closeTrade(tradeId, reason, exitPrice, precisionHint) {
     strategyId: trade.strategyId,
     strategyLabel: trade.strategyLabel,
     symbol: trade.symbol,
+    token: trade.token,
+    interval: trade.interval,
     side: trade.side,
     entryPrice: trade.entryPrice,
     exitPrice,
     stopLoss: trade.stopLoss,
     takeProfit: trade.takeProfit,
+    leverage: trade.leverage,
+    marginUsed: trade.marginUsed,
+    qualityScore: trade.qualityScore,
+    biasScore: trade.biasScore,
+    targetReturnPct: trade.targetReturnPct,
+    stopReturnPct: trade.stopReturnPct,
+    projectedMovePct: trade.projectedMovePct,
+    rr: trade.rr,
+    entryScore: trade.entryScore,
+    entryReason: trade.entryReason,
+    keyDetails: trade.keyDetails,
     detectedAt: trade.detectedAt,
     openedAt: trade.openedAt,
     closedAt: Date.now(),
@@ -2826,6 +3066,13 @@ if (dom.backupExportButton) {
   dom.backupExportButton.addEventListener("click", () => {
     downloadJsonFile(buildPaperBackupPayload(), paperBackupFilename());
     setStatus("Paper-trade backup exported.", "up");
+  });
+}
+
+if (dom.reportExportButton) {
+  dom.reportExportButton.addEventListener("click", () => {
+    downloadTextFile(buildPaper24hReport(), paperReportFilename());
+    setStatus("24H Auto Trade report exported.", "up");
   });
 }
 

@@ -18,6 +18,7 @@ const TRADEZ_EXECUTION_PREFERENCES_VERSION = 5;
 const HOUSE_AUTO_STRATEGY_VERSION = 5;
 const PAPER_BACKUP_TYPE = "soloris-paper-books-backup";
 const PAPER_BACKUP_VERSION = 1;
+const REPORT_LOOKBACK_MS = 24 * 60 * 60 * 1000;
 const TRADEZ_AUTO_START_BALANCE = 200;
 const TRADEZ_AUTO_LEVERAGE = 5;
 const TRADEZ_AUTO_MAX_CONCURRENT_TRADES = 6;
@@ -89,6 +90,7 @@ const dom = {
   refreshSubmit: document.getElementById("tradez-refresh-submit"),
   scanButton: document.getElementById("tradez-scan-button"),
   alertPermissionButton: document.getElementById("tradez-alert-permission"),
+  reportExportButton: document.getElementById("tradez-report-export"),
   backupExportButton: document.getElementById("tradez-backup-export"),
   backupImportButton: document.getElementById("tradez-backup-import"),
   backupFileInput: document.getElementById("tradez-backup-file"),
@@ -722,6 +724,206 @@ function downloadJsonFile(payload, filename) {
   link.click();
   link.remove();
   window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 0);
+}
+
+function downloadTextFile(text, filename, mimeType = "text/markdown;charset=utf-8") {
+  const blob = new Blob([text], { type: mimeType });
+  const objectUrl = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = objectUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 0);
+}
+
+function withinLast24Hours(timestamp, now = Date.now()) {
+  const value = Number(timestamp);
+  return Number.isFinite(value) && value > 0 && now >= value && now - value <= REPORT_LOOKBACK_MS;
+}
+
+function tradezReportFilename(now = Date.now()) {
+  const stamp = new Date(now).toISOString().replace(/:/g, "-").replace(/\..+/, "");
+  return `soloris-ema-signals-24h-${stamp}.md`;
+}
+
+function tradezPaperPnlUsd(trade, exitPrice) {
+  const direction = trade.side === "Short" ? -1 : 1;
+  return (exitPrice - trade.entryPrice) * trade.quantity * direction;
+}
+
+function tradezEntryReason(candidate) {
+  const signal = candidate.activeSignal;
+  return `${signal.side} EMA pullback into ${signal.touch} (${signal.strength}) with 1H confluence, strong volume confirmation, and structured TP1/TP2 management.`;
+}
+
+function tradezKeyDetails(candidate) {
+  return (candidate.activeSignal?.reasonParts || []).join(" • ");
+}
+
+function renderTradezTradeReportSection(trade, options = {}) {
+  const precision = trade.pricePrecision || 2;
+  const statusLabel = options.statusLabel || "Open";
+  const comparisonLabel = options.comparisonLabel || "Current";
+  const comparisonPrice = options.comparisonPrice;
+  const returnPct =
+    options.returnPct ??
+    (Number.isFinite(comparisonPrice) ? tradezPaperReturnPct(trade, comparisonPrice) : Number(trade.returnPct));
+  const pnlUsd =
+    options.pnlUsd ??
+    (Number.isFinite(comparisonPrice) ? tradezPaperPnlUsd(trade, comparisonPrice) : Number(trade.pnlUsd));
+  const lines = [
+    `### ${trade.symbol} • ${trade.side} • ${statusLabel}`,
+    `- Timestamp: ${formatExactDateTime(trade.openedAt || trade.detectedAt)}`,
+    trade.detectedAt ? `- Detected: ${formatExactDateTime(trade.detectedAt)}` : null,
+    trade.openedAt ? `- Opened: ${formatExactDateTime(trade.openedAt)}` : null,
+    trade.closedAt ? `- Closed: ${formatExactDateTime(trade.closedAt)}` : null,
+    `- Token: ${trade.token || trade.symbol.replace(/USDT$/i, "")}`,
+    `- Touch: ${trade.touch || "—"} • ${trade.strength || "Signal"}`,
+    `- Entry Zone: ${formatPrice(trade.entryZoneLow, precision)} - ${formatPrice(trade.entryZoneHigh, precision)}`,
+    `- Entry: ${formatPrice(trade.entryPrice, precision)}`,
+    Number.isFinite(comparisonPrice)
+      ? `- ${comparisonLabel}: ${formatPrice(comparisonPrice, precision)}`
+      : null,
+    `- TP1: ${formatPrice(trade.tp1, precision)}`,
+    `- TP2: ${formatPrice(trade.tp2, precision)}`,
+    `- Stop Loss: ${formatPrice(trade.stopLoss, precision)}`,
+    Number.isFinite(trade.leverage) ? `- Leverage: ${trade.leverage}x` : null,
+    Number.isFinite(trade.marginUsed) ? `- Margin Used: ${formatCompactUsd(trade.marginUsed, 2)}` : null,
+    Number.isFinite(trade.qualityScore) ? `- Quality: Q${Math.round(trade.qualityScore)}` : null,
+    Number.isFinite(trade.rr) ? `- Risk / Reward: ${trade.rr.toFixed(2)}` : null,
+    Number.isFinite(returnPct) ? `- Profit/Loss: ${formatPercent(returnPct)} on margin` : null,
+    Number.isFinite(pnlUsd) ? `- PnL USD: ${formatCompactUsd(pnlUsd, 2)}` : null,
+    trade.reason ? `- Close Reason: ${trade.reason}` : null,
+    `- Reason of entering: ${trade.entryReason || trade.signalNote || "EMA pullback setup tracked by Auto Trade 2."}`,
+    `- Key details: ${trade.keyDetails || "EMA confluence, support/resistance interaction, and volume confirmation."}`,
+  ];
+  return lines.filter(Boolean).join("\n");
+}
+
+function buildTradez24hReport(now = Date.now()) {
+  const openTrades = [...tradezPaper.openTrades];
+  const closedTrades = [...tradezPaper.closedTrades];
+  const demoOrders = [...tradezPaper.demoOrders];
+  const openedLast24h = [...openTrades, ...closedTrades].filter((trade) =>
+    withinLast24Hours(trade.openedAt || trade.detectedAt, now)
+  );
+  const closedLast24h = closedTrades.filter((trade) => withinLast24Hours(trade.closedAt, now));
+  const activityLast24h = tradezPaper.activity.filter((event) => withinLast24Hours(event.time, now));
+  const demoLast24h = demoOrders.filter((order) =>
+    withinLast24Hours(order.createdAt || order.detectedAt || order.lastUpdatedAt, now)
+  );
+  const unrealizedUsd = openTrades.reduce((sum, trade) => {
+    if (!Number.isFinite(trade.lastPrice)) return sum;
+    return sum + tradezPaperPnlUsd(trade, trade.lastPrice);
+  }, 0);
+  const currentEquity = tradezPaper.balance + unrealizedUsd;
+  const tpCount = closedLast24h.filter((trade) => trade.reason === "TP").length;
+  const slCount = closedLast24h.filter((trade) => trade.reason === "SL").length;
+  const beCount = closedLast24h.filter((trade) => trade.reason === "BE").length;
+  const report = [
+    "# Soloris Signals — EMA Signals 24H Review",
+    "",
+    `Exported at: ${formatExactDateTime(now)}`,
+    `Window: last 24 hours ending ${formatExactDateTime(now)}`,
+    "",
+    "## Summary",
+    `- Opening balance: ${formatPrice(tradezPaper.startingBalance, 2)}`,
+    `- Current balance: ${formatPrice(tradezPaper.balance, 2)}`,
+    `- Current equity: ${formatPrice(currentEquity, 2)}`,
+    `- Realized PnL: ${formatCompactUsd(tradezPaper.balance - tradezPaper.startingBalance, 2)}`,
+    `- Unrealized PnL: ${formatCompactUsd(unrealizedUsd, 2)}`,
+    `- Open EMA positions now: ${openTrades.length}`,
+    `- Trades opened in last 24H: ${openedLast24h.length}`,
+    `- Trades closed in last 24H: ${closedLast24h.length}`,
+    `- TP hits in last 24H: ${tpCount}`,
+    `- SL hits in last 24H: ${slCount}`,
+    `- Breakeven exits in last 24H: ${beCount}`,
+    `- Demo orders touched in last 24H: ${demoLast24h.length}`,
+    `- Last EMA scan: ${tradezPaper.lastScanAt ? formatExactDateTime(tradezPaper.lastScanAt) : "—"}`,
+    "",
+    "## Trades Opened In Last 24 Hours",
+    openedLast24h.length
+      ? openedLast24h
+          .sort((left, right) => (right.openedAt || right.detectedAt || 0) - (left.openedAt || left.detectedAt || 0))
+          .map((trade) =>
+            renderTradezTradeReportSection(trade, {
+              statusLabel: closedTrades.includes(trade) ? "Closed" : "Open",
+              comparisonLabel: closedTrades.includes(trade) ? "Exit" : "Current",
+              comparisonPrice: closedTrades.includes(trade) ? trade.exitPrice : trade.lastPrice,
+            })
+          )
+          .join("\n\n")
+      : "_No EMA Book trades opened in the last 24 hours._",
+    "",
+    "## Trades Closed In Last 24 Hours",
+    closedLast24h.length
+      ? closedLast24h
+          .sort((left, right) => (right.closedAt || 0) - (left.closedAt || 0))
+          .map((trade) =>
+            renderTradezTradeReportSection(trade, {
+              statusLabel: "Closed",
+              comparisonLabel: "Exit",
+              comparisonPrice: trade.exitPrice,
+              returnPct: trade.returnPct,
+              pnlUsd: trade.pnlUsd,
+            })
+          )
+          .join("\n\n")
+      : "_No EMA Book trades closed in the last 24 hours._",
+    "",
+    "## Current Open Positions Snapshot",
+    openTrades.length
+      ? openTrades
+          .sort((left, right) => (right.openedAt || 0) - (left.openedAt || 0))
+          .map((trade) =>
+            renderTradezTradeReportSection(trade, {
+              statusLabel: "Open",
+              comparisonLabel: "Current",
+              comparisonPrice: trade.lastPrice,
+            })
+          )
+          .join("\n\n")
+      : "_No live EMA Book positions._",
+    "",
+    "## Demo Orders (24H)",
+    demoLast24h.length
+      ? demoLast24h
+          .sort((left, right) => (right.createdAt || right.detectedAt || 0) - (left.createdAt || left.detectedAt || 0))
+          .map((order) => {
+            const precision = order.pricePrecision || 2;
+            return [
+              `### ${order.symbol} • ${order.side || "—"} • ${order.status || "UNKNOWN"}`,
+              `- Timestamp: ${formatExactDateTime(order.createdAt || order.detectedAt)}`,
+              `- Entry: ${Number.isFinite(order.entryPrice) ? formatPrice(order.entryPrice, precision) : "—"}`,
+              `- TP1: ${Number.isFinite(order.tp1) ? formatPrice(order.tp1, precision) : "—"}`,
+              `- TP2: ${Number.isFinite(order.tp2) ? formatPrice(order.tp2, precision) : "—"}`,
+              `- Stop Loss: ${Number.isFinite(order.stopLoss) ? formatPrice(order.stopLoss, precision) : "—"}`,
+              `- Leverage: ${Number.isFinite(order.leverage) ? `${order.leverage}x` : "—"}`,
+              `- Quality: ${Number.isFinite(order.qualityScore) ? `Q${Math.round(order.qualityScore)}` : "—"}`,
+              order.error ? `- Error: ${order.error}` : null,
+              Array.isArray(order.warnings) && order.warnings.length
+                ? `- Warnings: ${order.warnings.join(" • ")}`
+                : null,
+            ]
+              .filter(Boolean)
+              .join("\n");
+          })
+          .join("\n\n")
+      : "_No demo order activity in the last 24 hours._",
+    "",
+    "## EMA Activity Feed (24H)",
+    activityLast24h.length
+      ? activityLast24h
+          .sort((left, right) => (right.time || 0) - (left.time || 0))
+          .map((event) => `- ${formatExactDateTime(event.time)} • ${event.message}`)
+          .join("\n")
+      : "_No EMA activity events in the last 24 hours._",
+    "",
+  ];
+
+  return report.join("\n");
 }
 
 function normalizeImportedHouseBook(rawBook) {
@@ -1621,6 +1823,10 @@ function openTradezPaperTrade(candidate) {
     leverage: candidate.paperTrade.leverage,
     marginUsed: marginBudget,
     qualityScore: candidate.qualityScore,
+    rr: candidate.paperTrade.rr,
+    entryReason: tradezEntryReason(candidate),
+    keyDetails: tradezKeyDetails(candidate),
+    signalNote: candidate.activeSignal.note,
     pricePrecision: candidate.pricePrecision,
     detectedAt: candidate.identifiedAt || candidate.activeSignal.detectedAt || Date.now(),
     openedAt: Date.now(),
@@ -4023,6 +4229,13 @@ function bindEvents() {
     dom.backupExportButton.addEventListener("click", () => {
       downloadJsonFile(buildPaperBackupPayload(), paperBackupFilename());
       setStatus("Paper-trade backup exported.", "up");
+    });
+  }
+
+  if (dom.reportExportButton) {
+    dom.reportExportButton.addEventListener("click", () => {
+      downloadTextFile(buildTradez24hReport(), tradezReportFilename());
+      setStatus("24H EMA report exported.", "up");
     });
   }
 
