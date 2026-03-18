@@ -71,6 +71,10 @@ Once `DATABASE_URL` is present, the app will lazily create these tables on first
 - `trade_events`
 - `alert_deliveries`
 
+You can also initialize the schema manually one time from the browser or with `curl`:
+
+- [https://soloris-signals.vercel.app/api/init-db](https://soloris-signals.vercel.app/api/init-db)
+
 Reference schema: [`db/schema.sql`](/tmp/crypto-outlook-lab-fix/db/schema.sql)
 
 If `DATABASE_URL` is not configured, the logging hooks stay dormant and the platform keeps running normally.
