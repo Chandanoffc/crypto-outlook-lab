@@ -2502,6 +2502,9 @@ function renderTradezComparison() {
 function renderTradezPaperDashboard() {
   const metrics = readTradezPaperMetrics();
   const realizedPnl = tradezPaper.balance - tradezPaper.startingBalance;
+  const visibleOpenTrades = [...tradezPaper.openTrades].sort(
+    (left, right) => (right.openedAt || 0) - (left.openedAt || 0)
+  );
 
   if (dom.auto2MetricStart) dom.auto2MetricStart.textContent = formatPrice(tradezPaper.startingBalance, 2);
   if (dom.auto2MetricEquity) {
@@ -2535,7 +2538,7 @@ function renderTradezPaperDashboard() {
       : "neutral";
   }
   if (dom.auto2MetricOpenNote) {
-    const lead = tradezPaper.openTrades[0];
+    const lead = visibleOpenTrades[0];
     dom.auto2MetricOpenNote.textContent = lead
       ? `${lead.symbol} ${lead.side} • TP1 ${formatPrice(lead.tp1, lead.pricePrecision || 2)} • TP2 ${formatPrice(
           lead.tp2,
@@ -2560,8 +2563,8 @@ function renderTradezPaperDashboard() {
 
   renderAnalysisGrid(
     dom.auto2OpenGrid,
-    tradezPaper.openTrades.length
-      ? tradezPaper.openTrades.slice(0, 6).map((trade) => ({
+    visibleOpenTrades.length
+      ? visibleOpenTrades.map((trade) => ({
           label: `${trade.symbol} ${trade.side}`,
           value: `${formatPercent(tradezPaperReturnPct(trade, trade.lastPrice || trade.entryPrice))} live`,
           note: `Opened ${formatExactDateTime(trade.openedAt)} • Entered ${formatPrice(
