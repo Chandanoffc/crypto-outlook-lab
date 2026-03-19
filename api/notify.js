@@ -40,13 +40,13 @@ function resolveAlertBannerFile(event, meta = {}) {
 
   if (eventType === "entry_opened" || eventType === "test_signal") {
     const quality = Number(event?.qualityScore) || 0;
-    return quality > 140 ? "new-signal-gold.png" : "new-signal-cyan.png";
+    return quality > 140 ? "new-signal-gold.gif" : "new-signal-cyan.gif";
   }
   if (eventType === "tp1_hit" || eventType === "tp_hit") {
-    return "profits.png";
+    return "profits.gif";
   }
   if (eventType === "sl_hit" || eventType === "break_even_exit") {
-    return "loss.png";
+    return "loss.gif";
   }
   return "";
 }
@@ -57,10 +57,11 @@ async function loadAlertBanner(event, meta = {}) {
 
   try {
     const buffer = await fs.readFile(path.join(__dirname, "..", "assets", "alerts", filename));
+    const ext = path.extname(filename).toLowerCase();
     return {
       filename,
       buffer,
-      mimeType: "image/png",
+      mimeType: ext === ".gif" ? "image/gif" : "image/png",
     };
   } catch (error) {
     return null;
