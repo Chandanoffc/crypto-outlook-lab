@@ -24,7 +24,7 @@ const TRADEZ_AUTO_START_BALANCE = 10000;
 const TRADEZ_AUTO_LEVERAGE = 5;
 const TRADEZ_AUTO_MAX_CONCURRENT_TRADES = 30;
 const TRADEZ_AUTO_MAX_NEW_TRADES = 12;
-const TRADEZ_AUTO_VERSION = 2;
+const TRADEZ_AUTO_VERSION = 3;
 const TRADEZ_AUTO_TRADE_COOLDOWN_MS = 4 * 60 * 1000;
 const TRADEZ_AUTO_TP1_MARGIN_TRIGGER_PCT = 25;
 const TICKER_CACHE_MAX_AGE_MS = 30 * 60 * 1000;
@@ -978,12 +978,18 @@ function normalizeImportedHouseBook(rawBook) {
 
 function normalizeImportedTradezBook(rawBook) {
   if (!rawBook || typeof rawBook !== "object") return null;
-  return {
+  const book = {
     ...rawBook,
     startingBalance: Number(rawBook.startingBalance) || TRADEZ_AUTO_START_BALANCE,
+    balance:
+      Number(rawBook.balance) ||
+      Number(rawBook.startingBalance) ||
+      TRADEZ_AUTO_START_BALANCE,
     lastDailyBriefingUtcDate: rawBook.lastDailyBriefingUtcDate || utcDayKey(Date.now() - UTC_DAY_MS),
     strategyVersion: TRADEZ_AUTO_VERSION,
   };
+  normalizeTradezResearchBook(book);
+  return book;
 }
 
 async function importPaperBackup(file) {
@@ -1819,21 +1825,77 @@ function logTradezPaperActivity(message, tone = "neutral") {
   tradezPaper.activity = tradezPaper.activity.slice(0, 30);
 }
 
-function applyTradezPaperUpgradeNotice() {
-  if (tradezPaper.strategyVersion >= TRADEZ_AUTO_VERSION) return;
-  const previousStartingBalance = Number(tradezPaper.startingBalance) || 200;
-  const topUp = Math.max(0, TRADEZ_AUTO_START_BALANCE - previousStartingBalance);
-  tradezPaper.balance = Number(tradezPaper.balance) || previousStartingBalance;
-  tradezPaper.balance += topUp;
-  tradezPaper.startingBalance = TRADEZ_AUTO_START_BALANCE;
-  if (!tradezPaper.lastDailyBriefingUtcDate) {
-    tradezPaper.lastDailyBriefingUtcDate = utcDayKey(Date.now() - UTC_DAY_MS);
+function inferTradezLegacyBookBaseline(book) {
+  const startingBalance = Number(book?.startingBalance);
+  const balance = Number(book?.balance);
+  if (Number.isFinite(startingBalance) && startingBalance > 0 && startingBalance < TRADEZ_AUTO_START_BALANCE) {
+    return startingBalance;
   }
-  tradezPaper.strategyVersion = TRADEZ_AUTO_VERSION;
-  logTradezPaperActivity(
-    "EMA Book capacity upgraded to the $10,000 research book. Existing positions were preserved.",
-    "neutral"
-  );
+  if (
+    Number.isFinite(startingBalance) &&
+    startingBalance >= TRADEZ_AUTO_START_BALANCE &&
+    Number.isFinite(balance) &&
+    balance > 0 &&
+    balance < TRADEZ_AUTO_START_BALANCE * 0.2
+  ) {
+    return 200;
+  }
+  return null;
+}
+
+function normalizeTradezResearchBook(book) {
+  const legacyBaseline = inferTradezLegacyBookBaseline(book);
+  const currentBalance =
+    Number(book?.balance) ||
+    Number(book?.startingBalance) ||
+    legacyBaseline ||
+    TRADEZ_AUTO_START_BALANCE;
+
+  let didRebase = false;
+  let rebaseMessage = "";
+
+  if (legacyBaseline) {
+    const targetBalance =
+      Math.max(currentBalance, legacyBaseline) +
+      Math.max(0, TRADEZ_AUTO_START_BALANCE - legacyBaseline);
+    if (!Number.isFinite(Number(book.balance)) || Math.abs(Number(book.balance) - targetBalance) > 0.01) {
+      book.balance = targetBalance;
+      didRebase = true;
+      rebaseMessage =
+        "EMA Book research capital was rebased to keep the $10,000 book consistent after the liquidity upgrade.";
+    }
+  } else {
+    book.balance = currentBalance;
+  }
+
+  if (Number(book.startingBalance) !== TRADEZ_AUTO_START_BALANCE) {
+    book.startingBalance = TRADEZ_AUTO_START_BALANCE;
+    didRebase = true;
+    if (!rebaseMessage) {
+      rebaseMessage =
+        "EMA Book research capital was aligned to the $10,000 book after the liquidity upgrade.";
+    }
+  }
+
+  if (!book.lastDailyBriefingUtcDate) {
+    book.lastDailyBriefingUtcDate = utcDayKey(Date.now() - UTC_DAY_MS);
+  }
+
+  if ((Number(book.strategyVersion) || 1) < TRADEZ_AUTO_VERSION) {
+    book.strategyVersion = TRADEZ_AUTO_VERSION;
+    didRebase = true;
+  }
+
+  return {
+    didRebase,
+    rebaseMessage,
+  };
+}
+
+function applyTradezPaperUpgradeNotice() {
+  const { didRebase, rebaseMessage } = normalizeTradezResearchBook(tradezPaper);
+  if (!didRebase) return;
+  logTradezPaperActivity(rebaseMessage, "neutral");
   persistTradezPaperState();
 }
 
