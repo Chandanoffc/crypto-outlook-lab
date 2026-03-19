@@ -1,4 +1,6 @@
 const crypto = require("crypto");
+const fs = require("fs/promises");
+const path = require("path");
 const { insertAlertDelivery } = require("../lib/neon-db");
 
 function buildJsonResponse(res, statusCode, payload) {
@@ -23,34 +25,149 @@ function formatAlertMessage(title, event) {
   return `${title}\n${event?.message || ""}\n${event?.symbol || "Signal"} • ${when}`;
 }
 
-async function sendDiscord(webhookUrl, title, event) {
-  const response = await fetch(webhookUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json; charset=utf-8",
-    },
-    body: JSON.stringify({
-      content: formatAlertMessage(title, event),
-    }),
-  });
+function inferBaseUrl(req) {
+  const forwardedProto = req.headers["x-forwarded-proto"];
+  const forwardedHost = req.headers["x-forwarded-host"];
+  const proto = forwardedProto ? String(forwardedProto).split(",")[0].trim() : "https";
+  const host = forwardedHost || req.headers.host || "soloris-signals.vercel.app";
+  return `${proto}://${host}`;
+}
+
+function resolveAlertBannerFile(event, meta = {}) {
+  if (meta?.strategy !== "ema_book") return "";
+  const eventType = String(meta?.eventType || event?.deliveryType || "").toLowerCase();
+  if (!eventType) return "";
+
+  if (eventType === "entry_opened" || eventType === "test_signal") {
+    const quality = Number(event?.qualityScore) || 0;
+    return quality > 140 ? "new-signal-gold.png" : "new-signal-cyan.png";
+  }
+  if (eventType === "tp1_hit" || eventType === "tp_hit") {
+    return "profits.png";
+  }
+  if (eventType === "sl_hit" || eventType === "break_even_exit") {
+    return "loss.png";
+  }
+  return "";
+}
+
+async function loadAlertBanner(event, meta = {}) {
+  const filename = resolveAlertBannerFile(event, meta);
+  if (!filename) return null;
+
+  try {
+    const buffer = await fs.readFile(path.join(__dirname, "..", "assets", "alerts", filename));
+    return {
+      filename,
+      buffer,
+      mimeType: "image/png",
+    };
+  } catch (error) {
+    return null;
+  }
+}
+
+function buildDiscordPayload(title, event, bannerAttachment) {
+  const message = formatAlertMessage(title, event);
+  if (!bannerAttachment) {
+    return {
+      content: message,
+    };
+  }
+
+  return {
+    content: message,
+    embeds: [
+      {
+        color:
+          event?.side === "Short"
+            ? 0xef4444
+            : Number(event?.qualityScore) > 140
+              ? 0xd4af37
+              : 0x22d3ee,
+        image: {
+          url: `attachment://${bannerAttachment.filename}`,
+        },
+      },
+    ],
+  };
+}
+
+function buildTelegramCaption(title, event) {
+  const message = formatAlertMessage(title, event);
+  if (message.length <= 900) return message;
+  return [
+    title,
+    event?.symbol ? `Pair: ${event.symbol}` : "",
+    event?.side ? `Side: ${event.side}` : "",
+    Number.isFinite(Number(event?.entryPrice)) ? `Entry: $${event.entryPrice}` : "",
+    Number.isFinite(Number(event?.tp1)) ? `TP1: $${event.tp1}` : "",
+    Number.isFinite(Number(event?.tp2)) ? `TP2: $${event.tp2}` : "",
+    Number.isFinite(Number(event?.stopLoss)) ? `SL: $${event.stopLoss}` : "",
+    Number.isFinite(Number(event?.returnPct)) ? `Return: ${Number(event.returnPct).toFixed(2)}%` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+async function sendDiscord(webhookUrl, title, event, bannerAttachment) {
+  let response;
+  if (bannerAttachment) {
+    const form = new FormData();
+    form.append("payload_json", JSON.stringify(buildDiscordPayload(title, event, bannerAttachment)));
+    form.append(
+      "files[0]",
+      new Blob([bannerAttachment.buffer], { type: bannerAttachment.mimeType }),
+      bannerAttachment.filename
+    );
+    response = await fetch(webhookUrl, {
+      method: "POST",
+      body: form,
+    });
+  } else {
+    response = await fetch(webhookUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+      },
+      body: JSON.stringify(buildDiscordPayload(title, event, null)),
+    });
+  }
 
   if (!response.ok) {
     throw new Error(`Discord webhook failed (${response.status})`);
   }
 }
 
-async function sendTelegram(botToken, chatId, title, event) {
-  const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json; charset=utf-8",
-    },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text: formatAlertMessage(title, event),
-      disable_web_page_preview: true,
-    }),
-  });
+async function sendTelegram(botToken, chatId, title, event, bannerAttachment) {
+  let response;
+  if (bannerAttachment) {
+    const form = new FormData();
+    form.append("chat_id", chatId);
+    form.append("caption", buildTelegramCaption(title, event));
+    form.append("disable_web_page_preview", "true");
+    form.append(
+      "photo",
+      new Blob([bannerAttachment.buffer], { type: bannerAttachment.mimeType }),
+      bannerAttachment.filename
+    );
+    response = await fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
+      method: "POST",
+      body: form,
+    });
+  } else {
+    response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+      },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: formatAlertMessage(title, event),
+        disable_web_page_preview: true,
+      }),
+    });
+  }
 
   if (!response.ok) {
     throw new Error(`Telegram send failed (${response.status})`);
@@ -119,10 +236,11 @@ module.exports = async function handler(req, res) {
     const meta = body?.meta || {};
     const destinations = body?.destinations || {};
     const results = {};
+    const bannerAttachment = await loadAlertBanner(event, meta);
 
     if (destinations.discordWebhook) {
       try {
-        await sendDiscord(String(destinations.discordWebhook).trim(), title, event);
+        await sendDiscord(String(destinations.discordWebhook).trim(), title, event, bannerAttachment);
         results.discord = "sent";
         await recordDelivery("discord", "sent", "", title, event, meta);
       } catch (error) {
@@ -137,7 +255,8 @@ module.exports = async function handler(req, res) {
           String(destinations.telegramToken).trim(),
           String(destinations.telegramChatId).trim(),
           title,
-          event
+          event,
+          bannerAttachment
         );
         results.telegram = "sent";
         await recordDelivery("telegram", "sent", "", title, event, meta);
