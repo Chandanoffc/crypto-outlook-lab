@@ -2525,7 +2525,8 @@ function renderTradezPaperDashboard() {
     dom.auto2MetricWinRate.className = toneFromNumber(metrics.winRate - 50, 2);
   }
   if (dom.auto2MetricWinRateNote) {
-    dom.auto2MetricWinRateNote.textContent = `${metrics.tpCount} winners / ${tradezPaper.closedTrades.length} closed trades`;
+    const closedForWinRate = metrics.tpCount + metrics.slCount;
+    dom.auto2MetricWinRateNote.textContent = `${metrics.tpCount} winners / ${closedForWinRate} closed trades`;
   }
   if (dom.auto2MetricOpen) {
     dom.auto2MetricOpen.textContent = tradezPaper.openTrades.length ? `${tradezPaper.openTrades.length} Active` : "None";
