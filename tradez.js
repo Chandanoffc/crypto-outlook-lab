@@ -1673,8 +1673,14 @@ function renderAnalysisGrid(container, items) {
   items.forEach((item) => {
     const card = document.createElement("article");
     card.className = "analysis-card";
+    const badgeMarkup = item.badge
+      ? `<em class="analysis-card-badge ${item.badgeClass || ""}">${item.badge}</em>`
+      : "";
     card.innerHTML = `
-      <span>${item.label}</span>
+      <div class="analysis-card-topline">
+        <span>${item.label}</span>
+        ${badgeMarkup}
+      </div>
       <strong class="${item.tone || "neutral"}">${item.value}</strong>
       <small>${item.note}</small>
     `;
@@ -2505,6 +2511,7 @@ function renderTradezPaperDashboard() {
   const visibleOpenTrades = [...tradezPaper.openTrades].sort(
     (left, right) => (right.openedAt || 0) - (left.openedAt || 0)
   );
+  const recentTradeCutoff = Date.now() - 10 * 60 * 1000;
 
   if (dom.auto2MetricStart) dom.auto2MetricStart.textContent = formatPrice(tradezPaper.startingBalance, 2);
   if (dom.auto2MetricEquity) {
@@ -2567,6 +2574,8 @@ function renderTradezPaperDashboard() {
       ? visibleOpenTrades.map((trade) => ({
           label: `${trade.symbol} ${trade.side}`,
           value: `${formatPercent(tradezPaperReturnPct(trade, trade.lastPrice || trade.entryPrice))} live`,
+          badge: trade.openedAt && trade.openedAt >= recentTradeCutoff ? "Recently Opened" : "",
+          badgeClass: trade.openedAt && trade.openedAt >= recentTradeCutoff ? "recent" : "",
           note: `Opened ${formatExactDateTime(trade.openedAt)} • Entered ${formatPrice(
             trade.entryPrice,
             trade.pricePrecision || 2
