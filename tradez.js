@@ -19,12 +19,14 @@ const HOUSE_AUTO_STRATEGY_VERSION = 5;
 const PAPER_BACKUP_TYPE = "soloris-paper-books-backup";
 const PAPER_BACKUP_VERSION = 1;
 const REPORT_LOOKBACK_MS = 24 * 60 * 60 * 1000;
-const TRADEZ_AUTO_START_BALANCE = 200;
+const UTC_DAY_MS = 24 * 60 * 60 * 1000;
+const TRADEZ_AUTO_START_BALANCE = 10000;
 const TRADEZ_AUTO_LEVERAGE = 5;
-const TRADEZ_AUTO_MAX_CONCURRENT_TRADES = 6;
-const TRADEZ_AUTO_MAX_NEW_TRADES = 4;
-const TRADEZ_AUTO_VERSION = 1;
+const TRADEZ_AUTO_MAX_CONCURRENT_TRADES = 30;
+const TRADEZ_AUTO_MAX_NEW_TRADES = 12;
+const TRADEZ_AUTO_VERSION = 2;
 const TRADEZ_AUTO_TRADE_COOLDOWN_MS = 4 * 60 * 1000;
+const TRADEZ_AUTO_TP1_MARGIN_TRIGGER_PCT = 25;
 const TICKER_CACHE_MAX_AGE_MS = 30 * 60 * 1000;
 const FRESH_SIGNAL_WINDOW_MS = 10 * 60 * 1000;
 const DEMO_STATUS_SYNC_BATCH = 20;
@@ -207,8 +209,8 @@ let chartResizeBound = false;
 function loadTradezPaperState() {
   const stored = readStoredJson(TRADEZ_AUTO_STORAGE_KEY, {});
   return {
-    startingBalance: TRADEZ_AUTO_START_BALANCE,
-    balance: Number(stored.balance) || TRADEZ_AUTO_START_BALANCE,
+    startingBalance: Number(stored.startingBalance) || TRADEZ_AUTO_START_BALANCE,
+    balance: Number(stored.balance) || Number(stored.startingBalance) || TRADEZ_AUTO_START_BALANCE,
     autoEnabled: stored.autoEnabled !== false,
     openTrades: Array.isArray(stored.openTrades) ? stored.openTrades : [],
     closedTrades: Array.isArray(stored.closedTrades) ? stored.closedTrades : [],
@@ -216,6 +218,7 @@ function loadTradezPaperState() {
     activity: Array.isArray(stored.activity) ? stored.activity : [],
     activeTab: stored.activeTab || "positions",
     lastScanAt: Number(stored.lastScanAt) || 0,
+    lastDailyBriefingUtcDate: stored.lastDailyBriefingUtcDate || utcDayKey(Date.now() - UTC_DAY_MS),
     strategyVersion: Number(stored.strategyVersion) || 1,
   };
 }
@@ -281,6 +284,7 @@ function persistState() {
 
 function persistTradezPaperState() {
   writeStoredJson(TRADEZ_AUTO_STORAGE_KEY, {
+    startingBalance: tradezPaper.startingBalance,
     balance: tradezPaper.balance,
     autoEnabled: tradezPaper.autoEnabled,
     openTrades: tradezPaper.openTrades,
@@ -289,6 +293,7 @@ function persistTradezPaperState() {
     activity: tradezPaper.activity,
     activeTab: tradezPaper.activeTab,
     lastScanAt: tradezPaper.lastScanAt,
+    lastDailyBriefingUtcDate: tradezPaper.lastDailyBriefingUtcDate,
     strategyVersion: tradezPaper.strategyVersion,
   });
 }
@@ -743,6 +748,43 @@ function withinLast24Hours(timestamp, now = Date.now()) {
   return Number.isFinite(value) && value > 0 && now >= value && now - value <= REPORT_LOOKBACK_MS;
 }
 
+function utcDayKey(timestamp = Date.now()) {
+  const value = Number(timestamp);
+  if (!Number.isFinite(value)) return new Date().toISOString().slice(0, 10);
+  return new Date(value).toISOString().slice(0, 10);
+}
+
+function utcDayStartMs(dayKey) {
+  const parsed = Date.parse(`${dayKey}T00:00:00.000Z`);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function utcDayRange(dayKey) {
+  const start = utcDayStartMs(dayKey);
+  return {
+    start,
+    end: start ? start + UTC_DAY_MS : 0,
+  };
+}
+
+function isWithinUtcDay(timestamp, dayKey) {
+  const value = Number(timestamp);
+  if (!Number.isFinite(value) || value <= 0) return false;
+  const { start, end } = utcDayRange(dayKey);
+  return !!start && value >= start && value < end;
+}
+
+function formatUtcDayLabel(dayKey) {
+  const start = utcDayStartMs(dayKey);
+  if (!start) return dayKey;
+  return new Date(start).toLocaleDateString("en-US", {
+    timeZone: "UTC",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
 function tradezReportFilename(now = Date.now()) {
   const stamp = new Date(now).toISOString().replace(/:/g, "-").replace(/\..+/, "");
   return `soloris-ema-signals-24h-${stamp}.md`;
@@ -938,6 +980,8 @@ function normalizeImportedTradezBook(rawBook) {
   if (!rawBook || typeof rawBook !== "object") return null;
   return {
     ...rawBook,
+    startingBalance: Number(rawBook.startingBalance) || TRADEZ_AUTO_START_BALANCE,
+    lastDailyBriefingUtcDate: rawBook.lastDailyBriefingUtcDate || utcDayKey(Date.now() - UTC_DAY_MS),
     strategyVersion: TRADEZ_AUTO_VERSION,
   };
 }
@@ -1307,6 +1351,78 @@ function maybeSendTradezProgressNotification(kind, trade, extraLines = [], time 
             : "break_even_exit",
   };
   dispatchTradezDelivery(event, event.title);
+}
+
+function buildTradezDailyBriefing(dayKey) {
+  const openedTrades = tradezPaper.closedTrades
+    .concat(tradezPaper.openTrades)
+    .filter((trade) => isWithinUtcDay(trade.openedAt || trade.detectedAt, dayKey));
+  const closedTrades = tradezPaper.closedTrades.filter((trade) => isWithinUtcDay(trade.closedAt, dayKey));
+  const winners = closedTrades.filter((trade) => trade.reason === "TP");
+  const stopLosses = closedTrades.filter((trade) => trade.reason === "SL");
+  const breakevens = closedTrades.filter((trade) => trade.reason === "BE");
+  const avgGainPct = average(winners.map((trade) => Number(trade.returnPct)).filter(Number.isFinite));
+  const avgLossPct = average(
+    stopLosses.map((trade) => Math.abs(Number(trade.returnPct))).filter(Number.isFinite)
+  );
+  const realizedUsd = closedTrades.reduce((sum, trade) => sum + (Number(trade.pnlUsd) || 0), 0);
+  const realizedPct = pctChange(tradezPaper.startingBalance, tradezPaper.startingBalance + realizedUsd);
+
+  return {
+    dayKey,
+    label: formatUtcDayLabel(dayKey),
+    tradesTaken: openedTrades.length,
+    profitsHit: winners.length,
+    avgGainPct: Number.isFinite(avgGainPct) ? avgGainPct : 0,
+    slsHit: stopLosses.length,
+    avgLossPct: Number.isFinite(avgLossPct) ? avgLossPct : 0,
+    breakevens: breakevens.length,
+    realizedUsd,
+    realizedPct,
+    openRunners: tradezPaper.openTrades.length,
+  };
+}
+
+function maybeSendTradezDailyBriefing(now = Date.now()) {
+  const previousDayKey = utcDayKey(now - UTC_DAY_MS);
+  if (tradezPaper.lastDailyBriefingUtcDate === previousDayKey) return;
+
+  const briefing = buildTradezDailyBriefing(previousDayKey);
+  const lines = [
+    "📘 EMA BOOK DAILY BRIEFING",
+    `Date (UTC): ${briefing.label}`,
+    `Trades taken: ${briefing.tradesTaken}`,
+    `Profits hit: ${briefing.profitsHit}`,
+    `Avg gain: ${briefing.profitsHit ? formatPercent(briefing.avgGainPct) : "0.00%"}`,
+    `SLs hit: ${briefing.slsHit}`,
+    `Avg loss: ${briefing.slsHit ? `-${Math.abs(briefing.avgLossPct).toFixed(2)}%` : "0.00%"}`,
+    `Breakeven exits: ${briefing.breakevens}`,
+    `Overall realized PnL: ${formatCompactUsd(briefing.realizedUsd, 2)}`,
+    `Overall realized return: ${formatPercent(briefing.realizedPct)}`,
+    `Open runners carried: ${briefing.openRunners}`,
+  ];
+
+  dispatchTradezDelivery(
+    {
+      time: now,
+      symbol: "EMA_BOOK",
+      title: "EMA Book Daily Briefing",
+      deliveryType: "daily_briefing",
+      message: lines.join("\n"),
+      formattedMessage: lines.join("\n"),
+    },
+    "EMA Book Daily Briefing"
+  );
+
+  tradezPaper.lastDailyBriefingUtcDate = previousDayKey;
+  logTradezPaperActivity(
+    `Daily EMA briefing sent for ${briefing.label} • ${briefing.tradesTaken} trades • ${formatCompactUsd(
+      briefing.realizedUsd,
+      2
+    )} realized.`,
+    briefing.realizedUsd >= 0 ? "up" : "down"
+  );
+  persistTradezPaperState();
 }
 
 function markTradezDemoTp1(trade, candidate, statusRecord) {
@@ -1705,14 +1821,19 @@ function logTradezPaperActivity(message, tone = "neutral") {
 
 function applyTradezPaperUpgradeNotice() {
   if (tradezPaper.strategyVersion >= TRADEZ_AUTO_VERSION) return;
-  tradezPaper.balance = TRADEZ_AUTO_START_BALANCE;
-  tradezPaper.openTrades = [];
-  tradezPaper.closedTrades = [];
-  tradezPaper.demoOrders = [];
-  tradezPaper.activity = [];
-  tradezPaper.lastScanAt = 0;
+  const previousStartingBalance = Number(tradezPaper.startingBalance) || 200;
+  const topUp = Math.max(0, TRADEZ_AUTO_START_BALANCE - previousStartingBalance);
+  tradezPaper.balance = Number(tradezPaper.balance) || previousStartingBalance;
+  tradezPaper.balance += topUp;
+  tradezPaper.startingBalance = TRADEZ_AUTO_START_BALANCE;
+  if (!tradezPaper.lastDailyBriefingUtcDate) {
+    tradezPaper.lastDailyBriefingUtcDate = utcDayKey(Date.now() - UTC_DAY_MS);
+  }
   tradezPaper.strategyVersion = TRADEZ_AUTO_VERSION;
-  logTradezPaperActivity("Auto Trade 2 book initialized on the EMA Signals strategy.", "neutral");
+  logTradezPaperActivity(
+    "EMA Book capacity upgraded to the $10,000 research book. Existing positions were preserved.",
+    "neutral"
+  );
   persistTradezPaperState();
 }
 
@@ -1794,7 +1915,7 @@ function openTradezPaperTrade(candidate) {
   const slotsRemaining = Math.max(1, TRADEZ_AUTO_MAX_CONCURRENT_TRADES - tradezPaper.openTrades.length);
   const marginBudget = Math.min(
     freeCapital,
-    Math.max(tradezPaper.startingBalance * 0.16, freeCapital / slotsRemaining)
+    Math.max(tradezPaper.startingBalance * 0.03, freeCapital / slotsRemaining)
   );
   const riskCapital = Math.max(marginBudget * 0.12, 2);
   const stopDistance = Math.abs(actualEntry - candidate.paperTrade.stopLoss);
@@ -2022,9 +2143,11 @@ function refreshTradezPaperTrades(candidates) {
     trade.lastPrice = candidate.currentPrice;
     trade.pricePrecision = candidate.pricePrecision;
     const currentPrice = candidate.currentPrice;
+    const liveMarginPct = tradezPaperReturnPct(trade, currentPrice);
     const hitTp1 =
       !trade.tp1Hit &&
-      (trade.side === "Long" ? currentPrice >= trade.tp1 : currentPrice <= trade.tp1);
+      ((trade.side === "Long" ? currentPrice >= trade.tp1 : currentPrice <= trade.tp1) ||
+        liveMarginPct >= TRADEZ_AUTO_TP1_MARGIN_TRIGGER_PCT);
     const hitTp2 =
       trade.side === "Long" ? currentPrice >= trade.tp2 : currentPrice <= trade.tp2;
     const hitStop =
@@ -2057,6 +2180,7 @@ function refreshTradezPaperTrades(candidates) {
           exitType: "tp1",
           demoSync: trade.executionMode === "demo",
           runnerTarget: trade.tp2,
+          triggeredByMarginPct: liveMarginPct >= TRADEZ_AUTO_TP1_MARGIN_TRIGGER_PCT ? liveMarginPct : null,
         },
       });
       maybeSendTradezProgressNotification(
@@ -2367,8 +2491,8 @@ function renderTradezPaperDashboard() {
   if (dom.auto2Toggle) dom.auto2Toggle.textContent = tradezPaper.autoEnabled ? "Pause Auto 2" : "Resume Auto 2";
   if (dom.auto2Note) {
     dom.auto2Note.textContent = tradezPaper.autoEnabled
-      ? `Auto Trade 2 scans every 5 minutes, can open up to ${TRADEZ_AUTO_MAX_NEW_TRADES} fresh trades per pass, can hold up to ${TRADEZ_AUTO_MAX_CONCURRENT_TRADES} EMA positions, and is running in ${tradezModeLabel()} mode.`
-      : `Auto Trade 2 is paused. The feed still monitors EMA setups while ${tradezModeLabel()} mode stays armed.`;
+      ? `Auto Trade 2 scans every 5 minutes, can open up to ${TRADEZ_AUTO_MAX_NEW_TRADES} fresh trades per pass, can hold up to ${TRADEZ_AUTO_MAX_CONCURRENT_TRADES} EMA positions, and is running on the $${TRADEZ_AUTO_START_BALANCE.toLocaleString()} research book in ${tradezModeLabel()} mode.`
+      : `Auto Trade 2 is paused. The feed still monitors EMA setups while the $${TRADEZ_AUTO_START_BALANCE.toLocaleString()} research book stays armed in ${tradezModeLabel()} mode.`;
   }
 
   renderAnalysisGrid(
@@ -4151,6 +4275,7 @@ async function scanUniverse(manual = false) {
     await syncTradezDemoStatuses(analyzedCandidates);
     refreshTradezPaperTrades(analyzedCandidates);
     const openedTrades = tradezPaper.autoEnabled ? openTradezQualifiedTrades(state.candidates) : [];
+    maybeSendTradezDailyBriefing();
     renderSignalFeed();
     renderAlertFeed();
     updateMetrics();
@@ -4287,15 +4412,17 @@ function bindEvents() {
   if (dom.auto2Reset) {
     dom.auto2Reset.addEventListener("click", () => {
       tradezPaper.balance = TRADEZ_AUTO_START_BALANCE;
+      tradezPaper.startingBalance = TRADEZ_AUTO_START_BALANCE;
       tradezPaper.openTrades = [];
       tradezPaper.closedTrades = [];
       tradezPaper.demoOrders = [];
       tradezPaper.activity = [];
       tradezPaper.lastScanAt = 0;
-      logTradezPaperActivity("Auto Trade 2 reset to the $200 EMA Signals book.", "neutral");
+      tradezPaper.lastDailyBriefingUtcDate = utcDayKey(Date.now() - UTC_DAY_MS);
+      logTradezPaperActivity("Auto Trade 2 reset to the $10,000 EMA research book.", "neutral");
       persistTradezPaperState();
       renderTradezPaperDashboard();
-      setStatus("Auto Trade 2 reset to the $200 EMA Signals book.", "neutral");
+      setStatus("Auto Trade 2 reset to the $10,000 EMA research book.", "neutral");
     });
   }
 
