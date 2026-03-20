@@ -224,17 +224,22 @@ func makeImage(config: BannerConfig, phase: CGFloat) -> NSImage {
         phase: phase
     )
 
+    let titleBlockX: CGFloat = 290
+    let titleBlockWidth: CGFloat = width - 760
+    let titleRect = NSRect(x: titleBlockX, y: height - 138, width: titleBlockWidth, height: 84)
     drawText(
         config.title,
-        in: NSRect(x: 294, y: height - 124, width: 760, height: 66),
-        font: NSFont.systemFont(ofSize: 54, weight: .heavy),
-        color: NSColor(calibratedWhite: 0.98, alpha: 1)
+        in: titleRect,
+        font: NSFont.systemFont(ofSize: 74, weight: .black),
+        color: NSColor(calibratedWhite: 0.985, alpha: 1),
+        alignment: .center
     )
     drawText(
         config.subtitle,
-        in: NSRect(x: 300, y: height - 170, width: 520, height: 38),
-        font: NSFont(name: "Snell Roundhand Bold", size: 28) ?? NSFont.systemFont(ofSize: 28, weight: .semibold),
-        color: config.accentStart
+        in: NSRect(x: titleBlockX, y: height - 192, width: titleBlockWidth, height: 42),
+        font: NSFont(name: "Snell Roundhand Bold", size: 34) ?? NSFont.systemFont(ofSize: 34, weight: .semibold),
+        color: config.accentStart,
+        alignment: .center
     )
 
     let signalCapsule = NSRect(x: width - 422, y: height - 148, width: 300, height: 58)
