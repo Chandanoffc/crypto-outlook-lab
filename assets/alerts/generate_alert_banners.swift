@@ -16,6 +16,13 @@ struct BannerConfig {
     let edgeGlow: NSColor
     let title: String
     let subtitle: String
+    let motionStyle: MotionStyle
+}
+
+enum MotionStyle {
+    case sweep
+    case rise
+    case warn
 }
 
 let banners: [BannerConfig] = [
@@ -25,7 +32,8 @@ let banners: [BannerConfig] = [
         accentEnd: NSColor(calibratedRed: 0.24, green: 0.96, blue: 0.88, alpha: 1),
         edgeGlow: NSColor(calibratedRed: 0.18, green: 0.83, blue: 0.98, alpha: 0.88),
         title: "NEW SIGNAL",
-        subtitle: "Soloris Signals"
+        subtitle: "Soloris Signals",
+        motionStyle: .sweep
     ),
     BannerConfig(
         name: "new-signal-gold",
@@ -33,7 +41,8 @@ let banners: [BannerConfig] = [
         accentEnd: NSColor(calibratedRed: 1.00, green: 0.93, blue: 0.53, alpha: 1),
         edgeGlow: NSColor(calibratedRed: 0.98, green: 0.80, blue: 0.22, alpha: 0.88),
         title: "NEW SIGNAL",
-        subtitle: "Soloris Signals"
+        subtitle: "Soloris Signals",
+        motionStyle: .sweep
     ),
     BannerConfig(
         name: "profits",
@@ -41,7 +50,8 @@ let banners: [BannerConfig] = [
         accentEnd: NSColor(calibratedRed: 0.34, green: 0.95, blue: 0.64, alpha: 1),
         edgeGlow: NSColor(calibratedRed: 0.08, green: 0.73, blue: 0.52, alpha: 0.92),
         title: "PROFITS",
-        subtitle: "Soloris Signals"
+        subtitle: "Soloris Signals",
+        motionStyle: .rise
     ),
     BannerConfig(
         name: "loss",
@@ -49,7 +59,8 @@ let banners: [BannerConfig] = [
         accentEnd: NSColor(calibratedRed: 0.99, green: 0.56, blue: 0.29, alpha: 1),
         edgeGlow: NSColor(calibratedRed: 0.93, green: 0.27, blue: 0.27, alpha: 0.90),
         title: "LOSS",
-        subtitle: "Soloris Signals"
+        subtitle: "Soloris Signals",
+        motionStyle: .warn
     )
 ]
 
@@ -138,6 +149,104 @@ func drawTitleShimmer(in ctx: CGContext, rect: CGRect, color: NSColor, phase: CG
         end: CGPoint(x: x + sweepWidth, y: rect.maxY),
         options: []
     )
+    ctx.restoreGState()
+}
+
+func drawSignalSweep(in ctx: CGContext, rect: CGRect, color: NSColor, phase: CGFloat) {
+    let lineY = rect.minY + rect.height * (0.30 + 0.48 * phase)
+    let gradient = CGGradient(
+        colorsSpace: CGColorSpaceCreateDeviceRGB(),
+        colors: [
+            color.withAlphaComponent(0).cgColor,
+            color.withAlphaComponent(0.35).cgColor,
+            color.withAlphaComponent(0.75).cgColor,
+            color.withAlphaComponent(0.35).cgColor,
+            color.withAlphaComponent(0).cgColor
+        ] as CFArray,
+        locations: [0.0, 0.35, 0.5, 0.65, 1.0]
+    )!
+    ctx.saveGState()
+    ctx.addPath(CGPath(roundedRect: rect, cornerWidth: 30, cornerHeight: 30, transform: nil))
+    ctx.clip()
+    ctx.drawLinearGradient(
+        gradient,
+        start: CGPoint(x: rect.minX + 80, y: lineY),
+        end: CGPoint(x: rect.maxX - 80, y: lineY),
+        options: []
+    )
+    ctx.setStrokeColor(color.withAlphaComponent(0.55).cgColor)
+    ctx.setLineWidth(2)
+    ctx.move(to: CGPoint(x: rect.minX + 110, y: lineY))
+    ctx.addLine(to: CGPoint(x: rect.maxX - 110, y: lineY))
+    ctx.strokePath()
+    ctx.restoreGState()
+}
+
+func drawProfitLift(in ctx: CGContext, rect: CGRect, start: NSColor, end: NSColor, phase: CGFloat) {
+    let pulse = sin(phase * .pi)
+    ctx.saveGState()
+    ctx.addPath(CGPath(roundedRect: rect, cornerWidth: 30, cornerHeight: 30, transform: nil))
+    ctx.clip()
+    let centerX = rect.midX
+    for idx in 0..<3 {
+        let offset = CGFloat(idx - 1) * 90
+        let barWidth: CGFloat = 44
+        let rise = rect.minY + 16 + CGFloat(idx) * 10 + 20 * pulse
+        let barHeight = 60 + CGFloat(idx) * 32 + 30 * pulse
+        let barRect = CGRect(x: centerX + offset - barWidth / 2, y: rise, width: barWidth, height: barHeight)
+        let gradient = CGGradient(
+            colorsSpace: CGColorSpaceCreateDeviceRGB(),
+            colors: [
+                start.withAlphaComponent(0.10).cgColor,
+                end.withAlphaComponent(0.42 + 0.10 * pulse).cgColor
+            ] as CFArray,
+            locations: [0, 1]
+        )!
+        let path = CGPath(roundedRect: barRect, cornerWidth: 12, cornerHeight: 12, transform: nil)
+        ctx.addPath(path)
+        ctx.clip()
+        ctx.drawLinearGradient(gradient, start: CGPoint(x: barRect.midX, y: barRect.minY), end: CGPoint(x: barRect.midX, y: barRect.maxY), options: [])
+        ctx.resetClip()
+        ctx.addPath(CGPath(roundedRect: rect, cornerWidth: 30, cornerHeight: 30, transform: nil))
+        ctx.clip()
+    }
+
+    let arrowPath = CGMutablePath()
+    arrowPath.move(to: CGPoint(x: rect.midX - 160, y: rect.minY + 60 + 16 * pulse))
+    arrowPath.addCurve(
+        to: CGPoint(x: rect.midX + 180, y: rect.maxY - 58),
+        control1: CGPoint(x: rect.midX - 40, y: rect.midY - 20),
+        control2: CGPoint(x: rect.midX + 88, y: rect.midY + 30)
+    )
+    ctx.addPath(arrowPath)
+    ctx.setStrokeColor(end.withAlphaComponent(0.55 + 0.12 * pulse).cgColor)
+    ctx.setLineWidth(8)
+    ctx.setLineCap(.round)
+    ctx.strokePath()
+    ctx.restoreGState()
+}
+
+func drawLossWarning(in ctx: CGContext, rect: CGRect, color: NSColor, phase: CGFloat) {
+    let flicker = phase < 0.18 || (phase > 0.52 && phase < 0.72) ? 1.0 : 0.45
+    ctx.saveGState()
+    ctx.addPath(CGPath(roundedRect: rect, cornerWidth: 30, cornerHeight: 30, transform: nil))
+    ctx.clip()
+
+    ctx.setLineWidth(14)
+    for idx in -3...8 {
+        let startX = rect.minX + CGFloat(idx) * 120
+        ctx.setStrokeColor(color.withAlphaComponent(0.10 * flicker).cgColor)
+        ctx.move(to: CGPoint(x: startX, y: rect.minY))
+        ctx.addLine(to: CGPoint(x: startX + 180, y: rect.maxY))
+    }
+    ctx.strokePath()
+
+    let warnRect = CGRect(x: rect.midX - 210, y: rect.midY - 86, width: 420, height: 132)
+    let path = CGPath(roundedRect: warnRect, cornerWidth: 28, cornerHeight: 28, transform: nil)
+    ctx.addPath(path)
+    ctx.setStrokeColor(color.withAlphaComponent(0.28 + 0.18 * flicker).cgColor)
+    ctx.setLineWidth(3)
+    ctx.strokePath()
     ctx.restoreGState()
 }
 
@@ -263,12 +372,18 @@ func makeImage(config: BannerConfig, phase: CGFloat) -> NSImage {
         config.edgeGlow.withAlphaComponent(0.0)
     ])!
     titleHalo.draw(in: titleHaloRect, relativeCenterPosition: NSPoint(x: 0.0, y: 0.25))
-    drawTitleShimmer(
-        in: ctx,
-        rect: NSRect(x: titleBlockX - 40, y: height - 196, width: titleBlockWidth + 80, height: 118),
-        color: config.edgeGlow,
-        phase: phase
-    )
+    let titleMotionRect = NSRect(x: titleBlockX - 40, y: height - 196, width: titleBlockWidth + 80, height: 118)
+    switch config.motionStyle {
+    case .sweep:
+        drawTitleShimmer(in: ctx, rect: titleMotionRect, color: config.edgeGlow, phase: phase)
+        drawSignalSweep(in: ctx, rect: titleMotionRect, color: config.accentEnd, phase: phase)
+    case .rise:
+        drawProfitLift(in: ctx, rect: titleMotionRect, start: config.accentStart, end: config.accentEnd, phase: phase)
+        drawTitleShimmer(in: ctx, rect: titleMotionRect, color: config.edgeGlow.withAlphaComponent(0.8), phase: phase)
+    case .warn:
+        drawLossWarning(in: ctx, rect: titleMotionRect, color: config.edgeGlow, phase: phase)
+        drawTitleShimmer(in: ctx, rect: titleMotionRect, color: config.edgeGlow.withAlphaComponent(0.7), phase: phase)
+    }
     drawText(
         config.title,
         in: titleRect.offsetBy(dx: 0, dy: 0),
