@@ -224,20 +224,20 @@ func makeImage(config: BannerConfig, phase: CGFloat) -> NSImage {
         phase: phase
     )
 
-    let titleBlockX: CGFloat = 290
-    let titleBlockWidth: CGFloat = width - 760
-    let titleRect = NSRect(x: titleBlockX, y: height - 138, width: titleBlockWidth, height: 84)
+    let titleBlockWidth: CGFloat = 720
+    let titleBlockX: CGFloat = (width - titleBlockWidth) / 2
+    let titleRect = NSRect(x: titleBlockX, y: height - 146, width: titleBlockWidth, height: 96)
     drawText(
         config.title,
         in: titleRect,
-        font: NSFont.systemFont(ofSize: 74, weight: .black),
+        font: NSFont.systemFont(ofSize: 88, weight: .black),
         color: NSColor(calibratedWhite: 0.985, alpha: 1),
         alignment: .center
     )
     drawText(
         config.subtitle,
-        in: NSRect(x: titleBlockX, y: height - 192, width: titleBlockWidth, height: 42),
-        font: NSFont(name: "Snell Roundhand Bold", size: 34) ?? NSFont.systemFont(ofSize: 34, weight: .semibold),
+        in: NSRect(x: titleBlockX, y: height - 204, width: titleBlockWidth, height: 48),
+        font: NSFont(name: "Snell Roundhand Bold", size: 38) ?? NSFont.systemFont(ofSize: 38, weight: .semibold),
         color: config.accentStart,
         alignment: .center
     )
