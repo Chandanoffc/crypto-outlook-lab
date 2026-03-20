@@ -2371,8 +2371,10 @@ function readHouseTradeMetrics() {
 function readTradezPaperMetrics() {
   const tpCount = tradezPaper.closedTrades.filter((trade) => trade.reason === "TP").length;
   const slCount = tradezPaper.closedTrades.filter((trade) => trade.reason === "SL").length;
-  const totalClosed = tradezPaper.closedTrades.filter((trade) => trade.reason !== "BE").length;
-  const winRate = totalClosed ? (tpCount / totalClosed) * 100 : 0;
+  const beCount = tradezPaper.closedTrades.filter((trade) => trade.reason === "BE").length;
+  const resolvedCount = tpCount + slCount;
+  const totalClosed = tradezPaper.closedTrades.length;
+  const winRate = resolvedCount ? (tpCount / resolvedCount) * 100 : 0;
   const unrealizedUsd = tradezPaper.openTrades.reduce((sum, trade) => {
     const direction = trade.side === "Short" ? -1 : 1;
     if (!Number.isFinite(trade.lastPrice)) return sum;
@@ -2392,7 +2394,8 @@ function readTradezPaperMetrics() {
     openTrades: tradezPaper.openTrades.length,
     tpCount,
     slCount,
-    beCount: tradezPaper.closedTrades.filter((trade) => trade.reason === "BE").length,
+    beCount,
+    resolvedCount,
     winRate,
     averageQuality: Number.isFinite(averageQuality) ? averageQuality : 0,
     equity,
@@ -2535,8 +2538,9 @@ function renderTradezPaperDashboard() {
     dom.auto2MetricWinRate.className = toneFromNumber(metrics.winRate - 50, 2);
   }
   if (dom.auto2MetricWinRateNote) {
-    const closedForWinRate = metrics.tpCount + metrics.slCount;
-    dom.auto2MetricWinRateNote.textContent = `${metrics.tpCount} winners / ${closedForWinRate} closed trades`;
+    dom.auto2MetricWinRateNote.textContent = metrics.beCount
+      ? `${metrics.tpCount} winners / ${metrics.resolvedCount} resolved trades • ${metrics.beCount} BE`
+      : `${metrics.tpCount} winners / ${metrics.resolvedCount} resolved trades`;
   }
   if (dom.auto2MetricOpen) {
     dom.auto2MetricOpen.textContent = tradezPaper.openTrades.length ? `${tradezPaper.openTrades.length} Active` : "None";
