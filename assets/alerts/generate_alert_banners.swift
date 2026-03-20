@@ -114,6 +114,33 @@ func drawSweep(in ctx: CGContext, rect: CGRect, color: NSColor, phase: CGFloat) 
     ctx.restoreGState()
 }
 
+func drawTitleShimmer(in ctx: CGContext, rect: CGRect, color: NSColor, phase: CGFloat) {
+    let sweepWidth: CGFloat = 260
+    let x = rect.minX + (rect.width + sweepWidth * 2) * phase - sweepWidth
+    let gradient = CGGradient(
+        colorsSpace: CGColorSpaceCreateDeviceRGB(),
+        colors: [
+            color.withAlphaComponent(0.0).cgColor,
+            color.withAlphaComponent(0.20).cgColor,
+            color.withAlphaComponent(0.32).cgColor,
+            color.withAlphaComponent(0.0).cgColor
+        ] as CFArray,
+        locations: [0.0, 0.35, 0.6, 1.0]
+    )!
+    ctx.saveGState()
+    let clipPath = CGPath(roundedRect: rect, cornerWidth: 26, cornerHeight: 26, transform: nil)
+    ctx.addPath(clipPath)
+    ctx.clip()
+    ctx.rotate(by: -.pi / 18)
+    ctx.drawLinearGradient(
+        gradient,
+        start: CGPoint(x: x, y: rect.minY),
+        end: CGPoint(x: x + sweepWidth, y: rect.maxY),
+        options: []
+    )
+    ctx.restoreGState()
+}
+
 func drawLogo(in rect: NSRect, accentStart: NSColor, accentEnd: NSColor, edgeGlow: NSColor, phase: CGFloat) {
     let panel = NSBezierPath(roundedRect: rect, xRadius: 34, yRadius: 34)
     NSColor(calibratedRed: 0.03, green: 0.05, blue: 0.10, alpha: 0.96).setFill()
@@ -224,9 +251,31 @@ func makeImage(config: BannerConfig, phase: CGFloat) -> NSImage {
         phase: phase
     )
 
+    let pulse = sin(phase * .pi)
+
     let titleBlockWidth: CGFloat = 720
     let titleBlockX: CGFloat = (width - titleBlockWidth) / 2
     let titleRect = NSRect(x: titleBlockX, y: height - 146, width: titleBlockWidth, height: 96)
+    let titleHaloRect = NSRect(x: titleBlockX - 120, y: height - 250, width: titleBlockWidth + 240, height: 190)
+    let titleHalo = NSGradient(colors: [
+        config.edgeGlow.withAlphaComponent(0.18 + (0.12 * pulse)),
+        config.edgeGlow.withAlphaComponent(0.04 + (0.03 * pulse)),
+        config.edgeGlow.withAlphaComponent(0.0)
+    ])!
+    titleHalo.draw(in: titleHaloRect, relativeCenterPosition: NSPoint(x: 0.0, y: 0.25))
+    drawTitleShimmer(
+        in: ctx,
+        rect: NSRect(x: titleBlockX - 40, y: height - 196, width: titleBlockWidth + 80, height: 118),
+        color: config.edgeGlow,
+        phase: phase
+    )
+    drawText(
+        config.title,
+        in: titleRect.offsetBy(dx: 0, dy: 0),
+        font: NSFont.systemFont(ofSize: 88, weight: .black),
+        color: config.edgeGlow.withAlphaComponent(0.18 + (0.12 * pulse)),
+        alignment: .center
+    )
     drawText(
         config.title,
         in: titleRect,
@@ -238,8 +287,15 @@ func makeImage(config: BannerConfig, phase: CGFloat) -> NSImage {
         config.subtitle,
         in: NSRect(x: titleBlockX, y: height - 204, width: titleBlockWidth, height: 48),
         font: NSFont(name: "Snell Roundhand Bold", size: 38) ?? NSFont.systemFont(ofSize: 38, weight: .semibold),
-        color: config.accentStart,
+        color: config.accentStart.blended(withFraction: 0.25 * pulse, of: .white) ?? config.accentStart,
         alignment: .center
+    )
+
+    let subtitleLine = NSRect(x: titleBlockX + 170, y: height - 222, width: titleBlockWidth - 340, height: 4)
+    drawRoundedRect(
+        subtitleLine,
+        radius: 2,
+        fill: config.edgeGlow.withAlphaComponent(0.12 + (0.12 * pulse))
     )
 
     let signalCapsule = NSRect(x: width - 422, y: height - 148, width: 300, height: 58)
@@ -247,7 +303,7 @@ func makeImage(config: BannerConfig, phase: CGFloat) -> NSImage {
         signalCapsule,
         radius: 24,
         fill: NSColor(calibratedRed: 0.06, green: 0.09, blue: 0.14, alpha: 0.95),
-        stroke: config.edgeGlow.withAlphaComponent(0.32 + (0.12 * phase)),
+        stroke: config.edgeGlow.withAlphaComponent(0.28 + (0.18 * pulse)),
         lineWidth: 2
     )
     drawText(
