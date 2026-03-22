@@ -4,8 +4,8 @@ import ImageIO
 import UniformTypeIdentifiers
 
 let fileManager = FileManager.default
-let currentDir = URL(fileURLWithPath: fileManager.currentDirectoryPath)
-let outputDir = currentDir.appendingPathComponent("assets/alerts", isDirectory: true)
+let scriptDir = URL(fileURLWithPath: (#filePath as String), isDirectory: false).deletingLastPathComponent()
+let outputDir = scriptDir
 let width: CGFloat = 1600
 let height: CGFloat = 900
 
@@ -20,9 +20,10 @@ struct BannerConfig {
 }
 
 enum MotionStyle {
-    case sweep
-    case rise
+    case siren
+    case confetti
     case warn
+    case safe
 }
 
 let banners: [BannerConfig] = [
@@ -33,7 +34,7 @@ let banners: [BannerConfig] = [
         edgeGlow: NSColor(calibratedRed: 0.18, green: 0.83, blue: 0.98, alpha: 0.88),
         title: "NEW SIGNAL",
         subtitle: "Soloris Signals",
-        motionStyle: .sweep
+        motionStyle: .siren
     ),
     BannerConfig(
         name: "new-signal-gold",
@@ -42,7 +43,7 @@ let banners: [BannerConfig] = [
         edgeGlow: NSColor(calibratedRed: 0.98, green: 0.80, blue: 0.22, alpha: 0.88),
         title: "NEW SIGNAL",
         subtitle: "Soloris Signals",
-        motionStyle: .sweep
+        motionStyle: .siren
     ),
     BannerConfig(
         name: "profits",
@@ -51,7 +52,7 @@ let banners: [BannerConfig] = [
         edgeGlow: NSColor(calibratedRed: 0.08, green: 0.73, blue: 0.52, alpha: 0.92),
         title: "PROFITS",
         subtitle: "Soloris Signals",
-        motionStyle: .rise
+        motionStyle: .confetti
     ),
     BannerConfig(
         name: "loss",
@@ -69,7 +70,7 @@ let banners: [BannerConfig] = [
         edgeGlow: NSColor(calibratedRed: 0.38, green: 0.87, blue: 0.99, alpha: 0.92),
         title: "SAFE",
         subtitle: "Soloris Signals",
-        motionStyle: .rise
+        motionStyle: .safe
     )
 ]
 
@@ -235,6 +236,89 @@ func drawProfitLift(in ctx: CGContext, rect: CGRect, start: NSColor, end: NSColo
     ctx.restoreGState()
 }
 
+func drawConfetti(in ctx: CGContext, rect: CGRect, start: NSColor, end: NSColor, phase: CGFloat) {
+    ctx.saveGState()
+    ctx.addPath(CGPath(roundedRect: rect, cornerWidth: 30, cornerHeight: 30, transform: nil))
+    ctx.clip()
+    let pulse = sin(phase * .pi)
+    let pieces = 24
+    for idx in 0..<pieces {
+        let seed = CGFloat(idx) / CGFloat(max(1, pieces - 1))
+        let x = rect.minX + 30 + rect.width * seed
+        let drift = sin((seed * 8 + phase * 6) * .pi) * 26
+        let fall = rect.maxY - (rect.height * (0.18 + seed * 0.52)) + pulse * 28
+        let size = 10 + CGFloat((idx % 4) * 4)
+        let confettiRect = CGRect(x: x + drift, y: fall, width: size, height: size * 0.55)
+        let color = idx.isMultiple(of: 2) ? start.withAlphaComponent(0.7) : end.withAlphaComponent(0.8)
+        ctx.saveGState()
+        ctx.translateBy(x: confettiRect.midX, y: confettiRect.midY)
+        ctx.rotate(by: seed * .pi + phase * .pi * 1.2)
+        ctx.setFillColor(color.cgColor)
+        ctx.fill(CGRect(x: -confettiRect.width / 2, y: -confettiRect.height / 2, width: confettiRect.width, height: confettiRect.height))
+        ctx.restoreGState()
+    }
+    ctx.restoreGState()
+}
+
+func drawSirenPulse(in ctx: CGContext, rect: CGRect, color: NSColor, phase: CGFloat) {
+    ctx.saveGState()
+    ctx.addPath(CGPath(roundedRect: rect, cornerWidth: 30, cornerHeight: 30, transform: nil))
+    ctx.clip()
+    let pulse = 0.35 + 0.65 * abs(sin(phase * .pi * 1.8))
+    let center = CGPoint(x: rect.midX, y: rect.midY + 8)
+    for ring in 0..<4 {
+        let radius = rect.width * (0.10 + CGFloat(ring) * 0.09 + pulse * 0.03)
+        ctx.setStrokeColor(color.withAlphaComponent(max(0.08, 0.28 - CGFloat(ring) * 0.06)).cgColor)
+        ctx.setLineWidth(6 - CGFloat(ring))
+        ctx.strokeEllipse(in: CGRect(x: center.x - radius, y: center.y - radius * 0.56, width: radius * 2, height: radius * 1.12))
+    }
+    let beamWidth: CGFloat = 220
+    let beamAlpha = 0.08 + pulse * 0.12
+    let gradient = CGGradient(
+        colorsSpace: CGColorSpaceCreateDeviceRGB(),
+        colors: [
+            color.withAlphaComponent(0).cgColor,
+            color.withAlphaComponent(beamAlpha).cgColor,
+            color.withAlphaComponent(0).cgColor
+        ] as CFArray,
+        locations: [0, 0.5, 1]
+    )!
+    ctx.drawLinearGradient(
+        gradient,
+        start: CGPoint(x: center.x - beamWidth, y: center.y + 90),
+        end: CGPoint(x: center.x + beamWidth, y: center.y + 90),
+        options: []
+    )
+    ctx.restoreGState()
+}
+
+func drawSafeShield(in ctx: CGContext, rect: CGRect, start: NSColor, end: NSColor, phase: CGFloat) {
+    ctx.saveGState()
+    ctx.addPath(CGPath(roundedRect: rect, cornerWidth: 30, cornerHeight: 30, transform: nil))
+    ctx.clip()
+    let pulse = 0.4 + 0.6 * sin(phase * .pi)
+    let shieldRect = CGRect(x: rect.midX - 92, y: rect.midY - 74, width: 184, height: 184)
+    let shield = CGMutablePath()
+    shield.move(to: CGPoint(x: shieldRect.midX, y: shieldRect.maxY))
+    shield.addLine(to: CGPoint(x: shieldRect.maxX, y: shieldRect.maxY - 30))
+    shield.addLine(to: CGPoint(x: shieldRect.maxX - 18, y: shieldRect.midY - 10))
+    shield.addQuadCurve(to: CGPoint(x: shieldRect.midX, y: shieldRect.minY), control: CGPoint(x: shieldRect.maxX - 18, y: shieldRect.minY + 26))
+    shield.addQuadCurve(to: CGPoint(x: shieldRect.minX + 18, y: shieldRect.midY - 10), control: CGPoint(x: shieldRect.minX + 18, y: shieldRect.minY + 26))
+    shield.addLine(to: CGPoint(x: shieldRect.minX, y: shieldRect.maxY - 30))
+    shield.closeSubpath()
+    ctx.addPath(shield)
+    ctx.setStrokeColor(end.withAlphaComponent(0.55 + pulse * 0.15).cgColor)
+    ctx.setLineWidth(7)
+    ctx.strokePath()
+    for ring in 0..<3 {
+        let radius = 120 + CGFloat(ring) * 34 + pulse * 18
+        ctx.setStrokeColor(end.withAlphaComponent(0.12 - CGFloat(ring) * 0.03).cgColor)
+        ctx.setLineWidth(3)
+        ctx.strokeEllipse(in: CGRect(x: rect.midX - radius, y: rect.midY - radius * 0.55, width: radius * 2, height: radius * 1.1))
+    }
+    ctx.restoreGState()
+}
+
 func drawLossWarning(in ctx: CGContext, rect: CGRect, color: NSColor, phase: CGFloat) {
     let flicker = phase < 0.18 || (phase > 0.52 && phase < 0.72) ? 1.0 : 0.45
     ctx.saveGState()
@@ -371,51 +455,56 @@ func makeImage(config: BannerConfig, phase: CGFloat) -> NSImage {
 
     let pulse = sin(phase * .pi)
 
-    let titleBlockWidth: CGFloat = 720
+    let titleBlockWidth: CGFloat = 940
     let titleBlockX: CGFloat = (width - titleBlockWidth) / 2
-    let titleRect = NSRect(x: titleBlockX, y: height - 146, width: titleBlockWidth, height: 96)
-    let titleHaloRect = NSRect(x: titleBlockX - 120, y: height - 250, width: titleBlockWidth + 240, height: 190)
+    let titleCenterY: CGFloat = height * 0.64
+    let titleRect = NSRect(x: titleBlockX, y: titleCenterY - 40, width: titleBlockWidth, height: 110)
+    let titleHaloRect = NSRect(x: titleBlockX - 180, y: titleCenterY - 160, width: titleBlockWidth + 360, height: 320)
     let titleHalo = NSGradient(colors: [
         config.edgeGlow.withAlphaComponent(0.18 + (0.12 * pulse)),
         config.edgeGlow.withAlphaComponent(0.04 + (0.03 * pulse)),
         config.edgeGlow.withAlphaComponent(0.0)
     ])!
     titleHalo.draw(in: titleHaloRect, relativeCenterPosition: NSPoint(x: 0.0, y: 0.25))
-    let titleMotionRect = NSRect(x: titleBlockX - 40, y: height - 196, width: titleBlockWidth + 80, height: 118)
+    let titleMotionRect = NSRect(x: titleBlockX - 80, y: titleCenterY - 96, width: titleBlockWidth + 160, height: 192)
     switch config.motionStyle {
-    case .sweep:
+    case .siren:
+        drawSirenPulse(in: ctx, rect: titleMotionRect, color: config.edgeGlow, phase: phase)
         drawTitleShimmer(in: ctx, rect: titleMotionRect, color: config.edgeGlow, phase: phase)
         drawSignalSweep(in: ctx, rect: titleMotionRect, color: config.accentEnd, phase: phase)
-    case .rise:
-        drawProfitLift(in: ctx, rect: titleMotionRect, start: config.accentStart, end: config.accentEnd, phase: phase)
+    case .confetti:
+        drawConfetti(in: ctx, rect: titleMotionRect, start: config.accentStart, end: config.accentEnd, phase: phase)
         drawTitleShimmer(in: ctx, rect: titleMotionRect, color: config.edgeGlow.withAlphaComponent(0.8), phase: phase)
     case .warn:
         drawLossWarning(in: ctx, rect: titleMotionRect, color: config.edgeGlow, phase: phase)
         drawTitleShimmer(in: ctx, rect: titleMotionRect, color: config.edgeGlow.withAlphaComponent(0.7), phase: phase)
+    case .safe:
+        drawSafeShield(in: ctx, rect: titleMotionRect, start: config.accentStart, end: config.accentEnd, phase: phase)
+        drawTitleShimmer(in: ctx, rect: titleMotionRect, color: config.edgeGlow.withAlphaComponent(0.72), phase: phase)
     }
     drawText(
         config.title,
         in: titleRect.offsetBy(dx: 0, dy: 0),
-        font: NSFont.systemFont(ofSize: 88, weight: .black),
+        font: NSFont.systemFont(ofSize: 96, weight: .black),
         color: config.edgeGlow.withAlphaComponent(0.18 + (0.12 * pulse)),
         alignment: .center
     )
     drawText(
         config.title,
         in: titleRect,
-        font: NSFont.systemFont(ofSize: 88, weight: .black),
+        font: NSFont.systemFont(ofSize: 96, weight: .black),
         color: NSColor(calibratedWhite: 0.985, alpha: 1),
         alignment: .center
     )
     drawText(
         config.subtitle,
-        in: NSRect(x: titleBlockX, y: height - 204, width: titleBlockWidth, height: 48),
-        font: NSFont(name: "Snell Roundhand Bold", size: 38) ?? NSFont.systemFont(ofSize: 38, weight: .semibold),
+        in: NSRect(x: titleBlockX, y: titleCenterY - 84, width: titleBlockWidth, height: 48),
+        font: NSFont(name: "Snell Roundhand Bold", size: 40) ?? NSFont.systemFont(ofSize: 40, weight: .semibold),
         color: config.accentStart.blended(withFraction: 0.25 * pulse, of: .white) ?? config.accentStart,
         alignment: .center
     )
 
-    let subtitleLine = NSRect(x: titleBlockX + 170, y: height - 222, width: titleBlockWidth - 340, height: 4)
+    let subtitleLine = NSRect(x: titleBlockX + 120, y: titleCenterY - 98, width: titleBlockWidth - 240, height: 4)
     drawRoundedRect(
         subtitleLine,
         radius: 2,
