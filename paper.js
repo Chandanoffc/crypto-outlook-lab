@@ -34,6 +34,7 @@ const HTF_CONFIRMATION_CONFIG = [
 ];
 const STORAGE_KEY = "apex-signals-auto-paper";
 const AUTO_DELIVERY_STORAGE_KEY = "soloris-auto-trade-delivery";
+const AUTO_TRADE_RESET_KEY = "soloris-reset-autotrade-20260322";
 const DEFAULT_AUTO_DELIVERY = {
   browser: true,
   discordWebhook: "",
@@ -103,13 +104,23 @@ const dom = {
   paperTabTrades: document.getElementById("paper-tab-trades"),
   paperTabActivity: document.getElementById("paper-tab-activity"),
   paperTabNote: document.getElementById("paper-tab-note"),
+  paperTabAlerts: document.getElementById("paper-tab-alerts"),
   paperPanelPositions: document.getElementById("paper-panel-positions"),
   paperPanelTrades: document.getElementById("paper-panel-trades"),
   paperPanelActivity: document.getElementById("paper-panel-activity"),
+  paperPanelAlerts: document.getElementById("paper-panel-alerts"),
   openPositionGrid: document.getElementById("open-position-grid"),
   tradeLogTable: document.getElementById("trade-log-table"),
   activityTable: document.getElementById("activity-table"),
 };
+
+function maybeForceAutoTradeReset() {
+  if (localStorage.getItem(AUTO_TRADE_RESET_KEY) === "done") return;
+  localStorage.removeItem(STORAGE_KEY);
+  localStorage.setItem(AUTO_TRADE_RESET_KEY, "done");
+}
+
+maybeForceAutoTradeReset();
 
 const state = loadState();
 const autoDelivery = loadAutoDeliveryState();

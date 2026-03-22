@@ -14,6 +14,7 @@ const ALERT_CHANNEL_STORAGE_KEY = "apex-signals-alert-channels";
 const HOUSE_AUTO_STORAGE_KEY = "apex-signals-auto-paper";
 const TRADEZ_AUTO_STORAGE_KEY = "hyperdrive-tradez-auto-paper";
 const TRADEZ_EXECUTION_STORAGE_KEY = "soloris-tradez-execution";
+const AUTO_TRADE2_RESET_KEY = "soloris-reset-autotrade2-20260322";
 const TRADEZ_EXECUTION_PREFERENCES_VERSION = 5;
 const HOUSE_AUTO_STRATEGY_VERSION = 5;
 const PAPER_BACKUP_TYPE = "soloris-paper-books-backup";
@@ -186,6 +187,14 @@ const dom = {
   auto2DemoTable: document.getElementById("tradez-auto2-demo-table"),
   auto2ActivityTable: document.getElementById("tradez-auto2-activity-table"),
 };
+
+function maybeForceAutoTrade2Reset() {
+  if (localStorage.getItem(AUTO_TRADE2_RESET_KEY) === "done") return;
+  localStorage.removeItem(TRADEZ_AUTO_STORAGE_KEY);
+  localStorage.setItem(AUTO_TRADE2_RESET_KEY, "done");
+}
+
+maybeForceAutoTrade2Reset();
 
 const state = loadState();
 const tradezPaper = loadTradezPaperState();
