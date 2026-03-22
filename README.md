@@ -17,7 +17,7 @@ Production URL: [https://soloris-signals.vercel.app](https://soloris-signals.ver
 - Cross-exchange venue matrix for Binance, Bybit, and OKX when available
 - In-session depth and liquidation heatmaps with replay
 - Browser-stored alert center for breakouts, funding flips, OI spikes, and CVD reversals
-- Dedicated auto paper-trader page with a $200 starting balance, high-quality signal scanning, and TP/SL trade logs
+- Dedicated auto paper-trader page with a $1,000 starting balance, high-quality signal scanning, and TP/SL trade logs
 - Major crypto headlines
 - Rule-based 5H to 24H outlook
 

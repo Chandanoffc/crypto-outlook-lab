@@ -1,7 +1,7 @@
 const STRATEGY_SPECS = [
   { id: "core", label: "House Trend", shortLabel: "House", tone: "up", maxOpenTrades: 6 },
 ];
-const STRATEGY_START_BALANCE = 200;
+const STRATEGY_START_BALANCE = 1000;
 const START_BALANCE = STRATEGY_START_BALANCE;
 const DEFAULT_INTERVAL = "15m";
 const DEFAULT_QUALITY_THRESHOLD = 68;
@@ -21,7 +21,7 @@ const TRADE_COOLDOWN_MS = 4 * 60 * 1000;
 const HIGH_VOLUME_FLOOR = 100_000_000;
 const MIN_RR = 1.6;
 const MIN_PROJECTED_MOVE_PCT = 2.1;
-const STRATEGY_VERSION = 5;
+const STRATEGY_VERSION = 6;
 const TICKER_STORAGE_KEY = "apex-signals-auto-paper-tickers";
 const SHARED_TRADEZ_AUTO_STORAGE_KEY = "hyperdrive-tradez-auto-paper";
 const PAPER_BACKUP_TYPE = "soloris-paper-books-backup";
@@ -33,6 +33,32 @@ const HTF_CONFIRMATION_CONFIG = [
   { key: "4h", label: "4H", interval: "4h" },
 ];
 const STORAGE_KEY = "apex-signals-auto-paper";
+const AUTO_DELIVERY_STORAGE_KEY = "soloris-auto-trade-delivery";
+const DEFAULT_AUTO_DELIVERY = {
+  browser: true,
+  discordWebhook: "",
+  telegramToken: "",
+  telegramChatId: "",
+  notifyEntries: true,
+  notifyExits: true,
+  template: `{title}
+Pair: {symbol}
+Side: {side}
+Entry: {entry}
+Entry Zone: {entryZone}
+TP1: {tp1}
+TP2: {tp2}
+SL: {sl}
+Leverage: {leverage}x
+Quality: Q{quality}
+Touch: {touch}
+First detected: {firstDetectedAt}
+Opened: {openedAt}
+Mode: {mode}
+Open on Binance: {binanceLink}`,
+};
+const HOUSE_MIN_ENTRY_SCORE = 18;
+const HOUSE_MIN_REFINED_SCORE = 85;
 
 const dom = {
   autoForm: document.getElementById("auto-form"),
@@ -47,6 +73,17 @@ const dom = {
   backupExportButton: document.getElementById("paper-backup-export"),
   backupImportButton: document.getElementById("paper-backup-import"),
   backupFileInput: document.getElementById("paper-backup-file"),
+  alertTab: document.getElementById("paper-tab-alerts"),
+  alertPanel: document.getElementById("paper-panel-alerts"),
+  alertBrowserEnabled: document.getElementById("paper-alert-browser-enabled"),
+  alertDiscordWebhook: document.getElementById("paper-alert-discord-webhook"),
+  alertTelegramToken: document.getElementById("paper-alert-telegram-token"),
+  alertTelegramChatId: document.getElementById("paper-alert-telegram-chat-id"),
+  alertTemplate: document.getElementById("paper-alert-template"),
+  alertTestButton: document.getElementById("paper-alert-test"),
+  alertSaveButton: document.getElementById("paper-alert-save"),
+  alertNotifyEntries: document.getElementById("paper-alert-notify-entries"),
+  alertNotifyExits: document.getElementById("paper-alert-notify-exits"),
   autoRunNote: document.getElementById("auto-run-note"),
   statusBanner: document.getElementById("paper-status-banner"),
   metricStartBalance: document.getElementById("metric-start-balance"),
@@ -75,6 +112,7 @@ const dom = {
 };
 
 const state = loadState();
+const autoDelivery = loadAutoDeliveryState();
 let autoTimer = null;
 let exchangeInfoCache = null;
 let perpUniverseCache = null;
@@ -137,8 +175,9 @@ function loadState() {
           strategyLabel: trade.strategyLabel || strategySpec(trade.strategyId || "core").label,
         }))
       : [];
+    const storedStarting = Number(stored.startingBalance) || START_BALANCE;
     return {
-      startingBalance: START_BALANCE,
+      startingBalance: storedStarting,
       balance: STRATEGY_SPECS.reduce((sum, spec) => sum + (Number(strategyBalances[spec.id]) || 0), 0),
       strategyBalances,
       autoEnabled: stored.autoEnabled !== false,
@@ -175,6 +214,7 @@ function persistState() {
   window.localStorage.setItem(
     STORAGE_KEY,
     JSON.stringify({
+      startingBalance: state.startingBalance,
       balance: state.balance,
       strategyBalances: state.strategyBalances,
       autoEnabled: state.autoEnabled,
@@ -207,6 +247,33 @@ function writeStoredJson(key, value) {
   } catch (error) {
     // Ignore storage failures in degraded browser environments.
   }
+}
+
+function loadAutoDeliveryState() {
+  const stored = readStoredJson(AUTO_DELIVERY_STORAGE_KEY, {});
+  return {
+    browser: stored?.browser === false ? false : DEFAULT_AUTO_DELIVERY.browser,
+    discordWebhook: String(stored?.discordWebhook || DEFAULT_AUTO_DELIVERY.discordWebhook),
+    telegramToken: String(stored?.telegramToken || DEFAULT_AUTO_DELIVERY.telegramToken),
+    telegramChatId: String(stored?.telegramChatId || DEFAULT_AUTO_DELIVERY.telegramChatId),
+    notifyEntries:
+      typeof stored?.notifyEntries === "boolean" ? stored.notifyEntries : DEFAULT_AUTO_DELIVERY.notifyEntries,
+    notifyExits:
+      typeof stored?.notifyExits === "boolean" ? stored.notifyExits : DEFAULT_AUTO_DELIVERY.notifyExits,
+    template: String(stored?.template || DEFAULT_AUTO_DELIVERY.template),
+  };
+}
+
+function persistAutoDeliveryState() {
+  writeStoredJson(AUTO_DELIVERY_STORAGE_KEY, {
+    browser: autoDelivery.browser,
+    discordWebhook: autoDelivery.discordWebhook,
+    telegramToken: autoDelivery.telegramToken,
+    telegramChatId: autoDelivery.telegramChatId,
+    notifyEntries: autoDelivery.notifyEntries,
+    notifyExits: autoDelivery.notifyExits,
+    template: autoDelivery.template,
+  });
 }
 
 function emitServerLog(stream, event) {
@@ -345,6 +412,58 @@ function formatExactDateTime(timestamp) {
   });
 }
 
+function binanceFuturesLink(symbol) {
+  return `https://www.binance.com/en/futures/${encodeURIComponent(String(symbol || "").trim())}`;
+}
+
+function activeAutoSignalTemplate() {
+  const template = String(autoDelivery.template || DEFAULT_AUTO_DELIVERY.template || "").trim();
+  return template || DEFAULT_AUTO_DELIVERY.template;
+}
+
+function renderAutoSignalTemplate(templateData) {
+  const rendered = activeAutoSignalTemplate().replace(/\{([a-zA-Z0-9_]+)\}/g, (match, key) => {
+    const value = templateData?.[key];
+    return value === undefined || value === null || value === "" ? "-" : String(value);
+  });
+  return rendered;
+}
+
+function dispatchAutoDelivery(event, title) {
+  if (autoDelivery.browser && typeof Notification !== "undefined" && Notification.permission === "granted") {
+    const notification = new Notification(title, { body: event.message || "" });
+    window.setTimeout(() => notification.close(), 9000);
+  }
+
+  const hasRemote =
+    Boolean(autoDelivery.discordWebhook) ||
+    Boolean(autoDelivery.telegramToken && autoDelivery.telegramChatId);
+  if (!hasRemote) return;
+
+  fetch("/api/notify", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+    },
+    body: JSON.stringify({
+      title,
+      event,
+      meta: {
+        source: "auto_trade",
+        strategy: "house_trend",
+        eventType: event.deliveryType || "notification",
+      },
+      destinations: {
+        discordWebhook: autoDelivery.discordWebhook,
+        telegramToken: autoDelivery.telegramToken,
+        telegramChatId: autoDelivery.telegramChatId,
+      },
+    }),
+  }).catch((error) => {
+    console.error("auto trade delivery failed", error);
+  });
+}
+
 function withinLast24Hours(timestamp, now = Date.now()) {
   const value = Number(timestamp);
   return Number.isFinite(value) && value > 0 && now >= value && now - value <= REPORT_LOOKBACK_MS;
@@ -394,6 +513,108 @@ function buildHouseKeyDetails(candidate) {
     Number.isFinite(candidate.entryScore) ? `entry score ${candidate.entryScore}` : null,
   ];
   return details.filter(Boolean).join(" • ");
+}
+
+function buildAutoTradeNotificationEvent(title, trade, extraLines = [], time = Date.now()) {
+  const precision = trade.pricePrecision || 2;
+  const entryZone = formatPrice(trade.entryPrice, precision);
+  const firstDetectedAt = formatExactDateTime(trade.detectedAt || trade.openedAt || time);
+  const openedAt = formatExactDateTime(time);
+  const binanceLink = binanceFuturesLink(trade.symbol);
+  const baseLines = [
+    `Mode: Paper`,
+    `Side: ${trade.side}`,
+    `Entry: ${formatPrice(trade.entryPrice, precision)}`,
+    `Entry Zone: ${entryZone}`,
+    `TP1: ${formatPrice(trade.takeProfit, precision)}`,
+    `TP2: ${formatPrice(trade.takeProfit, precision)}`,
+    `SL: ${formatPrice(trade.stopLoss, precision)}`,
+    `Leverage: ${trade.leverage}x`,
+    `Quality: Q${Math.round(trade.qualityScore || 0)}`,
+    `First detected: ${firstDetectedAt}`,
+    `Opened: ${openedAt}`,
+    `Open on Binance: ${binanceLink}`,
+  ];
+
+  const templateData = {
+    title,
+    symbol: trade.symbol,
+    side: trade.side,
+    entry: formatPrice(trade.entryPrice, precision),
+    entryZone,
+    tp1: formatPrice(trade.takeProfit, precision),
+    tp2: formatPrice(trade.takeProfit, precision),
+    sl: formatPrice(trade.stopLoss, precision),
+    leverage: `${trade.leverage}`,
+    quality: `${Math.round(trade.qualityScore || 0)}`,
+    touch: trade.keyDetails?.includes("EMA") ? "EMA" : "-",
+    firstDetectedAt,
+    openedAt,
+    mode: "Paper",
+    binanceLink,
+    notes: extraLines.filter(Boolean).join(" • "),
+  };
+
+  return {
+    time,
+    symbol: trade.symbol,
+    message: [...baseLines, ...extraLines].filter(Boolean).join("\n"),
+    title,
+    formattedMessage: renderAutoSignalTemplate(templateData),
+  };
+}
+
+function maybeSendAutoEntryNotification(candidate, trade) {
+  if (!autoDelivery.notifyEntries) return;
+  const event = buildAutoTradeNotificationEvent(
+    `Auto Trade ${trade.side} ${trade.symbol}`,
+    trade,
+    [
+      `Setup: ${candidate.trade?.stance || trade.side} • ${candidate.bias?.label || "House trend"}`,
+      "Status: Trade opened by house engine.",
+    ],
+    trade.openedAt
+  );
+  event.deliveryType = "entry_opened";
+  dispatchAutoDelivery(event, event.title);
+}
+
+function maybeSendAutoExitNotification(kind, trade, exitPrice, time = Date.now()) {
+  if (!autoDelivery.notifyExits) return;
+  const precision = trade.pricePrecision || 2;
+  const baseLine = `${trade.symbol} • ${trade.side} • ${trade.leverage}x`;
+  const detectedLine = `At ${formatExactDateTime(time)}`;
+  const messageMap = {
+    tp: [
+      "SUCCESS.. TP Hit✅",
+      baseLine,
+      `Entry ${formatPrice(trade.entryPrice, precision)} • TP ${formatPrice(trade.takeProfit, precision)}`,
+      `Exit ${formatPrice(exitPrice, precision)}`,
+      detectedLine,
+      `Open on Binance: ${binanceFuturesLink(trade.symbol)}`,
+    ],
+    sl: [
+      "Oh No, SL HIT❌",
+      baseLine,
+      `Entry ${formatPrice(trade.entryPrice, precision)} • SL ${formatPrice(trade.stopLoss, precision)}`,
+      `Exit ${formatPrice(exitPrice, precision)}`,
+      detectedLine,
+      `Open on Binance: ${binanceFuturesLink(trade.symbol)}`,
+    ],
+  };
+  const shortLines = messageMap[kind] || [baseLine, detectedLine];
+  const event = {
+    ...buildAutoTradeNotificationEvent(
+      kind === "tp" ? `Auto Trade TP ${trade.symbol}` : `Auto Trade SL ${trade.symbol}`,
+      trade,
+      [],
+      time
+    ),
+    message: shortLines.join("\n"),
+    formattedMessage: shortLines.join("\n"),
+    deliveryType: kind === "tp" ? "tp_hit" : "sl_hit",
+  };
+  dispatchAutoDelivery(event, event.title);
 }
 
 function houseTradeReason(trade) {
@@ -610,9 +831,11 @@ function renderPaperTabs() {
     !dom.paperTabPositions ||
     !dom.paperTabTrades ||
     !dom.paperTabActivity ||
+    !dom.paperTabAlerts ||
     !dom.paperPanelPositions ||
     !dom.paperPanelTrades ||
-    !dom.paperPanelActivity
+    !dom.paperPanelActivity ||
+    !dom.paperPanelAlerts
   ) {
     return;
   }
@@ -620,9 +843,11 @@ function renderPaperTabs() {
   dom.paperTabPositions.classList.toggle("is-active", state.activeTab === "positions");
   dom.paperTabTrades.classList.toggle("is-active", state.activeTab === "trades");
   dom.paperTabActivity.classList.toggle("is-active", state.activeTab === "activity");
+  dom.paperTabAlerts.classList.toggle("is-active", state.activeTab === "alerts");
   dom.paperPanelPositions.hidden = state.activeTab !== "positions";
   dom.paperPanelTrades.hidden = state.activeTab !== "trades";
   dom.paperPanelActivity.hidden = state.activeTab !== "activity";
+  dom.paperPanelAlerts.hidden = state.activeTab !== "alerts";
 
   if (dom.paperTabNote) {
     dom.paperTabNote.textContent =
@@ -630,7 +855,9 @@ function renderPaperTabs() {
         ? "This view keeps live paper positions visible with entry, TP, SL, and live return."
         : state.activeTab === "trades"
           ? "The journal records every closed trade with the planned levels and realized result."
-          : "Engine actions show scan outcomes, openings, exits, and network retries in sequence.";
+          : state.activeTab === "activity"
+            ? "Engine actions show scan outcomes, openings, exits, and network retries in sequence."
+            : "Configure Auto Trade alert delivery channels and signal formatting.";
   }
 }
 
@@ -1796,29 +2023,33 @@ function applyCandidateConfirmation(candidate, ticker, confirmation) {
   const conflictCount = timeframeStates.filter((entry) => entry.tone === opposingTone).length;
   const distanceFromEma20Pct = Math.abs(pctChange(candidate.ema20, candidate.currentPrice));
   let entryQualityScore = 0;
+  const buyerLed =
+    candidate.cvdSlope > 0 && candidate.takerRatio > 1.01 && candidate.depthImbalance > 0.01;
+  const sellerLed =
+    candidate.cvdSlope < 0 && candidate.takerRatio < 0.99 && candidate.depthImbalance < -0.01;
 
-  if (hasGoodTradingVolume(quoteVolume)) entryQualityScore += 10;
-  else entryQualityScore -= 14;
+  if (hasGoodTradingVolume(quoteVolume)) entryQualityScore += 12;
+  else entryQualityScore -= 20;
 
   if (direction === "up") {
     entryQualityScore += candidate.rsi >= 52 && candidate.rsi <= 64 ? 8 : -8;
-    entryQualityScore += candidate.cvdSlope > 0 ? 8 : -10;
-    entryQualityScore += candidate.takerRatio > 1.01 ? 6 : -6;
-    entryQualityScore += candidate.depthImbalance > 0.02 ? 5 : -5;
-    entryQualityScore += candidate.oiChange1h > 0 ? 5 : -3;
-    if (candidate.fundingRate > 0.03) entryQualityScore -= 8;
+    entryQualityScore += candidate.cvdSlope > 0 ? 10 : -14;
+    entryQualityScore += candidate.takerRatio > 1.01 ? 8 : -10;
+    entryQualityScore += candidate.depthImbalance > 0.02 ? 6 : -8;
+    entryQualityScore += candidate.oiChange1h > 0 ? 6 : -4;
+    if (candidate.fundingRate > 0.03) entryQualityScore -= 10;
   } else {
     entryQualityScore += candidate.rsi <= 48 && candidate.rsi >= 34 ? 8 : -8;
-    entryQualityScore += candidate.cvdSlope < 0 ? 8 : -10;
-    entryQualityScore += candidate.takerRatio < 0.99 ? 6 : -6;
-    entryQualityScore += candidate.depthImbalance < -0.02 ? 5 : -5;
-    entryQualityScore += candidate.oiChange1h > 0 ? 5 : -3;
-    if (candidate.fundingRate < -0.03) entryQualityScore -= 8;
+    entryQualityScore += candidate.cvdSlope < 0 ? 10 : -14;
+    entryQualityScore += candidate.takerRatio < 0.99 ? 8 : -10;
+    entryQualityScore += candidate.depthImbalance < -0.02 ? 6 : -8;
+    entryQualityScore += candidate.oiChange1h > 0 ? 6 : -4;
+    if (candidate.fundingRate < -0.03) entryQualityScore -= 10;
   }
 
-  entryQualityScore += alignedCount >= 2 ? 16 : -20;
-  if (conflictCount > 0) entryQualityScore -= 10;
-  entryQualityScore += distanceFromEma20Pct <= 2.8 ? 4 : -8;
+  entryQualityScore += alignedCount >= 3 ? 20 : alignedCount === 2 ? 8 : -20;
+  if (conflictCount > 0) entryQualityScore -= 14;
+  entryQualityScore += distanceFromEma20Pct <= 2.5 ? 4 : -10;
   entryQualityScore += Math.abs(candidate.recentPriceChange) >= 0.8 ? 3 : -3;
 
   return {
@@ -1827,7 +2058,10 @@ function applyCandidateConfirmation(candidate, ticker, confirmation) {
     confirmation,
     alignedCount,
     conflictCount,
+    buyerLed,
+    sellerLed,
     entryQualityScore,
+    entryScore: entryQualityScore,
     refinedQualityScore: candidate.qualityScore + entryQualityScore,
   };
 }
@@ -1868,12 +2102,22 @@ function buildStrategySignal({
 }
 
 function buildCoreTrendStrategySignal(candidate) {
+  const refinedScore = candidate.refinedQualityScore ?? candidate.qualityScore;
+  const entryScore = candidate.entryQualityScore ?? 0;
+  const leadershipOk =
+    candidate.trade?.tone === "up" ? Boolean(candidate.buyerLed) : Boolean(candidate.sellerLed);
+  const effectiveGate = Math.max(effectiveHouseQualityGate(state.qualityThreshold), HOUSE_MIN_REFINED_SCORE);
+
   if (
     candidate.bias.tone === "neutral" ||
-    candidate.alignedCount < 2 ||
+    candidate.alignedCount < 3 ||
     candidate.conflictCount > 0 ||
     !hasGoodTradingVolume(candidate.quoteVolume) ||
-    candidate.rr < MIN_RR
+    candidate.rr < MIN_RR ||
+    entryScore < HOUSE_MIN_ENTRY_SCORE ||
+    refinedScore < effectiveGate ||
+    !leadershipOk ||
+    candidate.trade?.projectedMovePct < MIN_PROJECTED_MOVE_PCT
   ) {
     return null;
   }
@@ -1882,7 +2126,7 @@ function buildCoreTrendStrategySignal(candidate) {
     strategyId: "core",
     side: candidate.trade.stance,
     tone: candidate.trade.tone,
-    qualityScore: candidate.refinedQualityScore ?? candidate.qualityScore,
+    qualityScore: refinedScore,
     detectedAt: Date.now(),
     entry: candidate.trade.entry,
     stopLoss: candidate.trade.stopLoss,
@@ -2358,18 +2602,23 @@ function logActivity(message, tone = "neutral") {
 
 function applyStrategyUpgradeNotice() {
   if (state.strategyVersion >= STRATEGY_VERSION) return;
-  state.strategyBalances = buildDefaultStrategyBalances();
-  state.balance = START_BALANCE;
-  state.openTrades = [];
-  state.closedTrades = [];
-  state.activity = [];
-  state.lastCandidates = [];
-  state.lastScanAt = 0;
+  const stored = readStoredJson(STORAGE_KEY, {});
+  const legacyStart = Number(stored.startingBalance) || state.startingBalance || START_BALANCE;
+  const delta = START_BALANCE - legacyStart;
+
+  state.strategyBalances = STRATEGY_SPECS.reduce((accumulator, spec) => {
+    const current = Number(state.strategyBalances?.[spec.id]);
+    const fallback = Number.isFinite(current) ? current : legacyStart;
+    accumulator[spec.id] = fallback + delta;
+    return accumulator;
+  }, {});
+  state.startingBalance = START_BALANCE;
+  recomputeTotalBalance();
   analysisCache = new Map();
   universeTickerMap = new Map();
   scanCursor = 0;
   logActivity(
-    "Auto Trade is back on the stricter house engine. The old in-flight book was cleared so the journal restarts on the restored high-quality model.",
+    "House strategy book was rebased to the $1,000 baseline while preserving realized PnL.",
     "neutral"
   );
   state.strategyVersion = STRATEGY_VERSION;
@@ -2493,6 +2742,8 @@ function openTradeFromCandidate(candidate) {
     candidate.trade.tone
   );
 
+  maybeSendAutoEntryNotification(candidate, openedTrade);
+
   return true;
 }
 
@@ -2573,6 +2824,8 @@ function closeTrade(tradeId, reason, exitPrice, precisionHint) {
     )} on margin • ${formatCompactUsd(pnlUsd, 2)}.`,
     reason === "TP" ? "up" : "down"
   );
+
+  maybeSendAutoExitNotification(reason === "TP" ? "tp" : "sl", closedTrade, exitPrice, closedTrade.closedAt);
 }
 
 function tightenTradeProtection(trade, candidate) {
@@ -3027,6 +3280,13 @@ function syncControls() {
   if (dom.universeCount) dom.universeCount.value = perpUniverseCache ? `${perpUniverseCache.length} contracts` : "Loading...";
   dom.scanInterval.value = state.interval;
   dom.qualityThreshold.value = `${state.qualityThreshold}`;
+  if (dom.alertBrowserEnabled) dom.alertBrowserEnabled.checked = Boolean(autoDelivery.browser);
+  if (dom.alertDiscordWebhook) dom.alertDiscordWebhook.value = autoDelivery.discordWebhook || "";
+  if (dom.alertTelegramToken) dom.alertTelegramToken.value = autoDelivery.telegramToken || "";
+  if (dom.alertTelegramChatId) dom.alertTelegramChatId.value = autoDelivery.telegramChatId || "";
+  if (dom.alertTemplate) dom.alertTemplate.value = autoDelivery.template || DEFAULT_AUTO_DELIVERY.template;
+  if (dom.alertNotifyEntries) dom.alertNotifyEntries.checked = Boolean(autoDelivery.notifyEntries);
+  if (dom.alertNotifyExits) dom.alertNotifyExits.checked = Boolean(autoDelivery.notifyExits);
 }
 
 dom.autoForm.addEventListener("submit", (event) => {
@@ -3046,6 +3306,7 @@ dom.autoToggleButton.addEventListener("click", () => {
 });
 
 dom.resetSimButton.addEventListener("click", () => {
+  state.startingBalance = START_BALANCE;
   state.strategyBalances = buildDefaultStrategyBalances();
   state.balance = START_BALANCE;
   state.openTrades = [];
@@ -3056,10 +3317,10 @@ dom.resetSimButton.addEventListener("click", () => {
   analysisCache = new Map();
   universeTickerMap = new Map();
   scanCursor = 0;
-  logActivity("Simulation reset to the $200 house strategy book.", "neutral");
+  logActivity("Simulation reset to the $1,000 house strategy book.", "neutral");
   persistState();
   renderDashboard(perpUniverseCache || []);
-  setStatus("Simulation reset to the $200 house strategy book.", "neutral");
+  setStatus("Simulation reset to the $1,000 house strategy book.", "neutral");
 });
 
 if (dom.backupExportButton) {
@@ -3093,6 +3354,47 @@ if (dom.backupImportButton && dom.backupFileInput) {
   });
 }
 
+function updateAutoDeliveryFromDom() {
+  autoDelivery.browser = Boolean(dom.alertBrowserEnabled?.checked);
+  autoDelivery.discordWebhook = String(dom.alertDiscordWebhook?.value || "").trim();
+  autoDelivery.telegramToken = String(dom.alertTelegramToken?.value || "").trim();
+  autoDelivery.telegramChatId = String(dom.alertTelegramChatId?.value || "").trim();
+  autoDelivery.notifyEntries = Boolean(dom.alertNotifyEntries?.checked);
+  autoDelivery.notifyExits = Boolean(dom.alertNotifyExits?.checked);
+  autoDelivery.template = String(dom.alertTemplate?.value || "").trim() || DEFAULT_AUTO_DELIVERY.template;
+  persistAutoDeliveryState();
+}
+
+if (dom.alertSaveButton) {
+  dom.alertSaveButton.addEventListener("click", () => {
+    updateAutoDeliveryFromDom();
+    setStatus("Auto Trade alert delivery saved.", "up");
+  });
+}
+
+if (dom.alertTestButton) {
+  dom.alertTestButton.addEventListener("click", () => {
+    updateAutoDeliveryFromDom();
+    const now = Date.now();
+    const demoTrade = {
+      symbol: "BTCUSDT",
+      side: "Long",
+      entryPrice: 50000,
+      stopLoss: 49250,
+      takeProfit: 51250,
+      leverage: DEFAULT_LEVERAGE,
+      qualityScore: 120,
+      pricePrecision: 2,
+      detectedAt: now - 5 * 60 * 1000,
+      openedAt: now,
+    };
+    const event = buildAutoTradeNotificationEvent("Auto Trade Test Signal", demoTrade, ["Test delivery"], now);
+    event.deliveryType = "test_signal";
+    dispatchAutoDelivery(event, event.title);
+    setStatus("Test alert sent to configured channels.", "up");
+  });
+}
+
 if (dom.paperTabPositions) {
   dom.paperTabPositions.addEventListener("click", () => {
     state.activeTab = "positions";
@@ -3112,6 +3414,14 @@ if (dom.paperTabTrades) {
 if (dom.paperTabActivity) {
   dom.paperTabActivity.addEventListener("click", () => {
     state.activeTab = "activity";
+    persistState();
+    renderPaperTabs();
+  });
+}
+
+if (dom.paperTabAlerts) {
+  dom.paperTabAlerts.addEventListener("click", () => {
+    state.activeTab = "alerts";
     persistState();
     renderPaperTabs();
   });

@@ -64,7 +64,7 @@
               <h1>Automated paper execution desk</h1>
               <p class="subtitle">
                 Automated paper-trading simulator. It scans the full Binance USDT perp universe,
-                can hold multiple high-quality paper positions, starts at $200, uses the house
+                can hold multiple high-quality paper positions, starts at $1,000, uses the house
                 trend-continuation model, and logs every TP or SL outcome.
               </p>
             </div>
@@ -106,7 +106,7 @@
           <section class="panel shell-control-panel">
             <div class="control-row">
               <button id="auto-toggle-button" class="mini-button" type="button">Pause Auto</button>
-              <button id="reset-sim-button" class="mini-button" type="button">Reset to $200</button>
+              <button id="reset-sim-button" class="mini-button" type="button">Reset to $1,000</button>
               <button id="paper-report-export" class="mini-button" type="button">Download 24H Report</button>
               <button id="paper-backup-export" class="mini-button" type="button">Export Backup</button>
               <button id="paper-backup-import" class="mini-button" type="button">Import Backup</button>
@@ -123,12 +123,12 @@
           <section class="metric-strip shell-metric-strip">
           <article class="metric-card">
             <span class="metric-label">Starting Balance</span>
-            <strong id="metric-start-balance">$200.00</strong>
+            <strong id="metric-start-balance">$1,000.00</strong>
             <small>Simulation resets to this value</small>
           </article>
           <article class="metric-card">
             <span class="metric-label">Current Equity</span>
-            <strong id="metric-current-equity">$200.00</strong>
+            <strong id="metric-current-equity">$1,000.00</strong>
             <small id="metric-current-note">No closed trades yet</small>
           </article>
           <article class="metric-card">
@@ -203,6 +203,9 @@
               <button id="paper-tab-activity" class="mini-button feed-tab" type="button">
                 Activity Feed
               </button>
+              <button id="paper-tab-alerts" class="mini-button feed-tab" type="button">
+                Alert Delivery
+              </button>
             </div>
           </div>
 
@@ -220,6 +223,54 @@
 
           <div id="paper-panel-activity" hidden>
             <div id="activity-table" class="table-card"></div>
+          </div>
+
+          <div id="paper-panel-alerts" hidden>
+            <form id="paper-alert-form" class="delivery-form">
+              <div class="delivery-grid">
+                <label class="toggle-row">
+                  <input id="paper-alert-notify-entries" type="checkbox" />
+                  <span>Notify new entries</span>
+                </label>
+                <label class="toggle-row">
+                  <input id="paper-alert-notify-exits" type="checkbox" />
+                  <span>Notify TP / SL updates</span>
+                </label>
+                <label class="toggle-row">
+                  <input id="paper-alert-browser-enabled" type="checkbox" />
+                  <span>Browser alerts</span>
+                </label>
+              </div>
+
+              <div class="delivery-grid">
+                <label>
+                  Discord Webhook
+                  <input
+                    id="paper-alert-discord-webhook"
+                    type="text"
+                    placeholder="https://discord.com/api/webhooks/..."
+                  />
+                </label>
+                <label>
+                  Telegram Bot Token
+                  <input id="paper-alert-telegram-token" type="text" placeholder="123456:ABC..." />
+                </label>
+                <label>
+                  Telegram Chat ID
+                  <input id="paper-alert-telegram-chat-id" type="text" placeholder="123456789" />
+                </label>
+              </div>
+
+              <label class="full-span">
+                Signal Format
+                <textarea id="paper-alert-template" rows="7"></textarea>
+              </label>
+
+              <div class="delivery-actions">
+                <button id="paper-alert-save" class="mini-button" type="button">Save Delivery</button>
+                <button id="paper-alert-test" class="mini-button" type="button">Test Signal</button>
+              </div>
+            </form>
           </div>
         </section>
         </main>

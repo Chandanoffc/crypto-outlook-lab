@@ -20,11 +20,11 @@ const PAPER_BACKUP_TYPE = "soloris-paper-books-backup";
 const PAPER_BACKUP_VERSION = 1;
 const REPORT_LOOKBACK_MS = 24 * 60 * 60 * 1000;
 const UTC_DAY_MS = 24 * 60 * 60 * 1000;
-const TRADEZ_AUTO_START_BALANCE = 10000;
+const TRADEZ_AUTO_START_BALANCE = 1000;
 const TRADEZ_AUTO_LEVERAGE = 5;
 const TRADEZ_AUTO_MAX_CONCURRENT_TRADES = 30;
 const TRADEZ_AUTO_MAX_NEW_TRADES = 12;
-const TRADEZ_AUTO_VERSION = 3;
+const TRADEZ_AUTO_VERSION = 4;
 const TRADEZ_AUTO_TRADE_COOLDOWN_MS = 4 * 60 * 1000;
 const TRADEZ_AUTO_TP1_MARGIN_TRIGGER_PCT = 25;
 const TICKER_CACHE_MAX_AGE_MS = 30 * 60 * 1000;
@@ -1851,36 +1851,22 @@ function inferTradezLegacyBookBaseline(book) {
 
 function normalizeTradezResearchBook(book) {
   const legacyBaseline = inferTradezLegacyBookBaseline(book);
-  const currentBalance =
-    Number(book?.balance) ||
-    Number(book?.startingBalance) ||
-    legacyBaseline ||
-    TRADEZ_AUTO_START_BALANCE;
+  const storedStarting = Number(book?.startingBalance) || legacyBaseline || TRADEZ_AUTO_START_BALANCE;
+  const storedBalance = Number(book?.balance);
+  const realizedDelta = Number.isFinite(storedBalance) ? storedBalance - storedStarting : 0;
 
   let didRebase = false;
   let rebaseMessage = "";
 
-  if (legacyBaseline) {
-    const targetBalance =
-      Math.max(currentBalance, legacyBaseline) +
-      Math.max(0, TRADEZ_AUTO_START_BALANCE - legacyBaseline);
-    if (!Number.isFinite(Number(book.balance)) || Math.abs(Number(book.balance) - targetBalance) > 0.01) {
-      book.balance = targetBalance;
-      didRebase = true;
-      rebaseMessage =
-        "EMA Book research capital was rebased to keep the $10,000 book consistent after the liquidity upgrade.";
-    }
-  } else {
-    book.balance = currentBalance;
-  }
-
-  if (Number(book.startingBalance) !== TRADEZ_AUTO_START_BALANCE) {
+  if (storedStarting !== TRADEZ_AUTO_START_BALANCE) {
     book.startingBalance = TRADEZ_AUTO_START_BALANCE;
+    book.balance = TRADEZ_AUTO_START_BALANCE + realizedDelta;
     didRebase = true;
-    if (!rebaseMessage) {
-      rebaseMessage =
-        "EMA Book research capital was aligned to the $10,000 book after the liquidity upgrade.";
-    }
+    rebaseMessage =
+      "EMA Book research capital was rebased to the $1,000 baseline while preserving realized PnL.";
+  } else if (!Number.isFinite(storedBalance)) {
+    book.balance = TRADEZ_AUTO_START_BALANCE;
+    didRebase = true;
   }
 
   if (!book.lastDailyBriefingUtcDate) {
@@ -2330,7 +2316,7 @@ function readHouseTradeMetrics() {
   const stored = readStoredJson(HOUSE_AUTO_STORAGE_KEY, {});
   const openTrades = Array.isArray(stored.openTrades) ? stored.openTrades : [];
   const closedTrades = Array.isArray(stored.closedTrades) ? stored.closedTrades : [];
-  const startingBalance = Number(stored.startingBalance) || 200;
+  const startingBalance = Number(stored.startingBalance) || 1000;
   const realizedBalance = Number(stored.balance) || startingBalance;
   const tpCount = closedTrades.filter((trade) => trade.reason === "TP").length;
   const slCount = closedTrades.filter((trade) => trade.reason === "SL").length;
@@ -3314,6 +3300,10 @@ function buildTradezSignals(snapshot, quoteVolume = 0) {
   const oiHistory = (snapshot.openInterestHistory || []).map((entry) => Number(entry.sumOpenInterest));
   const oiChange1h = pctChangeFromLookback(oiHistory, 12);
   const fundingRate = (Number(snapshot.premiumIndex?.lastFundingRate) || 0) * 100;
+  const buyerLed =
+    tradeSummary.cvdSlope > 0 && takerSummary.latestRatio > 1.01 && depthSummary.imbalance > 0.01;
+  const sellerLed =
+    tradeSummary.cvdSlope < 0 && takerSummary.latestRatio < 0.99 && depthSummary.imbalance < -0.01;
   const bias = buildSetupBias(currentPrice, latestEma20, latestEma50, latestRsi);
   const completedLimit = Math.max(55, candles.length - 10);
   const markers = [];
@@ -3437,6 +3427,30 @@ function buildTradezSignals(snapshot, quoteVolume = 0) {
     if (Math.abs(fundingRate) > 0.04 && ((side === "Long" && fundingRate > 0) || (side === "Short" && fundingRate < 0))) {
       qualityScore -= 6;
     }
+    const flowAligned = side === "Long" ? buyerLed : sellerLed;
+    if (!hasGoodTradingVolume(quoteVolume)) qualityScore -= 18;
+    if (volumeFactor < 1.1) qualityScore -= 12;
+    if (!flowAligned) qualityScore -= 18;
+    if (!touch20 && !touch50 && !useLevelTwo) qualityScore -= 10;
+    if (side === "Long" && !touch20 && !touch50) qualityScore -= 8;
+    if (side === "Short" && !touch20 && !touch50) qualityScore -= 4;
+    if (useLevelTwo && flowAligned) qualityScore += side === "Short" ? 14 : 10;
+    if (side === "Long" && tradeSummary.cvdSlope <= 0) qualityScore -= 12;
+    if (side === "Short" && tradeSummary.cvdSlope >= 0) qualityScore -= 12;
+
+    let qualityCap = 180;
+    if (!hasGoodTradingVolume(quoteVolume)) qualityCap = Math.min(qualityCap, 110);
+    if (volumeFactor < 1.1) qualityCap = Math.min(qualityCap, 120);
+    if (!flowAligned) qualityCap = Math.min(qualityCap, 120);
+    if (!touch20 && !touch50 && !useLevelTwo) qualityCap = Math.min(qualityCap, 115);
+    const elite =
+      flowAligned &&
+      hasGoodTradingVolume(quoteVolume) &&
+      volumeFactor >= 1.2 &&
+      rr >= 1.6 &&
+      (useLevelTwo || touch20 || touch50);
+    if (!elite) qualityCap = Math.min(qualityCap, 138);
+    qualityScore = Math.min(qualityScore, qualityCap);
     if (rr < 1 || tp2 === tp1) continue;
 
     const signal = {
@@ -4498,10 +4512,10 @@ function bindEvents() {
       tradezPaper.activity = [];
       tradezPaper.lastScanAt = 0;
       tradezPaper.lastDailyBriefingUtcDate = utcDayKey(Date.now() - UTC_DAY_MS);
-      logTradezPaperActivity("Auto Trade 2 reset to the $10,000 EMA research book.", "neutral");
+      logTradezPaperActivity("Auto Trade 2 reset to the $1,000 EMA research book.", "neutral");
       persistTradezPaperState();
       renderTradezPaperDashboard();
-      setStatus("Auto Trade 2 reset to the $10,000 EMA research book.", "neutral");
+      setStatus("Auto Trade 2 reset to the $1,000 EMA research book.", "neutral");
     });
   }
 
