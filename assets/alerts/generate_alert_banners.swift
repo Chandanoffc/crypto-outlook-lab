@@ -61,6 +61,15 @@ let banners: [BannerConfig] = [
         title: "LOSS",
         subtitle: "Soloris Signals",
         motionStyle: .warn
+    ),
+    BannerConfig(
+        name: "safe",
+        accentStart: NSColor(calibratedRed: 0.12, green: 0.56, blue: 0.94, alpha: 1),
+        accentEnd: NSColor(calibratedRed: 0.38, green: 0.87, blue: 0.99, alpha: 1),
+        edgeGlow: NSColor(calibratedRed: 0.38, green: 0.87, blue: 0.99, alpha: 0.92),
+        title: "SAFE",
+        subtitle: "Soloris Signals",
+        motionStyle: .rise
     )
 ]
 

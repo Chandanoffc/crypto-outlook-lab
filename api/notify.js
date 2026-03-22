@@ -45,7 +45,10 @@ function resolveAlertBannerFile(event, meta = {}) {
   if (eventType === "tp1_hit" || eventType === "tp_hit") {
     return "profits.gif";
   }
-  if (eventType === "sl_hit" || eventType === "break_even_exit") {
+  if (eventType === "break_even_exit" || eventType === "safe_exit") {
+    return "safe.gif";
+  }
+  if (eventType === "sl_hit") {
     return "loss.gif";
   }
   return "";
