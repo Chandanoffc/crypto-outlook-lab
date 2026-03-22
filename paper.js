@@ -34,7 +34,7 @@ const HTF_CONFIRMATION_CONFIG = [
 ];
 const STORAGE_KEY = "apex-signals-auto-paper";
 const AUTO_DELIVERY_STORAGE_KEY = "soloris-auto-trade-delivery";
-const AUTO_TRADE_RESET_KEY = "soloris-reset-autotrade-20260322";
+const AUTO_TRADE_RESET_KEY = "soloris-reset-autotrade-20260322-v2";
 const DEFAULT_AUTO_DELIVERY = {
   browser: true,
   discordWebhook: "",

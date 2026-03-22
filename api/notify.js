@@ -36,7 +36,17 @@ function inferBaseUrl(req) {
 function resolveAlertBannerFile(event, meta = {}) {
   if (meta?.strategy !== "ema_book") return "";
   const eventType = String(meta?.eventType || event?.deliveryType || "").toLowerCase();
-  if (!eventType) return "";
+  const titleText = String(event?.title || meta?.title || "").toLowerCase();
+  const messageText = String(event?.message || event?.formattedMessage || "").toLowerCase();
+  const isProtected =
+    eventType === "break_even_exit" ||
+    eventType === "safe_exit" ||
+    titleText.includes("protected at entry") ||
+    titleText.includes("breakeven") ||
+    messageText.includes("protected at entry") ||
+    messageText.includes("breakeven exit") ||
+    messageText.includes("sl moved to entry");
+  if (!eventType && !isProtected) return "";
 
   if (eventType === "entry_opened" || eventType === "test_signal") {
     const quality = Number(event?.qualityScore) || 0;
@@ -45,7 +55,7 @@ function resolveAlertBannerFile(event, meta = {}) {
   if (eventType === "tp1_hit" || eventType === "tp_hit") {
     return "profits.gif";
   }
-  if (eventType === "break_even_exit" || eventType === "safe_exit") {
+  if (isProtected) {
     return "safe.gif";
   }
   if (eventType === "sl_hit") {
