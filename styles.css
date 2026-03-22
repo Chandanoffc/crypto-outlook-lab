@@ -3975,8 +3975,9 @@ body.token-analysis-page .shell-top-shell {
 body.token-analysis-page .shell-hero-shell {
   position: relative;
   overflow: hidden;
-  grid-template-columns: 1fr;
-  justify-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   text-align: center;
   padding: 42px 32px 36px;
   border-radius: 30px;
@@ -4040,7 +4041,8 @@ body.token-analysis-page .timeframe-switcher {
 }
 
 body.token-analysis-page .hero-form {
-  width: min(1040px, 100%);
+  align-self: auto;
+  width: min(920px, 100%);
   padding: 16px;
   border: 1px solid rgba(34, 211, 238, 0.1);
   border-radius: 26px;
@@ -4053,14 +4055,16 @@ body.token-analysis-page .hero-form {
 }
 
 body.token-analysis-page .token-analysis-center-form {
-  display: grid;
-  grid-template-columns: minmax(340px, 1fr) auto auto;
+  display: flex;
+  flex-wrap: nowrap;
   gap: 14px;
   align-items: center;
   justify-content: center;
 }
 
 body.token-analysis-page .token-analysis-token-input {
+  flex: 1 1 320px;
+  min-width: 0;
   min-height: 64px;
   border-radius: 18px;
   background:
@@ -4074,6 +4078,7 @@ body.token-analysis-page .token-analysis-token-input {
 }
 
 body.token-analysis-page .token-analysis-submit {
+  flex: 0 0 auto;
   min-width: 170px;
   min-height: 64px;
   border-radius: 18px;
@@ -4445,7 +4450,7 @@ body.token-analysis-page .token-analysis-advanced-panel {
   }
 
   body.token-analysis-page .shell-hero-shell {
-    grid-template-columns: 1fr;
+    display: flex;
   }
 
   body.token-analysis-page .hero-copy h1 {
@@ -4474,7 +4479,8 @@ body.token-analysis-page .token-analysis-advanced-panel {
   }
 
   body.token-analysis-page .token-analysis-center-form {
-    grid-template-columns: 1fr;
+    flex-direction: column;
+    align-items: stretch;
   }
 
   body.token-analysis-page .headline-metrics {
@@ -4492,7 +4498,7 @@ body.token-analysis-page .token-analysis-advanced-panel {
 
   body.token-analysis-page .timeframe-switcher {
     flex-wrap: wrap;
-    justify-content: flex-start;
+    justify-content: center;
   }
 
   body.token-analysis-page .analysis-brief-grid {
