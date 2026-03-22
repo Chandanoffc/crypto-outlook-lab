@@ -126,6 +126,12 @@ const dom = {
   chartLineLabelEma20: document.getElementById("chart-line-label-ema20"),
   chartLineLabelEma50: document.getElementById("chart-line-label-ema50"),
   timeframeSummaryCopy: document.getElementById("timeframe-summary-copy"),
+  tokenPastSummary: document.getElementById("token-past-summary"),
+  tokenShortTermSummary: document.getElementById("token-short-term-summary"),
+  tokenLongTermSummary: document.getElementById("token-long-term-summary"),
+  tokenTechnicalSummary: document.getElementById("token-technical-summary"),
+  tokenPredictionSummary: document.getElementById("token-prediction-summary"),
+  tokenNewsSummary: document.getElementById("token-news-summary"),
   tradeStance: document.getElementById("trade-stance"),
   tradeEntry: document.getElementById("trade-entry"),
   tradeTp1: document.getElementById("trade-tp1"),
@@ -198,6 +204,140 @@ function setStreamStatus(message, tone = "neutral") {
 
 function setTradeRefreshNote(message) {
   dom.tradeRefreshNote.textContent = message;
+}
+
+function setOptionalCopy(element, text) {
+  if (!element) return;
+  element.textContent = text;
+}
+
+function dominantTimeframeBucket(entries, fallbackLabel) {
+  if (!Array.isArray(entries) || !entries.length) return fallbackLabel;
+  const ranked = { bullish: 0, bearish: 0, balanced: 0 };
+
+  entries.forEach((entry) => {
+    if (!entry || !entry.bias) return;
+    const label = String(entry.bias.label || "").toLowerCase();
+    if (label.includes("bull")) ranked.bullish += 1;
+    else if (label.includes("bear")) ranked.bearish += 1;
+    else ranked.balanced += 1;
+  });
+
+  if (ranked.bullish > ranked.bearish && ranked.bullish >= ranked.balanced) return "bullish";
+  if (ranked.bearish > ranked.bullish && ranked.bearish >= ranked.balanced) return "bearish";
+  return fallbackLabel;
+}
+
+function buildRecentPerformanceSummary(context) {
+  if (!context) {
+    return "Recent price-action context will appear here after the token loads.";
+  }
+
+  const swingRangePct = context.latestAtr && context.currentPrice
+    ? (context.latestAtr / context.currentPrice) * 100
+    : 0;
+  const weeklyBucket = dominantTimeframeBucket(state.timeframeSummary.slice(2), context.bias.label.toLowerCase());
+  const shortBucket = dominantTimeframeBucket(state.timeframeSummary.slice(0, 2), context.bias.label.toLowerCase());
+  const catalystLead = context.newsItems?.[0]?.title
+    ? `Headline focus remains "${context.newsItems[0].title}".`
+    : "No dominant headline catalyst is crowding the tape.";
+
+  return `${state.snapshot.symbol} has spent the last few sessions ${
+    weeklyBucket === "bullish"
+      ? "building a higher-base structure"
+      : weeklyBucket === "bearish"
+        ? "respecting a weaker distribution profile"
+        : "rotating without a decisive weekly trend"
+  }, while the short-term tape is ${shortBucket}. Current realized swing size is about ${swingRangePct.toFixed(
+    2
+  )}% of spot per selected candle, which helps frame how aggressive the recent move has been. ${catalystLead}`;
+}
+
+function buildTechnicalSnapshot(context) {
+  if (!context) {
+    return "Technical detail will populate after the token snapshot is ready.";
+  }
+
+  const emaStack =
+    context.latestEma20 > context.latestEma50
+      ? "EMA20 is leading EMA50, so the trend stack still favors continuation buyers."
+      : "EMA50 is capping EMA20, so the broader stack still leans defensive.";
+  const rsiText =
+    context.latestRsi > 70
+      ? `RSI ${context.latestRsi.toFixed(1)} is stretched and vulnerable to mean reversion.`
+      : context.latestRsi < 35
+        ? `RSI ${context.latestRsi.toFixed(1)} is compressed and can fuel snapback reactions.`
+        : `RSI ${context.latestRsi.toFixed(1)} is balanced enough to support follow-through if flow confirms.`;
+  const macdText =
+    context.latestMacdHistogram > 0
+      ? "MACD histogram is positive, so momentum still expands with the current move."
+      : "MACD histogram is negative, so momentum remains under pressure.";
+
+  return `${emaStack} ${rsiText} ${macdText} VWAP sits at ${formatPrice(
+    context.latestVwap,
+    state.snapshot?.pricePrecision || 2
+  )}, and OBV slope ${formatSigned(context.obvSlope, 2, "%")} tells us whether volume is validating the move.`;
+}
+
+function buildPredictionSnapshot(context) {
+  if (!context) {
+    return "The model prediction will appear after analysis runs.";
+  }
+
+  const nearSupport = context.supportResistance?.supportLevels?.[0];
+  const nearResistance = context.supportResistance?.resistanceLevels?.[0];
+  const precision = state.snapshot?.pricePrecision || 2;
+  const biasDirection = context.bias.label.toLowerCase().includes("bull")
+    ? "buyers remain in control"
+    : context.bias.label.toLowerCase().includes("bear")
+      ? "sellers still control the path of least resistance"
+      : "the market is still waiting for commitment";
+
+  return `Model read: ${context.bias.label}. Quality score ${context.biasScore} suggests ${biasDirection}. The cleaner next move is ${
+    context.bias.label.toLowerCase().includes("bull")
+      ? `continuation above ${nearResistance ? formatPrice(nearResistance, precision) : "nearby resistance"}`
+      : context.bias.label.toLowerCase().includes("bear")
+        ? `continuation below ${nearSupport ? formatPrice(nearSupport, precision) : "nearby support"}`
+        : "a break away from the current balance area"
+  }. Use the marked support/resistance map and the potential-trade box as the operational trigger instead of anticipating early.`;
+}
+
+function buildNewsSnapshot(context) {
+  if (!context) {
+    return "News context will appear here after analysis runs.";
+  }
+
+  if (context.matchedUpbitNotice) {
+    return `Upbit notice matched this token: "${context.matchedUpbitNotice.title}". That is the most important current catalyst and should be treated as a volatility amplifier alongside the broader headlines.`;
+  }
+
+  if (context.newsItems?.length) {
+    return `Top catalyst in the feed: "${context.newsItems[0].title}". The current news tone scores ${context.newsScore > 0 ? "supportive" : context.newsScore < 0 ? "heavy" : "mixed"}, so headlines should be read as context rather than a standalone trigger.`;
+  }
+
+  return "No strong token-specific headline is dominating the tape right now, so price structure and derivatives flow should carry more weight than news.";
+}
+
+function renderTokenAnalysisBrief(context) {
+  const shortBucket = dominantTimeframeBucket(state.timeframeSummary.slice(0, 2), "balanced");
+  const longBucket = dominantTimeframeBucket(state.timeframeSummary.slice(2), "balanced");
+
+  setOptionalCopy(dom.tokenPastSummary, buildRecentPerformanceSummary(context));
+  setOptionalCopy(
+    dom.tokenShortTermSummary,
+    context
+      ? `Short-term expectation: ${shortBucket}. Watch the next 15m to 4H reactions around EMA20/EMA50, nearby support/resistance, and whether taker flow continues to confirm the current move.`
+      : "Short-term expectation will appear after the token loads."
+  );
+  setOptionalCopy(
+    dom.tokenLongTermSummary,
+    context
+      ? `Longer-horizon expectation: ${longBucket}. Use the 4H and 1D buckets as the anchor for next-days to next-weeks direction, then let short-term structure decide timing and invalidation.`
+      : "Long-term expectation will appear after the token loads."
+  );
+  setOptionalCopy(dom.tokenTechnicalSummary, buildTechnicalSnapshot(context));
+  setOptionalCopy(dom.tokenPredictionSummary, buildPredictionSnapshot(context));
+  setOptionalCopy(dom.tokenNewsSummary, buildNewsSnapshot(context));
 }
 
 function readStoredJson(key, fallback) {
@@ -2147,16 +2287,19 @@ function renderTimeframeSummary() {
   if (state.timeframeSummaryLoading && !state.timeframeSummary.length) {
     dom.timeframeSummaryCopy.textContent =
       "Scanning 10m, 30m, 1H, 4H, and 1D structure for a concise multi-timeframe read...";
+    renderTokenAnalysisBrief(state.lastDerived);
     return;
   }
 
   if (!state.timeframeSummary.length) {
     dom.timeframeSummaryCopy.textContent =
       "AI multi-timeframe summary will appear here after the contract loads.";
+    renderTokenAnalysisBrief(state.lastDerived);
     return;
   }
 
   dom.timeframeSummaryCopy.textContent = buildTimeframeNarrative(state.timeframeSummary);
+  renderTokenAnalysisBrief(state.lastDerived);
 }
 
 function computeSupportResistance(candles, currentPrice, latestAtr) {
@@ -2999,6 +3142,7 @@ function renderEmptyDashboard(message) {
   renderAlertEvents();
   renderRiskGrid(null);
   renderPaperTable();
+  renderTokenAnalysisBrief(null);
   renderTimeframeSummary();
   renderPotentialTrade(null);
   renderReplaySurface();
@@ -4205,6 +4349,7 @@ function renderDashboard() {
   );
 
   renderNews(derived.newsItems, state.upbitNotices);
+  renderTokenAnalysisBrief(derived);
   renderTimeframeSummary();
 
   setStatus(

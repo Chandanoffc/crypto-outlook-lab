@@ -5,11 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Soloris Signals is a futures-first crypto trading workspace for perps analysis, EMA pullbacks, signal feeds, and paper trading."
+      content="Soloris Token Analysis studies any perp token with charting, technical structure, catalyst context, and AI forward expectations across multiple timeframes."
     />
-    <link rel="canonical" href="https://soloris-signals.vercel.app/" />
-    <meta property="og:url" content="https://soloris-signals.vercel.app/" />
-    <title>Soloris Signals</title>
+    <link rel="canonical" href="https://soloris-signals.vercel.app/token-analysis.html" />
+    <meta property="og:url" content="https://soloris-signals.vercel.app/token-analysis.html" />
+    <title>Soloris Token Analysis</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -20,8 +20,9 @@
     <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
     <script src="./fallback-perps.js" defer></script>
     <script src="./app.js" defer></script>
+    <script src="./token-analysis.js" defer></script>
   </head>
-  <body class="dashboard-home shell-page main-shell-page">
+  <body class="dashboard-home shell-page main-shell-page token-analysis-page">
     <div class="page-shell shell-layout">
       <aside class="shell-sidebar">
         <a class="brand-block brand-block-sidebar" href="./index.html">
@@ -37,8 +38,8 @@
         <div class="shell-sidebar-nav">
           <p class="panel-label">Workspace</p>
           <nav class="page-tabs shell-page-tabs" aria-label="Primary pages">
-            <a class="page-tab is-current" href="./index.html">Main</a>
-            <a class="page-tab" href="./token-analysis.html">Token Analysis</a>
+            <a class="page-tab" href="./index.html">Main</a>
+            <a class="page-tab is-current" href="./token-analysis.html">Token Analysis</a>
             <a class="page-tab" href="./paper.html">Auto Trade</a>
             <a class="page-tab" href="./arena.html">Signals Arena</a>
             <a class="page-tab" href="./tradez.html">EMA Signals</a>
@@ -46,13 +47,13 @@
         </div>
 
         <div class="shell-sidebar-foot">
-          <div class="app-pill">Live Perps</div>
+          <div class="app-pill">AI Research</div>
           <div class="shell-sidebar-card">
-            <span class="stack-label">Main Desk</span>
-            <strong>Institutional Workspace</strong>
+            <span class="stack-label">Research Desk</span>
+            <strong>Token Narrative Engine</strong>
             <small>
-              Structure, flow, funding, catalysts, and execution context in one tighter trading
-              surface.
+              One token in, full AI read out: structure, momentum, catalysts, and forward
+              expectations in one tighter surface.
             </small>
           </div>
         </div>
@@ -62,12 +63,17 @@
         <header class="shell-top-shell">
           <section class="panel hero-shell shell-hero-shell">
             <div class="hero-copy">
-              <p class="eyebrow">Main Dashboard</p>
-              <h1>Institutional perps workspace</h1>
+              <p class="eyebrow">Token Analysis</p>
+              <h1>AI token research desk</h1>
               <p class="subtitle">
-                Futures-first dashboard for structure, leverage, order flow, liquidation pressure,
-                and short-horizon setups.
+                Enter any perp token and let Soloris break down the chart, momentum, catalysts,
+                quality score, and forward expectations from short term to multi-week structure.
               </p>
+              <div class="token-analysis-hero-highlights" aria-label="Research highlights">
+                <span class="analysis-highlight-chip">Chart + EMA / RSI / Volume</span>
+                <span class="analysis-highlight-chip">Short-term + long-term outlook</span>
+                <span class="analysis-highlight-chip">Catalysts, quality, and prediction</span>
+              </div>
             </div>
 
             <form id="token-form" class="token-form hero-form">
@@ -84,17 +90,24 @@
                 />
               </label>
 
-              <label>
+              <label class="visually-hidden" aria-hidden="true">
                 Chart Interval
                 <select id="interval-select" name="interval">
-                  <option value="5m">5m</option>
                   <option value="15m" selected>15m</option>
                   <option value="1h">1h</option>
                   <option value="4h">4h</option>
+                  <option value="1d">1d</option>
                 </select>
               </label>
 
-              <button type="submit">Load Dashboard</button>
+              <div class="timeframe-switcher" role="group" aria-label="Chart timeframe">
+                <button type="button" class="mini-button timeframe-button is-active" data-analysis-interval="15m">15m</button>
+                <button type="button" class="mini-button timeframe-button" data-analysis-interval="1h">1H</button>
+                <button type="button" class="mini-button timeframe-button" data-analysis-interval="4h">4H</button>
+                <button type="button" class="mini-button timeframe-button" data-analysis-interval="1d">1D</button>
+              </div>
+
+              <button type="submit">Analyze</button>
             </form>
           </section>
 
@@ -291,6 +304,89 @@
             advice.
           </div>
         </aside>
+
+        <section class="panel workspace-panel token-analysis-brief-panel">
+          <div class="panel-head">
+            <div>
+              <p class="panel-label">AI Research Summary</p>
+              <h2>Past action, expectations, catalysts, and platform prediction</h2>
+            </div>
+          </div>
+
+          <div class="analysis-brief-grid">
+            <article class="subpanel">
+              <div class="panel-head-inline">
+                <div>
+                  <p class="panel-label">Past Sessions</p>
+                  <h3>What the token has done</h3>
+                </div>
+              </div>
+              <p id="token-past-summary" class="research-copy">
+                Recent price-action context will appear here after the token loads.
+              </p>
+            </article>
+
+            <article class="subpanel">
+              <div class="panel-head-inline">
+                <div>
+                  <p class="panel-label">Short Term</p>
+                  <h3>Next few hours to days</h3>
+                </div>
+              </div>
+              <p id="token-short-term-summary" class="research-copy">
+                Short-term expectation will appear after the token loads.
+              </p>
+            </article>
+
+            <article class="subpanel">
+              <div class="panel-head-inline">
+                <div>
+                  <p class="panel-label">Long Term</p>
+                  <h3>Next days to weeks</h3>
+                </div>
+              </div>
+              <p id="token-long-term-summary" class="research-copy">
+                Long-term expectation will appear after the token loads.
+              </p>
+            </article>
+
+            <article class="subpanel">
+              <div class="panel-head-inline">
+                <div>
+                  <p class="panel-label">Technical Analysis</p>
+                  <h3>Trend, momentum, and confirmation</h3>
+                </div>
+              </div>
+              <p id="token-technical-summary" class="research-copy">
+                Technical detail will populate after the token snapshot is ready.
+              </p>
+            </article>
+
+            <article class="subpanel">
+              <div class="panel-head-inline">
+                <div>
+                  <p class="panel-label">Platform Prediction</p>
+                  <h3>What Soloris expects next</h3>
+                </div>
+              </div>
+              <p id="token-prediction-summary" class="research-copy">
+                The model prediction will appear after analysis runs.
+              </p>
+            </article>
+
+            <article class="subpanel">
+              <div class="panel-head-inline">
+                <div>
+                  <p class="panel-label">News Context</p>
+                  <h3>Catalysts moving the token</h3>
+                </div>
+              </div>
+              <p id="token-news-summary" class="research-copy">
+                News context will appear here after analysis runs.
+              </p>
+            </article>
+          </div>
+        </section>
 
         <section class="panel workspace-panel">
           <div class="panel-head">

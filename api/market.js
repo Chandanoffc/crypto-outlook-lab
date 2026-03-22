@@ -4,7 +4,7 @@ const DEFAULT_TOKEN = "BTC";
 const DEFAULT_INTERVAL = "15m";
 const QUOTE_ASSET = "USDT";
 const NEWS_LIMIT = 6;
-const VALID_INTERVALS = new Set(["5m", "15m", "1h", "4h"]);
+const VALID_INTERVALS = new Set(["5m", "15m", "30m", "1h", "4h", "1d"]);
 const EXCHANGE_CACHE_TTL_MS = 10 * 60 * 1000;
 
 let exchangeInfoCache = {

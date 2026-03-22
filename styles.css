@@ -3945,3 +3945,550 @@ body.tradez-page .quality-tier-q0 {
     height: 420px;
   }
 }
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+body.token-analysis-page .hero-form {
+  align-items: end;
+}
+
+body.token-analysis-page .main-grid {
+  grid-template-columns: minmax(0, 1.7fr) minmax(340px, 0.88fr);
+  gap: 22px;
+  align-items: start;
+}
+
+body.token-analysis-page .shell-top-shell {
+  gap: 24px;
+}
+
+body.token-analysis-page .shell-hero-shell {
+  position: relative;
+  overflow: hidden;
+  grid-template-columns: minmax(0, 1.18fr) minmax(400px, 0.9fr);
+  padding: 26px;
+  border-radius: 30px;
+  background:
+    radial-gradient(circle at 18% 20%, rgba(34, 211, 238, 0.14), transparent 34%),
+    radial-gradient(circle at 78% 18%, rgba(14, 165, 233, 0.12), transparent 26%),
+    linear-gradient(145deg, rgba(16, 23, 38, 0.98), rgba(10, 16, 28, 0.96));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 24px 64px rgba(2, 6, 23, 0.48);
+}
+
+body.token-analysis-page .shell-hero-shell::before {
+  content: "";
+  position: absolute;
+  inset: auto -8% -34% 34%;
+  height: 260px;
+  background: radial-gradient(circle, rgba(34, 211, 238, 0.1), transparent 66%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+body.token-analysis-page .shell-hero-shell > * {
+  position: relative;
+  z-index: 1;
+}
+
+body.token-analysis-page .hero-copy {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+body.token-analysis-page .hero-copy h1 {
+  max-width: 11ch;
+  letter-spacing: -0.04em;
+  line-height: 0.95;
+}
+
+body.token-analysis-page .hero-copy .subtitle {
+  max-width: 70ch;
+  font-size: 1rem;
+  line-height: 1.72;
+}
+
+body.token-analysis-page .token-analysis-hero-highlights {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+body.token-analysis-page .analysis-highlight-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid rgba(34, 211, 238, 0.16);
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 40%),
+    rgba(10, 18, 31, 0.82);
+  color: #d7f9ff;
+  font-size: 0.84rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.03),
+    0 10px 24px rgba(2, 132, 199, 0.12);
+}
+
+body.token-analysis-page .timeframe-switcher {
+  display: inline-grid;
+  grid-auto-flow: column;
+  gap: 10px;
+  align-items: center;
+}
+
+body.token-analysis-page .hero-form {
+  padding: 18px;
+  border: 1px solid rgba(34, 211, 238, 0.08);
+  border-radius: 24px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 24%),
+    rgba(8, 15, 28, 0.88);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.03),
+    0 20px 48px rgba(2, 6, 23, 0.3);
+}
+
+body.token-analysis-page .timeframe-button {
+  min-width: 74px;
+}
+
+body.token-analysis-page .timeframe-button.is-active {
+  border-color: rgba(34, 211, 238, 0.38);
+  background:
+    linear-gradient(180deg, rgba(34, 211, 238, 0.14), rgba(34, 211, 238, 0.08)),
+    rgba(17, 28, 48, 0.96);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 0 0 1px rgba(34, 211, 238, 0.08),
+    0 10px 28px rgba(34, 211, 238, 0.14);
+  color: #d9fbff;
+}
+
+body.token-analysis-page .token-analysis-brief-panel {
+  grid-column: 1 / -1;
+  padding: 22px;
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at top left, rgba(34, 211, 238, 0.08), transparent 28%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(11, 18, 32, 0.96));
+}
+
+body.token-analysis-page .analysis-brief-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+body.token-analysis-page .token-analysis-brief-panel .subpanel {
+  position: relative;
+  min-height: 232px;
+  padding: 18px 18px 20px;
+  border-radius: 22px;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 24%),
+    rgba(13, 20, 36, 0.94);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.03),
+    0 14px 30px rgba(2, 6, 23, 0.18);
+}
+
+body.token-analysis-page .token-analysis-brief-panel .subpanel::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: linear-gradient(90deg, rgba(34, 211, 238, 0.88), rgba(14, 165, 233, 0.18));
+  opacity: 0.9;
+}
+
+body.token-analysis-page .token-analysis-brief-panel .subpanel:nth-child(2)::before,
+body.token-analysis-page .token-analysis-brief-panel .subpanel:nth-child(5)::before {
+  background: linear-gradient(90deg, rgba(96, 165, 250, 0.9), rgba(34, 211, 238, 0.18));
+}
+
+body.token-analysis-page .token-analysis-brief-panel .subpanel:nth-child(3)::before,
+body.token-analysis-page .token-analysis-brief-panel .subpanel:nth-child(6)::before {
+  background: linear-gradient(90deg, rgba(56, 189, 248, 0.9), rgba(125, 211, 252, 0.16));
+}
+
+body.token-analysis-page .token-analysis-brief-panel .panel-head-inline {
+  margin-bottom: 14px;
+}
+
+body.token-analysis-page .token-analysis-brief-panel .panel-head-inline h3 {
+  margin: 0;
+  color: #f8fafc;
+  font-size: 1rem;
+  line-height: 1.3;
+}
+
+body.token-analysis-page .research-copy {
+  margin: 0;
+  color: var(--text-soft);
+  line-height: 1.75;
+  font-size: 0.98rem;
+}
+
+body.token-analysis-page .panel-hero {
+  min-height: 0;
+  padding: 22px;
+  border-radius: 30px;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(34, 211, 238, 0.06), transparent 26%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(11, 18, 32, 0.96));
+}
+
+body.token-analysis-page .panel-hero .panel-head {
+  margin-bottom: 22px;
+}
+
+body.token-analysis-page .panel-hero .panel-head h2 {
+  max-width: 14ch;
+  line-height: 1;
+}
+
+body.token-analysis-page .headline-metrics {
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+body.token-analysis-page .headline-chip {
+  min-width: 146px;
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 30%),
+    rgba(12, 19, 33, 0.95);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 16px 30px rgba(2, 6, 23, 0.18);
+}
+
+body.token-analysis-page .chart-shell {
+  position: relative;
+  padding: 14px;
+  border-radius: 28px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 20%),
+    radial-gradient(circle at top right, rgba(56, 189, 248, 0.06), transparent 22%),
+    rgba(8, 13, 23, 0.96);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.03),
+    0 18px 42px rgba(2, 6, 23, 0.24);
+}
+
+body.token-analysis-page .chart-frame {
+  min-height: 520px;
+  border-radius: 22px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.015), transparent 16%),
+    #08101d;
+}
+
+body.token-analysis-page .chart-hud {
+  top: 18px;
+  left: 18px;
+  gap: 10px;
+}
+
+body.token-analysis-page .chart-hud-item {
+  min-width: 112px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  backdrop-filter: blur(16px);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 28%),
+    rgba(9, 15, 26, 0.78);
+}
+
+body.token-analysis-page .chart-series-label {
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+body.token-analysis-page .level-badges {
+  margin-top: 18px;
+  gap: 18px;
+}
+
+body.token-analysis-page .timeframe-inline,
+body.token-analysis-page .trade-idea-card {
+  margin-top: 18px;
+}
+
+body.token-analysis-page .timeframe-inline {
+  padding: 18px;
+  border-radius: 22px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 30%),
+    rgba(11, 18, 30, 0.9);
+}
+
+body.token-analysis-page .trade-idea-card {
+  padding: 18px;
+  border-radius: 24px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 30%),
+    rgba(11, 18, 30, 0.92);
+}
+
+body.token-analysis-page .panel-outlook {
+  position: sticky;
+  top: 24px;
+  gap: 16px;
+  padding: 22px;
+  border-radius: 30px;
+  background:
+    radial-gradient(circle at top right, rgba(34, 211, 238, 0.08), transparent 26%),
+    linear-gradient(180deg, rgba(14, 22, 37, 0.98), rgba(10, 16, 28, 0.97));
+}
+
+body.token-analysis-page .panel-outlook .panel-head {
+  align-items: start;
+  margin-bottom: 0;
+}
+
+body.token-analysis-page .panel-outlook .panel-head h2 {
+  line-height: 1.05;
+}
+
+body.token-analysis-page .score-stack {
+  min-width: 170px;
+  gap: 10px;
+}
+
+body.token-analysis-page .score-badge {
+  min-width: 84px;
+  min-height: 84px;
+  border-radius: 24px;
+  font-size: 1.18rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.07), transparent 34%),
+    rgba(13, 20, 35, 0.98);
+}
+
+body.token-analysis-page .quality-meter-block {
+  width: min(188px, 100%);
+}
+
+body.token-analysis-page .stream-status {
+  width: fit-content;
+  margin-bottom: 0;
+}
+
+body.token-analysis-page .outlook-copy {
+  padding: 16px 18px;
+  border: 1px solid rgba(30, 41, 59, 0.78);
+  border-radius: 20px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 28%),
+    rgba(9, 15, 26, 0.82);
+}
+
+body.token-analysis-page .panel-outlook .signal-list {
+  max-height: 540px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+body.token-analysis-page .panel-outlook .signal-item {
+  padding: 16px;
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 28%),
+    rgba(11, 18, 30, 0.9);
+}
+
+body.token-analysis-page .disclaimer {
+  margin-top: 4px;
+  padding: 16px 2px 0;
+  border-top: 1px solid rgba(30, 41, 59, 0.72);
+}
+
+body.token-analysis-page .workspace-panel {
+  grid-column: 1 / -1;
+  padding: 22px;
+  border-radius: 30px;
+  background:
+    radial-gradient(circle at top left, rgba(14, 165, 233, 0.06), transparent 24%),
+    linear-gradient(180deg, rgba(14, 22, 37, 0.98), rgba(10, 16, 28, 0.97));
+}
+
+body.token-analysis-page .workspace-panel .panel-head {
+  margin-bottom: 18px;
+}
+
+body.token-analysis-page .workspace-panel .panel-head h2 {
+  max-width: 18ch;
+  line-height: 1.08;
+}
+
+body.token-analysis-page .workspace-panel .subsection-meta {
+  margin-bottom: 18px;
+}
+
+body.token-analysis-page .workspace-grid,
+body.token-analysis-page .workspace-grid-overview {
+  gap: 18px;
+}
+
+body.token-analysis-page .workspace-grid-overview {
+  grid-template-columns: minmax(0, 1.1fr) repeat(2, minmax(0, 0.95fr));
+}
+
+body.token-analysis-page .subpanel {
+  padding: 18px;
+  border-radius: 22px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 28%),
+    rgba(12, 19, 33, 0.94);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.03),
+    0 14px 32px rgba(2, 6, 23, 0.16);
+}
+
+body.token-analysis-page .subpanel .panel-head-inline h3,
+body.token-analysis-page .subpanel .panel-head h3 {
+  margin: 0;
+  color: #f8fafc;
+}
+
+body.token-analysis-page .analysis-grid,
+body.token-analysis-page .setup-grid {
+  gap: 14px;
+}
+
+body.token-analysis-page .analysis-card,
+body.token-analysis-page .setup-card,
+body.token-analysis-page .news-item,
+body.token-analysis-page .table-row {
+  padding: 15px;
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 30%),
+    rgba(9, 15, 26, 0.78);
+}
+
+body.token-analysis-page .heatmap-card,
+body.token-analysis-page .table-card {
+  border-radius: 20px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 24%),
+    rgba(8, 14, 25, 0.86);
+}
+
+body.token-analysis-page .workspace-panel .feed-tabs {
+  padding: 6px;
+  border-radius: 999px;
+  background: rgba(7, 13, 24, 0.84);
+  box-shadow: inset 0 0 0 1px rgba(34, 211, 238, 0.08);
+}
+
+body.token-analysis-page .panel-outlook .signal-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+body.token-analysis-page .panel-outlook .signal-list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(51, 65, 85, 0.72);
+}
+
+body.token-analysis-page .workspace-panel .feed-tab {
+  min-width: 144px;
+}
+
+@media (max-width: 1180px) {
+  body.token-analysis-page .main-grid {
+    grid-template-columns: 1fr;
+  }
+
+  body.token-analysis-page .shell-hero-shell {
+    grid-template-columns: 1fr;
+  }
+
+  body.token-analysis-page .hero-copy h1 {
+    max-width: none;
+  }
+
+  body.token-analysis-page .panel-outlook {
+    position: static;
+  }
+
+  body.token-analysis-page .workspace-grid-overview {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  body.token-analysis-page .analysis-brief-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  body.token-analysis-page .shell-hero-shell {
+    padding: 20px;
+  }
+
+  body.token-analysis-page .analysis-highlight-chip {
+    width: 100%;
+    justify-content: center;
+  }
+
+  body.token-analysis-page .panel-hero,
+  body.token-analysis-page .panel-outlook,
+  body.token-analysis-page .workspace-panel,
+  body.token-analysis-page .token-analysis-brief-panel {
+    padding: 18px;
+  }
+
+  body.token-analysis-page .headline-metrics {
+    justify-content: stretch;
+  }
+
+  body.token-analysis-page .headline-chip {
+    min-width: calc(50% - 6px);
+    flex: 1 1 calc(50% - 6px);
+  }
+
+  body.token-analysis-page .chart-frame {
+    min-height: 420px;
+  }
+
+  body.token-analysis-page .timeframe-switcher {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  body.token-analysis-page .analysis-brief-grid {
+    grid-template-columns: 1fr;
+  }
+
+  body.token-analysis-page .workspace-grid-overview {
+    grid-template-columns: 1fr;
+  }
+
+  body.token-analysis-page .workspace-panel .feed-tabs {
+    width: 100%;
+  }
+
+  body.token-analysis-page .workspace-panel .feed-tab {
+    min-width: 0;
+    flex: 1 1 0;
+  }
+}
