@@ -3963,7 +3963,7 @@ body.token-analysis-page .hero-form {
 }
 
 body.token-analysis-page .main-grid {
-  grid-template-columns: minmax(0, 1.7fr) minmax(340px, 0.88fr);
+  grid-template-columns: minmax(0, 1.6fr) minmax(320px, 0.84fr);
   gap: 22px;
   align-items: start;
 }
@@ -3975,8 +3975,10 @@ body.token-analysis-page .shell-top-shell {
 body.token-analysis-page .shell-hero-shell {
   position: relative;
   overflow: hidden;
-  grid-template-columns: minmax(0, 1.18fr) minmax(400px, 0.9fr);
-  padding: 26px;
+  grid-template-columns: 1fr;
+  justify-items: center;
+  text-align: center;
+  padding: 34px 28px 30px;
   border-radius: 30px;
   background:
     radial-gradient(circle at 18% 20%, rgba(34, 211, 238, 0.14), transparent 34%),
@@ -4006,63 +4008,59 @@ body.token-analysis-page .hero-copy {
   display: grid;
   gap: 14px;
   align-content: start;
+  justify-items: center;
 }
 
 body.token-analysis-page .hero-copy h1 {
-  max-width: 11ch;
+  max-width: none;
   letter-spacing: -0.04em;
   line-height: 0.95;
 }
 
 body.token-analysis-page .hero-copy .subtitle {
-  max-width: 70ch;
+  max-width: 58ch;
   font-size: 1rem;
-  line-height: 1.72;
+  line-height: 1.68;
 }
 
-body.token-analysis-page .token-analysis-hero-highlights {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 4px;
-}
-
-body.token-analysis-page .analysis-highlight-chip {
-  display: inline-flex;
-  align-items: center;
-  min-height: 40px;
-  padding: 0 14px;
-  border: 1px solid rgba(34, 211, 238, 0.16);
-  border-radius: 999px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 40%),
-    rgba(10, 18, 31, 0.82);
-  color: #d7f9ff;
-  font-size: 0.84rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.03),
-    0 10px 24px rgba(2, 132, 199, 0.12);
+body.token-analysis-page .token-analysis-hero-copy {
+  margin-bottom: 16px;
 }
 
 body.token-analysis-page .timeframe-switcher {
-  display: inline-grid;
-  grid-auto-flow: column;
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
   gap: 10px;
   align-items: center;
 }
 
 body.token-analysis-page .hero-form {
-  padding: 18px;
+  width: min(880px, 100%);
+  padding: 20px;
   border: 1px solid rgba(34, 211, 238, 0.08);
-  border-radius: 24px;
+  border-radius: 28px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 24%),
     rgba(8, 15, 28, 0.88);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.03),
     0 20px 48px rgba(2, 6, 23, 0.3);
+}
+
+body.token-analysis-page .token-analysis-center-form {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.1fr) auto auto;
+  gap: 12px;
+  align-items: end;
+}
+
+body.token-analysis-page .token-analysis-input-label {
+  text-align: left;
+}
+
+body.token-analysis-page .token-analysis-submit {
+  min-width: 150px;
 }
 
 body.token-analysis-page .timeframe-button {
@@ -4092,13 +4090,13 @@ body.token-analysis-page .token-analysis-brief-panel {
 
 body.token-analysis-page .analysis-brief-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 18px;
 }
 
 body.token-analysis-page .token-analysis-brief-panel .subpanel {
   position: relative;
-  min-height: 232px;
+  min-height: 0;
   padding: 18px 18px 20px;
   border-radius: 22px;
   overflow: hidden;
@@ -4161,7 +4159,7 @@ body.token-analysis-page .panel-hero .panel-head {
 }
 
 body.token-analysis-page .panel-hero .panel-head h2 {
-  max-width: 14ch;
+  max-width: 13ch;
   line-height: 1;
 }
 
@@ -4226,6 +4224,10 @@ body.token-analysis-page .chart-series-label {
 body.token-analysis-page .level-badges {
   margin-top: 18px;
   gap: 18px;
+}
+
+body.token-analysis-page .token-analysis-level-badges {
+  display: none;
 }
 
 body.token-analysis-page .timeframe-inline,
@@ -4336,7 +4338,7 @@ body.token-analysis-page .workspace-panel .panel-head {
 }
 
 body.token-analysis-page .workspace-panel .panel-head h2 {
-  max-width: 18ch;
+  max-width: 14ch;
   line-height: 1.08;
 }
 
@@ -4349,8 +4351,9 @@ body.token-analysis-page .workspace-grid-overview {
   gap: 18px;
 }
 
-body.token-analysis-page .workspace-grid-overview {
-  grid-template-columns: minmax(0, 1.1fr) repeat(2, minmax(0, 0.95fr));
+body.token-analysis-page .workspace-grid-overview,
+body.token-analysis-page .workspace-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 body.token-analysis-page .subpanel {
@@ -4414,6 +4417,11 @@ body.token-analysis-page .workspace-panel .feed-tab {
   min-width: 144px;
 }
 
+body.token-analysis-page .token-analysis-hidden-metrics,
+body.token-analysis-page .token-analysis-advanced-panel {
+  display: none !important;
+}
+
 @media (max-width: 1180px) {
   body.token-analysis-page .main-grid {
     grid-template-columns: 1fr;
@@ -4431,10 +4439,6 @@ body.token-analysis-page .workspace-panel .feed-tab {
     position: static;
   }
 
-  body.token-analysis-page .workspace-grid-overview {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   body.token-analysis-page .analysis-brief-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -4445,16 +4449,15 @@ body.token-analysis-page .workspace-panel .feed-tab {
     padding: 20px;
   }
 
-  body.token-analysis-page .analysis-highlight-chip {
-    width: 100%;
-    justify-content: center;
-  }
-
   body.token-analysis-page .panel-hero,
   body.token-analysis-page .panel-outlook,
   body.token-analysis-page .workspace-panel,
   body.token-analysis-page .token-analysis-brief-panel {
     padding: 18px;
+  }
+
+  body.token-analysis-page .token-analysis-center-form {
+    grid-template-columns: 1fr;
   }
 
   body.token-analysis-page .headline-metrics {
