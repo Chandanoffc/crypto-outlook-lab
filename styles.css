@@ -3978,7 +3978,7 @@ body.token-analysis-page .shell-hero-shell {
   grid-template-columns: 1fr;
   justify-items: center;
   text-align: center;
-  padding: 34px 28px 30px;
+  padding: 42px 32px 36px;
   border-radius: 30px;
   background:
     radial-gradient(circle at 18% 20%, rgba(34, 211, 238, 0.14), transparent 34%),
@@ -4006,7 +4006,7 @@ body.token-analysis-page .shell-hero-shell > * {
 
 body.token-analysis-page .hero-copy {
   display: grid;
-  gap: 14px;
+  gap: 12px;
   align-content: start;
   justify-items: center;
 }
@@ -4018,53 +4018,72 @@ body.token-analysis-page .hero-copy h1 {
 }
 
 body.token-analysis-page .hero-copy .subtitle {
-  max-width: 58ch;
+  max-width: 48ch;
   font-size: 1rem;
-  line-height: 1.68;
+  line-height: 1.62;
 }
 
 body.token-analysis-page .token-analysis-hero-copy {
-  margin-bottom: 16px;
+  margin-bottom: 22px;
 }
 
 body.token-analysis-page .timeframe-switcher {
   display: flex;
   justify-content: center;
-  flex-wrap: wrap;
-  gap: 10px;
+  flex-wrap: nowrap;
+  gap: 8px;
   align-items: center;
+  padding: 6px;
+  border-radius: 999px;
+  background: rgba(7, 13, 24, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(34, 211, 238, 0.08);
 }
 
 body.token-analysis-page .hero-form {
-  width: min(880px, 100%);
-  padding: 20px;
-  border: 1px solid rgba(34, 211, 238, 0.08);
-  border-radius: 28px;
+  width: min(1040px, 100%);
+  padding: 16px;
+  border: 1px solid rgba(34, 211, 238, 0.1);
+  border-radius: 26px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 24%),
-    rgba(8, 15, 28, 0.88);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 24%),
+    rgba(8, 15, 28, 0.9);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.03),
-    0 20px 48px rgba(2, 6, 23, 0.3);
+    0 18px 42px rgba(2, 6, 23, 0.24);
 }
 
 body.token-analysis-page .token-analysis-center-form {
   display: grid;
-  grid-template-columns: minmax(220px, 1.1fr) auto auto;
-  gap: 12px;
-  align-items: end;
+  grid-template-columns: minmax(340px, 1fr) auto auto;
+  gap: 14px;
+  align-items: center;
+  justify-content: center;
 }
 
-body.token-analysis-page .token-analysis-input-label {
-  text-align: left;
+body.token-analysis-page .token-analysis-token-input {
+  min-height: 64px;
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 30%),
+    rgba(11, 18, 30, 0.95);
+  border: 1px solid rgba(30, 41, 59, 0.86);
+  padding: 0 18px;
+  font-size: 1.02rem;
+  color: #f8fafc;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 body.token-analysis-page .token-analysis-submit {
-  min-width: 150px;
+  min-width: 170px;
+  min-height: 64px;
+  border-radius: 18px;
+  font-size: 1.02rem;
 }
 
 body.token-analysis-page .timeframe-button {
-  min-width: 74px;
+  min-width: 68px;
+  min-height: 52px;
+  border-radius: 16px;
 }
 
 body.token-analysis-page .timeframe-button.is-active {
@@ -4235,31 +4254,25 @@ body.token-analysis-page .trade-idea-card {
   margin-top: 18px;
 }
 
-body.token-analysis-page .timeframe-inline {
-  padding: 18px;
-  border-radius: 22px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 30%),
-    rgba(11, 18, 30, 0.9);
-}
-
-body.token-analysis-page .trade-idea-card {
-  padding: 18px;
-  border-radius: 24px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 30%),
-    rgba(11, 18, 30, 0.92);
+body.token-analysis-page .timeframe-inline,
+body.token-analysis-page .token-analysis-trade-card {
+  display: none;
 }
 
 body.token-analysis-page .panel-outlook {
   position: sticky;
   top: 24px;
+  align-self: start;
+  z-index: 4;
   gap: 16px;
   padding: 22px;
   border-radius: 30px;
   background:
     radial-gradient(circle at top right, rgba(34, 211, 238, 0.08), transparent 26%),
     linear-gradient(180deg, rgba(14, 22, 37, 0.98), rgba(10, 16, 28, 0.97));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 20px 42px rgba(2, 6, 23, 0.2);
 }
 
 body.token-analysis-page .panel-outlook .panel-head {
@@ -4417,6 +4430,10 @@ body.token-analysis-page .workspace-panel .feed-tab {
   min-width: 144px;
 }
 
+body.token-analysis-page .shell-sidebar-foot {
+  display: none;
+}
+
 body.token-analysis-page .token-analysis-hidden-metrics,
 body.token-analysis-page .token-analysis-advanced-panel {
   display: none !important;
@@ -4474,8 +4491,8 @@ body.token-analysis-page .token-analysis-advanced-panel {
   }
 
   body.token-analysis-page .timeframe-switcher {
-    grid-auto-flow: row;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    flex-wrap: wrap;
+    justify-content: flex-start;
   }
 
   body.token-analysis-page .analysis-brief-grid {

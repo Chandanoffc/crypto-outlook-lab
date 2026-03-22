@@ -72,18 +72,17 @@
             </div>
 
             <form id="token-form" class="token-form hero-form token-analysis-center-form">
-              <label class="token-analysis-input-label">
-                Token
-                <input
-                  id="token-input"
-                  name="token"
-                  type="text"
-                  placeholder="BTC"
-                  value="BTC"
-                  autocomplete="off"
-                  spellcheck="false"
-                />
-              </label>
+              <label class="visually-hidden" for="token-input">Token</label>
+              <input
+                id="token-input"
+                name="token"
+                class="token-analysis-token-input"
+                type="text"
+                placeholder="Enter token ticker, for example BTC or SOL"
+                value="BTC"
+                autocomplete="off"
+                spellcheck="false"
+              />
 
               <label class="visually-hidden" aria-hidden="true">
                 Chart Interval
