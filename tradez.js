@@ -26,12 +26,21 @@ const TRADEZ_AUTO_START_BALANCE = 1000;
 const TRADEZ_AUTO_LEVERAGE = 5;
 const TRADEZ_AUTO_MAX_CONCURRENT_TRADES = 30;
 const TRADEZ_AUTO_MAX_NEW_TRADES = 12;
-const TRADEZ_AUTO_VERSION = 4;
+const TRADEZ_AUTO_VERSION = 5;
 const TRADEZ_AUTO_TRADE_COOLDOWN_MS = 4 * 60 * 1000;
 const TRADEZ_AUTO_TP1_MARGIN_TRIGGER_PCT = 25;
 const TICKER_CACHE_MAX_AGE_MS = 30 * 60 * 1000;
 const FRESH_SIGNAL_WINDOW_MS = 10 * 60 * 1000;
 const DEMO_STATUS_SYNC_BATCH = 20;
+const HIGHER_TIMEFRAME_INTERVAL = "4h";
+const EMA_SLOPE_LOOKBACK = 4;
+const MIN_EMA_SEPARATION_ATR = 0.2;
+const MAX_STALE_SIGNAL_BARS = 3;
+const MAX_AUTO_ENTRY_SIGNAL_BARS = 2;
+const MAX_POST_TOUCH_EXTENSION_ATR = 1.75;
+const MIN_EXECUTION_RR = 1.4;
+const TRADEZ_AUTO_EXECUTION_THRESHOLD_BUFFER = 12;
+const TRADEZ_AUTO_MIN_EXECUTION_THRESHOLD = 92;
 const DEFAULT_ALERT_CHANNELS = {
   browser: true,
   discordWebhook: "",
@@ -1967,12 +1976,25 @@ function signalIsAtLiveEntry(signal, currentPrice) {
 }
 
 function highQualityTradezAutoCandidates(candidates, threshold) {
+  const executionThreshold = Math.max(
+    TRADEZ_AUTO_MIN_EXECUTION_THRESHOLD,
+    Number(threshold || 0) + TRADEZ_AUTO_EXECUTION_THRESHOLD_BUFFER
+  );
   return candidates
     .map(buildTradezAutoCandidate)
     .filter(Boolean)
-    .filter((candidate) => candidate.qualityScore >= threshold)
+    .filter((candidate) => candidate.qualityScore >= executionThreshold)
     .filter((candidate) => candidate.paperTrade.targetMarginPct >= 20 && candidate.paperTrade.targetMarginPct <= 55)
-    .filter((candidate) => candidate.paperTrade.rr >= 1.2)
+    .filter((candidate) => candidate.paperTrade.rr >= MIN_EXECUTION_RR)
+    .filter((candidate) => (candidate.activeSignal?.sinceTouchBars || 0) <= MAX_AUTO_ENTRY_SIGNAL_BARS)
+    .filter((candidate) => (candidate.activeSignal?.flowConfirmations || 0) >= 2)
+    .filter((candidate) => (candidate.activeSignal?.retestCount || 0) <= 2)
+    .filter((candidate) => candidate.activeSignal?.higherTimeframeConfirmed)
+    .filter(
+      (candidate) =>
+        !Number.isFinite(candidate.activeSignal?.extensionFromTouch) ||
+        candidate.activeSignal.extensionFromTouch <= candidate.latestAtr * MAX_POST_TOUCH_EXTENSION_ATR
+    )
     .filter(candidateIsAtLiveEntry)
     .sort((left, right) => {
       const rightSeen = right.identifiedAt || right.activeSignal?.detectedAt || 0;
@@ -3135,6 +3157,10 @@ async function fetchDirectSnapshot(token) {
       `https://fapi.binance.com/fapi/v1/klines?symbol=${resolved.symbol}&interval=${STRATEGY_INTERVAL}&limit=240`,
       "Klines"
     ),
+    fetchDirectJson(
+      `https://fapi.binance.com/fapi/v1/klines?symbol=${resolved.symbol}&interval=${HIGHER_TIMEFRAME_INTERVAL}&limit=180`,
+      "Higher timeframe klines"
+    ),
     fetchDirectJson(`https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=${resolved.symbol}`, "Ticker"),
     fetchDirectJson(`https://fapi.binance.com/fapi/v1/depth?symbol=${resolved.symbol}&limit=100`, "Depth"),
     fetchDirectJson(`https://fapi.binance.com/fapi/v1/aggTrades?symbol=${resolved.symbol}&limit=400`, "Trades"),
@@ -3155,6 +3181,7 @@ async function fetchDirectSnapshot(token) {
 
   const [
     klinesResult,
+    higherTimeframeKlinesResult,
     tickerResult,
     depthResult,
     tradesResult,
@@ -3165,12 +3192,17 @@ async function fetchDirectSnapshot(token) {
   ] = requests;
 
   let candles;
+  let candles4h;
   let ticker;
   let depth;
   let trades;
 
   if (klinesResult.status === "fulfilled" && tickerResult.status === "fulfilled") {
     candles = klinesResult.value.map(mapKlineEntry);
+    candles4h =
+      higherTimeframeKlinesResult.status === "fulfilled"
+        ? higherTimeframeKlinesResult.value.map(mapKlineEntry)
+        : aggregateCandles(candles, 4);
     ticker = tickerResult.value;
     depth = depthResult.status === "fulfilled" ? depthResult.value : { bids: [], asks: [] };
     trades = tradesResult.status === "fulfilled" ? tradesResult.value : [];
@@ -3180,6 +3212,7 @@ async function fetchDirectSnapshot(token) {
       throw new Error(`Core perpetual market data is unavailable for ${resolved.symbol}.`);
     }
     candles = spotCore.candles;
+    candles4h = aggregateCandles(candles, 4);
     ticker = spotCore.ticker;
     depth = spotCore.depth;
     trades = spotCore.trades;
@@ -3191,6 +3224,7 @@ async function fetchDirectSnapshot(token) {
     baseAsset: resolved.baseAsset,
     pricePrecision: resolved.pricePrecision,
     candles,
+    candles4h,
     ticker,
     depth,
     trades,
@@ -3228,6 +3262,34 @@ async function mapWithConcurrency(items, concurrency, mapper) {
 
 function buildTickerLookup(tickers) {
   return new Map(tickers.map((entry) => [entry.symbol, entry]));
+}
+
+function aggregateCandles(candles, bucketSize) {
+  if (!Array.isArray(candles) || !candles.length || bucketSize <= 1) return candles || [];
+  const aggregated = [];
+
+  for (let index = 0; index < candles.length; index += bucketSize) {
+    const bucket = candles.slice(index, index + bucketSize).filter(Boolean);
+    if (!bucket.length) continue;
+    const open = bucket[0];
+    const close = bucket[bucket.length - 1];
+    aggregated.push({
+      time: open.time,
+      open: open.open,
+      high: Math.max(...bucket.map((entry) => Number(entry.high) || Number.NEGATIVE_INFINITY)),
+      low: Math.min(...bucket.map((entry) => Number(entry.low) || Number.POSITIVE_INFINITY)),
+      close: close.close,
+      volume: bucket.reduce((sum, entry) => sum + (Number(entry.volume) || 0), 0),
+    });
+  }
+
+  return aggregated.filter(
+    (candle) =>
+      Number.isFinite(candle.open) &&
+      Number.isFinite(candle.high) &&
+      Number.isFinite(candle.low) &&
+      Number.isFinite(candle.close)
+  );
 }
 
 function selectUniverseBatch(universe) {
@@ -3294,6 +3356,81 @@ function rangePosition(candle, side) {
   return (candle.high - candle.close) / candleRange;
 }
 
+function emaSlopeAligned(series, index, side, atrValue, lookback = EMA_SLOPE_LOOKBACK) {
+  let supportive = 0;
+  let comparisons = 0;
+  let netChange = 0;
+  const minimumDelta = Math.max((Number(atrValue) || 0) * 0.015, 0);
+
+  for (let cursor = Math.max(1, index - lookback + 1); cursor <= index; cursor += 1) {
+    const current = series[cursor];
+    const previous = series[cursor - 1];
+    if (!Number.isFinite(current) || !Number.isFinite(previous)) continue;
+    const delta = current - previous;
+    netChange += delta;
+    comparisons += 1;
+    if (side === "Long" ? delta >= -minimumDelta : delta <= minimumDelta) supportive += 1;
+  }
+
+  if (comparisons < 3) return false;
+  if (supportive < comparisons - 1) return false;
+  return side === "Long" ? netChange > minimumDelta * 2 : netChange < -minimumDelta * 2;
+}
+
+function wickRejectedLevel(candle, level, side, tolerance) {
+  if (!Number.isFinite(level)) return false;
+  const range = Math.max(candle.high - candle.low, 0.0000001);
+  const body = Math.abs(candle.close - candle.open);
+  const lowerWick = Math.max(Math.min(candle.open, candle.close) - candle.low, 0);
+  const upperWick = Math.max(candle.high - Math.max(candle.open, candle.close), 0);
+  const reclaimBuffer = Math.max(tolerance * 0.12, range * 0.08);
+
+  if (side === "Long") {
+    return candle.low <= level + tolerance && candle.close >= level + reclaimBuffer && lowerWick > body * 0.65;
+  }
+
+  return candle.high >= level - tolerance && candle.close <= level - reclaimBuffer && upperWick > body * 0.65;
+}
+
+function countFlowConfirmations(side, tradeSummary, takerSummary, depthSummary) {
+  let confirmations = 0;
+  if (side === "Long") {
+    if (tradeSummary.cvdSlope > 0) confirmations += 1;
+    if (takerSummary.latestRatio > 1.01) confirmations += 1;
+    if (depthSummary.imbalance > 0.01) confirmations += 1;
+  } else {
+    if (tradeSummary.cvdSlope < 0) confirmations += 1;
+    if (takerSummary.latestRatio < 0.99) confirmations += 1;
+    if (depthSummary.imbalance < -0.01) confirmations += 1;
+  }
+  return confirmations;
+}
+
+function countLevelRetests(candles, level, tolerance, endIndex, window = 36) {
+  if (!Number.isFinite(level)) return 0;
+  let touches = 0;
+  let inTouch = false;
+  const start = Math.max(0, endIndex - window);
+
+  for (let index = start; index <= endIndex; index += 1) {
+    const touched = touchesLevel(candles[index], level, tolerance);
+    if (touched && !inTouch) touches += 1;
+    inTouch = touched;
+  }
+
+  return touches;
+}
+
+function postTouchExtension(candles, startIndex, endIndex, level, side) {
+  if (!Number.isFinite(level) || endIndex <= startIndex) return 0;
+  const segment = candles.slice(startIndex + 1, endIndex + 1);
+  if (!segment.length) return 0;
+  if (side === "Long") {
+    return Math.max(...segment.map((entry) => Math.max((Number(entry.high) || level) - level, 0)));
+  }
+  return Math.max(...segment.map((entry) => Math.max(level - (Number(entry.low) || level), 0)));
+}
+
 function buildSetupBias(currentPrice, latestEma20, latestEma50, latestRsi) {
   let score = 0;
   score += currentPrice > latestEma20 ? 10 : -10;
@@ -3307,16 +3444,27 @@ function buildSetupBias(currentPrice, latestEma20, latestEma50, latestRsi) {
 
 function buildTradezSignals(snapshot, quoteVolume = 0) {
   const candles = (snapshot.candles || []).map((candle) => ({ ...candle }));
+  const higherTimeframeCandles =
+    Array.isArray(snapshot.candles4h) && snapshot.candles4h.length
+      ? snapshot.candles4h.map((candle) => ({ ...candle }))
+      : aggregateCandles(candles, 4);
   const closes = candles.map((candle) => candle.close);
+  const higherTimeframeCloses = higherTimeframeCandles.map((candle) => candle.close);
   const currentPrice = Number(snapshot.premiumIndex?.markPrice) || Number(snapshot.ticker?.lastPrice) || closes[closes.length - 1] || 0;
   const ema20Series = ema(closes, 20);
   const ema50Series = ema(closes, 50);
   const rsiSeries = rsi(closes, 14);
   const atrSeries = atr(candles, 14);
+  const higherTimeframeEma20Series = ema(higherTimeframeCloses, 20);
+  const higherTimeframeEma50Series = ema(higherTimeframeCloses, 50);
+  const higherTimeframeRsiSeries = rsi(higherTimeframeCloses, 14);
   const latestEma20 = latestDefinedValue(ema20Series) ?? currentPrice;
   const latestEma50 = latestDefinedValue(ema50Series) ?? currentPrice;
   const latestRsi = latestDefinedValue(rsiSeries) ?? 50;
   const latestAtr = latestDefinedValue(atrSeries) ?? currentPrice * 0.01;
+  const higherTimeframeEma20 = latestDefinedValue(higherTimeframeEma20Series) ?? latestEma20;
+  const higherTimeframeEma50 = latestDefinedValue(higherTimeframeEma50Series) ?? latestEma50;
+  const higherTimeframeRsi = latestDefinedValue(higherTimeframeRsiSeries) ?? latestRsi;
   const supportResistance = computeSupportResistance(candles, currentPrice, latestAtr);
   const tradeSummary = analyzeTradeTape(snapshot.trades || []);
   const depthSummary = analyzeOrderbook(snapshot.depth || { bids: [], asks: [] }, currentPrice);
@@ -3324,10 +3472,14 @@ function buildTradezSignals(snapshot, quoteVolume = 0) {
   const oiHistory = (snapshot.openInterestHistory || []).map((entry) => Number(entry.sumOpenInterest));
   const oiChange1h = pctChangeFromLookback(oiHistory, 12);
   const fundingRate = (Number(snapshot.premiumIndex?.lastFundingRate) || 0) * 100;
-  const buyerLed =
-    tradeSummary.cvdSlope > 0 && takerSummary.latestRatio > 1.01 && depthSummary.imbalance > 0.01;
-  const sellerLed =
-    tradeSummary.cvdSlope < 0 && takerSummary.latestRatio < 0.99 && depthSummary.imbalance < -0.01;
+  const longFlowConfirmations = countFlowConfirmations("Long", tradeSummary, takerSummary, depthSummary);
+  const shortFlowConfirmations = countFlowConfirmations("Short", tradeSummary, takerSummary, depthSummary);
+  const buyerLed = longFlowConfirmations === 3;
+  const sellerLed = shortFlowConfirmations === 3;
+  const higherTimeframeLongConfirmed =
+    higherTimeframeEma20 > higherTimeframeEma50 && higherTimeframeRsi >= 50 && higherTimeframeRsi <= 72;
+  const higherTimeframeShortConfirmed =
+    higherTimeframeEma20 < higherTimeframeEma50 && higherTimeframeRsi <= 50 && higherTimeframeRsi >= 28;
   const bias = buildSetupBias(currentPrice, latestEma20, latestEma50, latestRsi);
   const completedLimit = Math.max(55, candles.length - 10);
   const markers = [];
@@ -3349,6 +3501,7 @@ function buildTradezSignals(snapshot, quoteVolume = 0) {
     const bullishTrend = ema20Value > ema50Value;
     const bearishTrend = ema20Value < ema50Value;
     const tolerance = Math.max(atrValue * 0.16, candle.close * 0.0012, supportResistance.bandWidth * 0.45);
+    const emaSeparationAtr = Math.abs(ema20Value - ema50Value) / Math.max(atrValue, 0.0000001);
     const touch20 = candle.low <= ema20Value + tolerance && candle.high >= ema20Value - tolerance;
     const touch50 = candle.low <= ema50Value + tolerance && candle.high >= ema50Value - tolerance;
     const touchS1 = touchesLevel(candle, support1, tolerance);
@@ -3367,9 +3520,24 @@ function buildTradezSignals(snapshot, quoteVolume = 0) {
       volumeFactor >= 1.05 &&
       rangePosition(candle, "Short") >= 0.56 &&
       (!nextCandle || nextCandle.close <= candle.close * 1.004);
-
-    const longSetup = bullishTrend && (touchS1 || touchS2) && bullishVolumeConfirmed;
-    const shortSetup = bearishTrend && (touchR1 || touchR2) && bearishVolumeConfirmed;
+    const longSlopeAligned = emaSlopeAligned(ema20Series, index, "Long", atrValue);
+    const shortSlopeAligned = emaSlopeAligned(ema20Series, index, "Short", atrValue);
+    const longSetup =
+      bullishTrend &&
+      higherTimeframeLongConfirmed &&
+      longSlopeAligned &&
+      emaSeparationAtr >= MIN_EMA_SEPARATION_ATR &&
+      longFlowConfirmations >= 2 &&
+      (touchS1 || touchS2) &&
+      bullishVolumeConfirmed;
+    const shortSetup =
+      bearishTrend &&
+      higherTimeframeShortConfirmed &&
+      shortSlopeAligned &&
+      emaSeparationAtr >= MIN_EMA_SEPARATION_ATR &&
+      shortFlowConfirmations >= 2 &&
+      (touchR1 || touchR2) &&
+      bearishVolumeConfirmed;
 
     if (!longSetup && !shortSetup) continue;
 
@@ -3384,6 +3552,9 @@ function buildTradezSignals(snapshot, quoteVolume = 0) {
         : Math.max(candle.high, ema20Value, ema50Value);
     const levelTag = levelLabel(side, useLevelTwo);
     const confluenceLabel = buildConfluenceLabel(side, useLevelTwo, touch20, touch50);
+    const flowConfirmations = side === "Long" ? longFlowConfirmations : shortFlowConfirmations;
+    const wickRejected = wickRejectedLevel(candle, anchorLevel, side, tolerance);
+    const retestCount = countLevelRetests(candles, anchorLevel, tolerance, index, 40);
     const emaAnchorLow = Math.min(
       anchorLevel,
       touch20 ? ema20Value : anchorLevel,
@@ -3420,11 +3591,17 @@ function buildTradezSignals(snapshot, quoteVolume = 0) {
     const rr = Math.abs(tp1 - entryReference) / Math.max(risk, 0.0000001);
     const recentDistancePct = Math.abs(pctChange(entryReference, currentPrice));
     const sinceTouchBars = candles.length - 2 - index;
+    const extensionFromTouch = postTouchExtension(candles, index, candles.length - 2, anchorLevel, side);
+    const staleSetup = sinceTouchBars > MAX_STALE_SIGNAL_BARS;
+    const overextendedSetup = extensionFromTouch > atrValue * MAX_POST_TOUCH_EXTENSION_ATR;
+    if (!wickRejected || retestCount > 2 || staleSetup || overextendedSetup || flowConfirmations < 2) continue;
     const emaConfluenceScore = touch20 && touch50 ? 18 : touch50 ? 14 : touch20 ? 12 : 4;
     let qualityScore = 46;
     qualityScore += side === "Long" ? 18 : 18;
     qualityScore += useLevelTwo ? 20 : 12;
     qualityScore += emaConfluenceScore;
+    qualityScore += emaSeparationAtr >= 0.5 ? 12 : emaSeparationAtr >= 0.32 ? 7 : -10;
+    qualityScore += flowConfirmations === 3 ? 12 : 4;
     qualityScore += (side === "Long" ? candle.close > candle.open : candle.close < candle.open) ? 10 : 0;
     qualityScore += rangePosition(candle, side) >= 0.62 ? 8 : -6;
     qualityScore += volumeFactor >= 1.4 ? 16 : volumeFactor >= 1.15 ? 10 : -12;
@@ -3447,6 +3624,15 @@ function buildTradezSignals(snapshot, quoteVolume = 0) {
     qualityScore += rr >= 1.8 ? 16 : rr >= 1.2 ? 8 : -10;
     qualityScore += room / Math.max(risk, 0.0000001) >= 1.2 ? 8 : -10;
     qualityScore -= sinceTouchBars * 4;
+    qualityScore += wickRejected ? 10 : -14;
+    qualityScore += retestCount === 1 ? 8 : retestCount === 2 ? 2 : -18;
+    qualityScore += side === "Long"
+      ? higherTimeframeLongConfirmed
+        ? 10
+        : -18
+      : higherTimeframeShortConfirmed
+        ? 10
+        : -18;
     if (recentDistancePct > 1.8) qualityScore -= 14;
     if (Math.abs(fundingRate) > 0.04 && ((side === "Long" && fundingRate > 0) || (side === "Short" && fundingRate < 0))) {
       qualityScore -= 6;
@@ -3498,6 +3684,13 @@ function buildTradezSignals(snapshot, quoteVolume = 0) {
       rr,
       sinceTouchBars,
       recentDistancePct,
+      retestCount,
+      flowConfirmations,
+      wickRejected,
+      emaSeparationAtr,
+      higherTimeframeConfirmed:
+        side === "Long" ? higherTimeframeLongConfirmed : higherTimeframeShortConfirmed,
+      extensionFromTouch,
       volumeFactor,
       moveStopToEntryAfterTp1: true,
       note:
@@ -3507,6 +3700,18 @@ function buildTradezSignals(snapshot, quoteVolume = 0) {
       reasonParts: [
         useLevelTwo ? `${levelTag} strong` : `${levelTag} good`,
         touch20 || touch50 ? `EMA confluence ${touch20 && touch50 ? "20/50" : touch50 ? "50" : "20"}` : "level-led setup",
+        "EMA20 slope aligned",
+        `EMA separation ${emaSeparationAtr.toFixed(2)} ATR`,
+        "wick rejection confirmed",
+        `flow ${flowConfirmations}/3`,
+        retestCount <= 1 ? "first retest" : "second retest",
+        side === "Long"
+          ? higherTimeframeLongConfirmed
+            ? "4H trend confirmed"
+            : "4H trend mixed"
+          : higherTimeframeShortConfirmed
+            ? "4H trend confirmed"
+            : "4H trend mixed",
         hasGoodTradingVolume(quoteVolume) ? "good liquidity" : "thin liquidity",
         volumeFactor >= 1.15 ? "buy/sell volume confirmed" : "volume soft",
         side === "Long" ? (tradeSummary.cvdSlope > 0 ? "CVD supportive" : "CVD soft") : tradeSummary.cvdSlope < 0 ? "CVD supportive" : "CVD soft",
@@ -3523,9 +3728,12 @@ function buildTradezSignals(snapshot, quoteVolume = 0) {
       text: `${side === "Long" ? "L" : "S"}${useLevelTwo ? "2" : "1"}`,
     });
 
-    if (!activeSignal && signal.sinceTouchBars <= 3) {
+    if (!activeSignal && signal.sinceTouchBars <= MAX_STALE_SIGNAL_BARS) {
       activeSignal = signal;
-    } else if (signal.sinceTouchBars <= 3 && signal.qualityScore > (activeSignal?.qualityScore || 0)) {
+    } else if (
+      signal.sinceTouchBars <= MAX_STALE_SIGNAL_BARS &&
+      signal.qualityScore > (activeSignal?.qualityScore || 0)
+    ) {
       activeSignal = signal;
     }
   }
