@@ -4231,6 +4231,55 @@ body.token-analysis-page .chart-frame {
     #08101d;
 }
 
+body.token-analysis-page .token-analysis-summary-tabs {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+body.token-analysis-page .token-analysis-summary-head h3 {
+  margin: 0;
+  color: #f8fafc;
+  font-size: 1.2rem;
+  line-height: 1.08;
+}
+
+body.token-analysis-page .token-analysis-summary-tablist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px;
+  border-radius: 20px;
+  background: rgba(7, 13, 24, 0.84);
+  box-shadow: inset 0 0 0 1px rgba(34, 211, 238, 0.08);
+}
+
+body.token-analysis-page .token-analysis-summary-tab {
+  min-height: 42px;
+  padding-inline: 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(30, 41, 59, 0.82);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 30%),
+    rgba(11, 18, 30, 0.82);
+  color: #cbd5e1;
+}
+
+body.token-analysis-page .token-analysis-summary-tab.is-active {
+  border-color: rgba(34, 211, 238, 0.34);
+  background:
+    linear-gradient(180deg, rgba(34, 211, 238, 0.14), rgba(34, 211, 238, 0.07)),
+    rgba(14, 24, 38, 0.96);
+  color: #ecfeff;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 10px 22px rgba(34, 211, 238, 0.12);
+}
+
+body.token-analysis-page .token-analysis-summary-panel {
+  min-width: 0;
+}
+
 body.token-analysis-page .chart-hud {
   top: 18px;
   left: 18px;
@@ -4501,6 +4550,15 @@ body.token-analysis-page .token-analysis-advanced-panel {
 
   body.token-analysis-page .chart-frame {
     min-height: 420px;
+  }
+
+  body.token-analysis-page .token-analysis-summary-tablist {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  body.token-analysis-page .token-analysis-summary-tab {
+    width: 100%;
   }
 
   body.token-analysis-page .timeframe-switcher {

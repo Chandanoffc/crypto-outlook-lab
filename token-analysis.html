@@ -200,6 +200,203 @@
             </div>
           </div>
 
+          <section class="token-analysis-summary-tabs" aria-label="AI Research Summary">
+            <div class="token-analysis-summary-head">
+              <div>
+                <p class="panel-label">AI Research Summary</p>
+                <h3>What matters at a glance</h3>
+              </div>
+            </div>
+
+            <div
+              class="token-analysis-summary-tablist"
+              role="tablist"
+              aria-label="AI Research Summary Tabs"
+            >
+              <button
+                id="summary-tab-past"
+                class="mini-button token-analysis-summary-tab is-active"
+                type="button"
+                role="tab"
+                aria-selected="true"
+                aria-controls="summary-panel-past"
+                data-summary-tab="past"
+              >
+                Past Sessions
+              </button>
+              <button
+                id="summary-tab-short-term"
+                class="mini-button token-analysis-summary-tab"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                aria-controls="summary-panel-short-term"
+                data-summary-tab="short-term"
+              >
+                Short Term
+              </button>
+              <button
+                id="summary-tab-long-term"
+                class="mini-button token-analysis-summary-tab"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                aria-controls="summary-panel-long-term"
+                data-summary-tab="long-term"
+              >
+                Long Term
+              </button>
+              <button
+                id="summary-tab-technical"
+                class="mini-button token-analysis-summary-tab"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                aria-controls="summary-panel-technical"
+                data-summary-tab="technical"
+              >
+                Technical
+              </button>
+              <button
+                id="summary-tab-prediction"
+                class="mini-button token-analysis-summary-tab"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                aria-controls="summary-panel-prediction"
+                data-summary-tab="prediction"
+              >
+                Prediction
+              </button>
+              <button
+                id="summary-tab-news"
+                class="mini-button token-analysis-summary-tab"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                aria-controls="summary-panel-news"
+                data-summary-tab="news"
+              >
+                News Context
+              </button>
+            </div>
+
+            <div class="token-analysis-summary-panels">
+              <article
+                id="summary-panel-past"
+                class="subpanel token-analysis-summary-panel"
+                role="tabpanel"
+                aria-labelledby="summary-tab-past"
+                data-summary-panel="past"
+              >
+                <div class="panel-head-inline">
+                  <div>
+                    <p class="panel-label">Past Sessions</p>
+                    <h3>What the token has done</h3>
+                  </div>
+                </div>
+                <p id="token-past-summary" class="research-copy">
+                  Recent price-action context will appear here after the token loads.
+                </p>
+              </article>
+
+              <article
+                id="summary-panel-short-term"
+                class="subpanel token-analysis-summary-panel"
+                role="tabpanel"
+                aria-labelledby="summary-tab-short-term"
+                data-summary-panel="short-term"
+                hidden
+              >
+                <div class="panel-head-inline">
+                  <div>
+                    <p class="panel-label">Short Term</p>
+                    <h3>Next few hours to days</h3>
+                  </div>
+                </div>
+                <p id="token-short-term-summary" class="research-copy">
+                  Short-term expectation will appear after the token loads.
+                </p>
+              </article>
+
+              <article
+                id="summary-panel-long-term"
+                class="subpanel token-analysis-summary-panel"
+                role="tabpanel"
+                aria-labelledby="summary-tab-long-term"
+                data-summary-panel="long-term"
+                hidden
+              >
+                <div class="panel-head-inline">
+                  <div>
+                    <p class="panel-label">Long Term</p>
+                    <h3>Next days to weeks</h3>
+                  </div>
+                </div>
+                <p id="token-long-term-summary" class="research-copy">
+                  Long-term expectation will appear after the token loads.
+                </p>
+              </article>
+
+              <article
+                id="summary-panel-technical"
+                class="subpanel token-analysis-summary-panel"
+                role="tabpanel"
+                aria-labelledby="summary-tab-technical"
+                data-summary-panel="technical"
+                hidden
+              >
+                <div class="panel-head-inline">
+                  <div>
+                    <p class="panel-label">Technical Analysis</p>
+                    <h3>Trend, momentum, and confirmation</h3>
+                  </div>
+                </div>
+                <p id="token-technical-summary" class="research-copy">
+                  Technical detail will populate after the token snapshot is ready.
+                </p>
+              </article>
+
+              <article
+                id="summary-panel-prediction"
+                class="subpanel token-analysis-summary-panel"
+                role="tabpanel"
+                aria-labelledby="summary-tab-prediction"
+                data-summary-panel="prediction"
+                hidden
+              >
+                <div class="panel-head-inline">
+                  <div>
+                    <p class="panel-label">Platform Prediction</p>
+                    <h3>What Soloris expects next</h3>
+                  </div>
+                </div>
+                <p id="token-prediction-summary" class="research-copy">
+                  The model prediction will appear after analysis runs.
+                </p>
+              </article>
+
+              <article
+                id="summary-panel-news"
+                class="subpanel token-analysis-summary-panel"
+                role="tabpanel"
+                aria-labelledby="summary-tab-news"
+                data-summary-panel="news"
+                hidden
+              >
+                <div class="panel-head-inline">
+                  <div>
+                    <p class="panel-label">News Context</p>
+                    <h3>Catalysts moving the token</h3>
+                  </div>
+                </div>
+                <p id="token-news-summary" class="research-copy">
+                  News context will appear here after analysis runs.
+                </p>
+              </article>
+            </div>
+          </section>
+
           <div class="level-badges token-analysis-level-badges">
             <div class="level-stack">
               <span class="stack-label">Support Fields</span>
@@ -298,89 +495,6 @@
             advice.
           </div>
         </aside>
-
-        <section class="panel workspace-panel token-analysis-brief-panel">
-          <div class="panel-head">
-            <div>
-              <p class="panel-label">AI Research Summary</p>
-              <h2>What matters at a glance</h2>
-            </div>
-          </div>
-
-          <div class="analysis-brief-grid">
-            <article class="subpanel">
-              <div class="panel-head-inline">
-                <div>
-                  <p class="panel-label">Past Sessions</p>
-                  <h3>What the token has done</h3>
-                </div>
-              </div>
-              <p id="token-past-summary" class="research-copy">
-                Recent price-action context will appear here after the token loads.
-              </p>
-            </article>
-
-            <article class="subpanel">
-              <div class="panel-head-inline">
-                <div>
-                  <p class="panel-label">Short Term</p>
-                  <h3>Next few hours to days</h3>
-                </div>
-              </div>
-              <p id="token-short-term-summary" class="research-copy">
-                Short-term expectation will appear after the token loads.
-              </p>
-            </article>
-
-            <article class="subpanel">
-              <div class="panel-head-inline">
-                <div>
-                  <p class="panel-label">Long Term</p>
-                  <h3>Next days to weeks</h3>
-                </div>
-              </div>
-              <p id="token-long-term-summary" class="research-copy">
-                Long-term expectation will appear after the token loads.
-              </p>
-            </article>
-
-            <article class="subpanel">
-              <div class="panel-head-inline">
-                <div>
-                  <p class="panel-label">Technical Analysis</p>
-                  <h3>Trend, momentum, and confirmation</h3>
-                </div>
-              </div>
-              <p id="token-technical-summary" class="research-copy">
-                Technical detail will populate after the token snapshot is ready.
-              </p>
-            </article>
-
-            <article class="subpanel">
-              <div class="panel-head-inline">
-                <div>
-                  <p class="panel-label">Platform Prediction</p>
-                  <h3>What Soloris expects next</h3>
-                </div>
-              </div>
-              <p id="token-prediction-summary" class="research-copy">
-                The model prediction will appear after analysis runs.
-              </p>
-            </article>
-
-            <article class="subpanel">
-              <div class="panel-head-inline">
-                <div>
-                  <p class="panel-label">News Context</p>
-                  <h3>Catalysts moving the token</h3>
-                </div>
-              </div>
-              <p id="token-news-summary" class="research-copy">
-                News context will appear here after analysis runs.
-              </p>
-            </article>
-          </div>
-        </section>
 
         <section class="panel workspace-panel token-analysis-advanced-panel" hidden>
           <div class="panel-head">
