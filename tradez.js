@@ -37,7 +37,7 @@ const EMA_SLOPE_LOOKBACK = 4;
 const MIN_EMA_SEPARATION_ATR = 0.2;
 const MAX_STALE_SIGNAL_BARS = 3;
 const MAX_AUTO_ENTRY_SIGNAL_BARS = 2;
-const MAX_POST_TOUCH_EXTENSION_ATR = 1.75;
+const MAX_POST_TOUCH_EXTENSION_ATR = 1.5;
 const MIN_EXECUTION_RR = 1.4;
 const TRADEZ_AUTO_EXECUTION_THRESHOLD_BUFFER = 12;
 const TRADEZ_AUTO_MIN_EXECUTION_THRESHOLD = 92;
@@ -3477,9 +3477,9 @@ function buildTradezSignals(snapshot, quoteVolume = 0) {
   const buyerLed = longFlowConfirmations === 3;
   const sellerLed = shortFlowConfirmations === 3;
   const higherTimeframeLongConfirmed =
-    higherTimeframeEma20 > higherTimeframeEma50 && higherTimeframeRsi >= 50 && higherTimeframeRsi <= 72;
+    higherTimeframeEma20 > higherTimeframeEma50 && higherTimeframeRsi > 50;
   const higherTimeframeShortConfirmed =
-    higherTimeframeEma20 < higherTimeframeEma50 && higherTimeframeRsi <= 50 && higherTimeframeRsi >= 28;
+    higherTimeframeEma20 < higherTimeframeEma50 && higherTimeframeRsi < 50;
   const bias = buildSetupBias(currentPrice, latestEma20, latestEma50, latestRsi);
   const completedLimit = Math.max(55, candles.length - 10);
   const markers = [];
