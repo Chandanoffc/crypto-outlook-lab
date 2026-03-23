@@ -5878,3 +5878,146 @@ body.token-analysis-page .panel-outlook .signal-item {
 body.token-analysis-page .panel-outlook .signal-item + .signal-item {
   margin-top: 2px;
 }
+
+/* Final premium refinement */
+body.shell-page:not(.tradez-page) .app-bar,
+body.tradez-page .app-bar {
+  border-color: rgba(100, 116, 139, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent 36%),
+    rgba(15, 19, 27, 0.64);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.028),
+    0 8px 20px rgba(2, 6, 23, 0.1);
+}
+
+body.shell-page:not(.tradez-page) .shell-top-shell,
+body.tradez-page .tradez-top-shell {
+  gap: 20px;
+}
+
+body.shell-page:not(.tradez-page) .hero-shell,
+body.tradez-page .tradez-hero-shell {
+  gap: 16px;
+  padding: 15px 18px;
+}
+
+body.shell-page:not(.tradez-page) .hero-copy,
+body.tradez-page .hero-copy,
+body.token-analysis-page .hero-copy {
+  gap: 4px;
+}
+
+body.shell-page:not(.tradez-page) .hero-copy h1,
+body.tradez-page .hero-copy h1 {
+  line-height: 1;
+}
+
+body.shell-page:not(.tradez-page) .hero-copy .subtitle,
+body.tradez-page .hero-copy .subtitle,
+body.token-analysis-page .hero-copy .subtitle {
+  margin-top: 2px;
+}
+
+body.token-analysis-page .shell-hero-shell {
+  padding: 18px 20px 14px;
+}
+
+body.token-analysis-page .token-analysis-hero-copy {
+  margin-bottom: 10px;
+}
+
+body.token-analysis-page .hero-form {
+  padding: 8px;
+}
+
+body.shell-page:not(.tradez-page) .panel,
+body.shell-page:not(.tradez-page) .metric-strip,
+body.shell-page:not(.tradez-page) .subpanel,
+body.tradez-page .panel,
+body.tradez-page .metric-strip,
+body.tradez-page .subpanel {
+  border-color: rgba(100, 116, 139, 0.1);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.012), transparent 34%),
+    rgba(17, 21, 29, 0.82);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.02),
+    0 10px 22px rgba(2, 6, 23, 0.08);
+}
+
+body.shell-page:not(.tradez-page) .headline-chip,
+body.shell-page:not(.tradez-page) .metric-card,
+body.shell-page:not(.tradez-page) .analysis-card,
+body.shell-page:not(.tradez-page) .setup-card,
+body.shell-page:not(.tradez-page) .news-item,
+body.shell-page:not(.tradez-page) .signal-item,
+body.shell-page:not(.tradez-page) .table-row,
+body.shell-page:not(.tradez-page) .chart-hud-item,
+body.shell-page:not(.tradez-page) .timeframe-inline,
+body.shell-page:not(.tradez-page) .trade-idea-card,
+body.shell-page:not(.tradez-page) .trade-idea-stat,
+body.shell-page:not(.tradez-page) .stack-card,
+body.tradez-page .headline-chip,
+body.tradez-page .metric-card,
+body.tradez-page .analysis-card,
+body.tradez-page .setup-card,
+body.tradez-page .news-item,
+body.tradez-page .signal-item,
+body.tradez-page .table-row,
+body.tradez-page .chart-hud-item,
+body.tradez-page .timeframe-inline,
+body.tradez-page .trade-idea-card,
+body.tradez-page .trade-idea-stat,
+body.tradez-page .stack-card,
+body.token-analysis-page .outlook-copy,
+body.token-analysis-page .panel-outlook .signal-item {
+  border-color: rgba(100, 116, 139, 0.09);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.008), transparent 38%),
+    rgba(10, 14, 20, 0.68);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.015),
+    0 6px 14px rgba(2, 6, 23, 0.06);
+}
+
+body.token-analysis-page .panel-outlook,
+body.tradez-page .tradez-side-stack,
+body.main-shell-page .panel-outlook,
+body.auto-shell-page .panel-engine-compact {
+  gap: 8px;
+}
+
+body.token-analysis-page .panel-outlook {
+  padding: 13px;
+}
+
+body.token-analysis-page .panel-outlook .signal-list {
+  gap: 8px;
+}
+
+body.shell-page:not(.tradez-page) .token-form button,
+body.tradez-page .token-form button {
+  border-color: rgba(34, 211, 238, 0.18);
+  background:
+    linear-gradient(180deg, rgba(70, 216, 239, 0.26), rgba(28, 136, 154, 0.18)),
+    rgba(11, 16, 23, 0.98);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 10px 20px rgba(2, 6, 23, 0.1);
+}
+
+body.shell-page:not(.tradez-page) .token-form button:hover,
+body.tradez-page .token-form button:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 12px 22px rgba(2, 6, 23, 0.12);
+}
+
+body.shell-page:not(.tradez-page) .status-banner,
+body.tradez-page .status-banner,
+body.shell-page:not(.tradez-page) .chart-shell,
+body.tradez-page .chart-shell {
+  box-shadow: none;
+}
