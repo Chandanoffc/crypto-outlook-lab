@@ -18,7 +18,7 @@ const DEFAULT_LEVERAGE = 5;
 const TARGET_MARGIN_RETURN_PCT = 22;
 const STOP_MARGIN_RETURN_PCT = 10;
 const TRADE_COOLDOWN_MS = 4 * 60 * 1000;
-const STOP_LOSS_COOLDOWN_MS = 20 * 60 * 1000;
+const STOP_LOSS_COOLDOWN_MS = 2 * 60 * 60 * 1000;
 const HIGH_VOLUME_FLOOR = 100_000_000;
 const MIN_RR = 1.6;
 const MIN_PROJECTED_MOVE_PCT = 2.1;
@@ -1714,7 +1714,11 @@ function analyzeSnapshot(snapshot) {
   const ema50SlopeAligned = bias.tone === "up" ? ema50Slope > -0.01 : ema50Slope < 0.01;
   const crowdedLong = fundingRate > 0.03 && oiChange1h > 0 && globalLongShortRatio > 1.12;
   const crowdedShort = fundingRate < -0.03 && oiChange1h > 0 && globalLongShortRatio < 0.88;
+  const crowdedHardRejectLong = fundingRate > 0.05 && oiChange1h > 0 && globalLongShortRatio > 1.18;
+  const crowdedHardRejectShort = fundingRate < -0.05 && oiChange1h > 0 && globalLongShortRatio < 0.82;
   const crowdedContinuation = bias.tone === "up" ? crowdedLong : bias.tone === "down" ? crowdedShort : false;
+  const crowdedHardReject =
+    bias.tone === "up" ? crowdedHardRejectLong : bias.tone === "down" ? crowdedHardRejectShort : false;
   const potentialTrade = buildPotentialTrade({
     currentPrice,
     ema20: ema20Value,
@@ -1772,6 +1776,7 @@ function analyzeSnapshot(snapshot) {
     oiChange1h,
     recentPriceChange,
     crowdedContinuation,
+    crowdedHardReject,
     cvdSlope: tradeSummary.cvdSlope,
     depthImbalance: depthSummary.imbalance,
     takerRatio: takerSummary.latestRatio,
@@ -1805,6 +1810,7 @@ function highQualityCandidates(candidates, threshold) {
         candidate.trade?.nearestTargetRr >= MIN_NEAREST_TARGET_RR &&
         candidate.ema20SlopeAligned &&
         candidate.ema50SlopeAligned &&
+        !candidate.crowdedHardReject &&
         !candidate.compressedStructure &&
         !candidate.lowVolatilityChop &&
         hasGoodTradingVolume(candidate.quoteVolume) &&
@@ -2290,6 +2296,7 @@ function applyCandidateConfirmation(candidate, ticker, confirmation) {
     candidate.cvdSlope < 0 && candidate.takerRatio < 0.99 && candidate.depthImbalance < -0.01;
   const lowerLiquiditySetup = quoteVolume < HIGH_VOLUME_FLOOR * 1.6;
   const crowdedSetup = Boolean(candidate.crowdedContinuation);
+  const crowdedHardReject = Boolean(candidate.crowdedHardReject);
   const htfAgreementHardRejected = alignedCount < 3 || conflictCount > 0;
   const locationQuality = Boolean(candidate.trade?.entryLocationQuality);
   const slopesAligned = Boolean(candidate.ema20SlopeAligned) && Boolean(candidate.ema50SlopeAligned);
@@ -2325,6 +2332,7 @@ function applyCandidateConfirmation(candidate, ticker, confirmation) {
     entryQualityScore -= 12;
   }
   if (crowdedSetup) entryQualityScore -= 16;
+  if (crowdedHardReject) entryQualityScore -= 18;
   entryQualityScore += alignedCount >= 3 ? 20 : alignedCount === 2 ? 8 : -20;
   if (conflictCount > 0) entryQualityScore -= 40;
   entryQualityScore += distanceFromEma20Pct <= 2.5 ? 4 : -10;
@@ -2332,10 +2340,12 @@ function applyCandidateConfirmation(candidate, ticker, confirmation) {
   const requiredQualityGate =
     effectiveHouseQualityGate() +
     (crowdedSetup ? 10 : 0) +
+    (crowdedHardReject ? 8 : 0) +
     (lowerLiquiditySetup ? 6 : 0);
   const requiredEntryScore =
     HOUSE_MIN_ENTRY_SCORE +
     (crowdedSetup ? 4 : 0) +
+    (crowdedHardReject ? 4 : 0) +
     (lowerLiquiditySetup ? 2 : 0);
 
   return {
@@ -2347,6 +2357,7 @@ function applyCandidateConfirmation(candidate, ticker, confirmation) {
     buyerLed,
     sellerLed,
     crowdedSetup,
+    crowdedHardReject,
     lowerLiquiditySetup,
     htfAgreementHardRejected,
     requiredQualityGate,
@@ -2419,6 +2430,7 @@ function buildCoreTrendStrategySignal(candidate) {
     candidate.trade?.nearestTargetRr < MIN_NEAREST_TARGET_RR ||
     !candidate.ema20SlopeAligned ||
     !candidate.ema50SlopeAligned ||
+    candidate.crowdedHardReject ||
     candidate.compressedStructure ||
     candidate.lowVolatilityChop ||
     candidate.trade?.projectedMovePct < MIN_PROJECTED_MOVE_PCT

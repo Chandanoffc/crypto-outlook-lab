@@ -35,10 +35,12 @@ const DEMO_STATUS_SYNC_BATCH = 20;
 const HIGHER_TIMEFRAME_INTERVAL = "4h";
 const EMA_SLOPE_LOOKBACK = 4;
 const MIN_EMA_SEPARATION_ATR = 0.2;
-const MAX_STALE_SIGNAL_BARS = 3;
-const MAX_AUTO_ENTRY_SIGNAL_BARS = 2;
+const MAX_STALE_SIGNAL_BARS = 2;
+const MAX_AUTO_ENTRY_SIGNAL_BARS = 1;
 const MAX_POST_TOUCH_EXTENSION_ATR = 1.5;
-const MIN_EXECUTION_RR = 1.4;
+const MIN_EXECUTION_RR = 1.5;
+const MIN_VISIBLE_SIGNAL_VOLUME_FACTOR = 1.1;
+const MIN_AUTO_EXECUTION_VOLUME_FACTOR = 1.15;
 const TRADEZ_AUTO_EXECUTION_THRESHOLD_BUFFER = 12;
 const TRADEZ_AUTO_MIN_EXECUTION_THRESHOLD = 92;
 const DEFAULT_ALERT_CHANNELS = {
@@ -1989,6 +1991,7 @@ function highQualityTradezAutoCandidates(candidates, threshold) {
     .filter((candidate) => (candidate.activeSignal?.sinceTouchBars || 0) <= MAX_AUTO_ENTRY_SIGNAL_BARS)
     .filter((candidate) => (candidate.activeSignal?.flowConfirmations || 0) >= 2)
     .filter((candidate) => (candidate.activeSignal?.retestCount || 0) <= 2)
+    .filter((candidate) => (candidate.activeSignal?.volumeFactor || 0) >= MIN_AUTO_EXECUTION_VOLUME_FACTOR)
     .filter((candidate) => candidate.activeSignal?.higherTimeframeConfirmed)
     .filter(
       (candidate) =>
@@ -3512,12 +3515,12 @@ function buildTradezSignals(snapshot, quoteVolume = 0) {
     const volumeFactor = averageVolume20 ? candle.volume / averageVolume20 : 1;
     const bullishVolumeConfirmed =
       candle.close > candle.open &&
-      volumeFactor >= 1.05 &&
+      volumeFactor >= MIN_VISIBLE_SIGNAL_VOLUME_FACTOR &&
       rangePosition(candle, "Long") >= 0.56 &&
       (!nextCandle || nextCandle.close >= candle.close * 0.996);
     const bearishVolumeConfirmed =
       candle.close < candle.open &&
-      volumeFactor >= 1.05 &&
+      volumeFactor >= MIN_VISIBLE_SIGNAL_VOLUME_FACTOR &&
       rangePosition(candle, "Short") >= 0.56 &&
       (!nextCandle || nextCandle.close <= candle.close * 1.004);
     const longSlopeAligned = emaSlopeAligned(ema20Series, index, "Long", atrValue);
@@ -3639,7 +3642,7 @@ function buildTradezSignals(snapshot, quoteVolume = 0) {
     }
     const flowAligned = side === "Long" ? buyerLed : sellerLed;
     if (!hasGoodTradingVolume(quoteVolume)) qualityScore -= 18;
-    if (volumeFactor < 1.1) qualityScore -= 12;
+    if (volumeFactor < MIN_VISIBLE_SIGNAL_VOLUME_FACTOR) qualityScore -= 12;
     if (!flowAligned) qualityScore -= 18;
     if (!touch20 && !touch50 && !useLevelTwo) qualityScore -= 10;
     if (side === "Long" && !touch20 && !touch50) qualityScore -= 8;
@@ -3650,7 +3653,7 @@ function buildTradezSignals(snapshot, quoteVolume = 0) {
 
     let qualityCap = 180;
     if (!hasGoodTradingVolume(quoteVolume)) qualityCap = Math.min(qualityCap, 110);
-    if (volumeFactor < 1.1) qualityCap = Math.min(qualityCap, 120);
+    if (volumeFactor < MIN_VISIBLE_SIGNAL_VOLUME_FACTOR) qualityCap = Math.min(qualityCap, 120);
     if (!flowAligned) qualityCap = Math.min(qualityCap, 120);
     if (!touch20 && !touch50 && !useLevelTwo) qualityCap = Math.min(qualityCap, 115);
     const elite =
