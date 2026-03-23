@@ -66,6 +66,8 @@ const MAX_ENTRY_DISTANCE_FROM_EMA20_ATR = 1.15;
 const MAX_ENTRY_DISTANCE_FROM_LEVEL_ATR = 0.95;
 const MIN_EMA_SPREAD_ATR = 0.22;
 const MIN_ATR_PCT_FOR_CONTINUATION = 0.45;
+const MIN_RECENT_BODY_RATIO = 0.33;
+const MAX_RECENT_WICKY_CANDLES = 2;
 
 const dom = {
   autoForm: document.getElementById("auto-form"),
@@ -1153,6 +1155,27 @@ function upperWickRatio(candle) {
   return (candle.high - Math.max(candle.open, candle.close)) / candleRange(candle);
 }
 
+function recentCandleQuality(candles, lookback = 4) {
+  const recent = (candles || []).slice(-lookback).filter(Boolean);
+  if (!recent.length) {
+    return { avgBodyRatio: 0, wickyCount: 0, isWickyChop: true };
+  }
+
+  const avgBodyRatio = average(recent.map((candle) => candleBody(candle) / candleRange(candle)));
+  const wickyCount = recent.filter((candle) => {
+    const upper = upperWickRatio(candle);
+    const lower = lowerWickRatio(candle);
+    const bodyRatio = candleBody(candle) / candleRange(candle);
+    return bodyRatio < 0.35 && (upper > 0.34 || lower > 0.34);
+  }).length;
+
+  return {
+    avgBodyRatio,
+    wickyCount,
+    isWickyChop: avgBodyRatio < MIN_RECENT_BODY_RATIO || wickyCount > MAX_RECENT_WICKY_CANDLES,
+  };
+}
+
 function withinPercent(reference, price, pct) {
   if (!Number.isFinite(reference) || !Number.isFinite(price) || !reference) return false;
   return Math.abs((price - reference) / reference) * 100 <= pct;
@@ -1550,8 +1573,11 @@ function analyzeSnapshot(snapshot) {
   const ema50Slope = slopePercentage(ema50Series, 4);
   const emaSpreadAtr = Math.abs(ema20Value - ema50Value) / Math.max(latestAtr, 0.0000001);
   const atrPct = currentPrice ? (latestAtr / Math.abs(currentPrice)) * 100 : 0;
+  const recentStructure = recentCandleQuality(candles, 4);
   const compressedStructure = emaSpreadAtr < MIN_EMA_SPREAD_ATR;
-  const lowVolatilityChop = atrPct < MIN_ATR_PCT_FOR_CONTINUATION && Math.abs(recentPriceChange) < 0.75;
+  const lowVolatilityChop =
+    (atrPct < MIN_ATR_PCT_FOR_CONTINUATION && Math.abs(recentPriceChange) < 0.75) ||
+    recentStructure.isWickyChop;
   const venueConsensus = buildVenueConsensus(snapshot.venues || []);
   const biasScore = buildBiasScore({
     currentPrice,
@@ -1620,6 +1646,8 @@ function analyzeSnapshot(snapshot) {
     ema50SlopeAligned,
     emaSpreadAtr,
     atrPct,
+    recentBodyRatio: recentStructure.avgBodyRatio,
+    recentWickyCount: recentStructure.wickyCount,
     compressedStructure,
     lowVolatilityChop,
     rsi: latestDefinedValue(rsiSeries) ?? 50,
@@ -2178,6 +2206,9 @@ function applyCandidateConfirmation(candidate, ticker, confirmation) {
   entryQualityScore += candidate.trade?.nearestTargetRr >= MIN_NEAREST_TARGET_RR ? 8 : -18;
   if (candidate.compressedStructure) entryQualityScore -= 16;
   if (candidate.lowVolatilityChop) entryQualityScore -= 18;
+  if (Number.isFinite(candidate.recentBodyRatio) && candidate.recentBodyRatio < MIN_RECENT_BODY_RATIO) {
+    entryQualityScore -= 12;
+  }
   if (crowdedSetup) entryQualityScore -= 16;
   entryQualityScore += alignedCount >= 3 ? 20 : alignedCount === 2 ? 8 : -20;
   if (conflictCount > 0) entryQualityScore -= 40;
