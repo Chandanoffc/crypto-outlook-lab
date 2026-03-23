@@ -18,6 +18,7 @@ const DEFAULT_LEVERAGE = 5;
 const TARGET_MARGIN_RETURN_PCT = 22;
 const STOP_MARGIN_RETURN_PCT = 10;
 const TRADE_COOLDOWN_MS = 4 * 60 * 1000;
+const STOP_LOSS_COOLDOWN_MS = 20 * 60 * 1000;
 const HIGH_VOLUME_FLOOR = 100_000_000;
 const MIN_RR = 1.6;
 const MIN_PROJECTED_MOVE_PCT = 2.1;
@@ -60,6 +61,11 @@ Open on Binance: {binanceLink}`,
 };
 const HOUSE_MIN_ENTRY_SCORE = 18;
 const HOUSE_MIN_REFINED_SCORE = 85;
+const MIN_NEAREST_TARGET_RR = 1.5;
+const MAX_ENTRY_DISTANCE_FROM_EMA20_ATR = 1.15;
+const MAX_ENTRY_DISTANCE_FROM_LEVEL_ATR = 0.95;
+const MIN_EMA_SPREAD_ATR = 0.22;
+const MIN_ATR_PCT_FOR_CONTINUATION = 0.45;
 
 const dom = {
   autoForm: document.getElementById("auto-form"),
@@ -495,6 +501,7 @@ function buildHouseEntryReason(candidate) {
   const emaLabel = candidate.ema20 >= candidate.ema50 ? "EMA20 above EMA50" : "EMA20 below EMA50";
   const confirmation1h = candidate.confirmation?.["1h"]?.label || "Queue";
   const confirmation4h = candidate.confirmation?.["4h"]?.label || "Queue";
+  const modeLabel = candidate.trade?.mode === "breakout" ? "breakout continuation" : "pullback continuation";
   const flowLabel =
     candidate.trade?.stance === "Short"
       ? candidate.cvdSlope < 0
@@ -503,12 +510,13 @@ function buildHouseEntryReason(candidate) {
       : candidate.cvdSlope > 0
         ? "buyer-led flow"
         : "mixed flow";
-  return `${trendLabel} setup with ${emaLabel}, ${confirmation1h} / ${confirmation4h} confirmation, and ${flowLabel}.`;
+  return `${trendLabel} setup in ${modeLabel} mode with ${emaLabel}, ${confirmation1h} / ${confirmation4h} confirmation, and ${flowLabel}.`;
 }
 
 function buildHouseKeyDetails(candidate) {
   const details = [
     candidate.ema20 >= candidate.ema50 ? "EMA bull" : "EMA bear",
+    candidate.trade?.mode ? candidate.trade.mode : null,
     Number.isFinite(candidate.rsi) ? `RSI ${candidate.rsi.toFixed(0)}` : null,
     Number.isFinite(candidate.cvdSlope) ? `CVD ${formatPercent(candidate.cvdSlope)}` : null,
     Number.isFinite(candidate.oiChange1h) ? `OI ${formatPercent(candidate.oiChange1h)}` : null,
@@ -1383,42 +1391,107 @@ function biasDescriptor(score) {
   return { label: "Balanced", tone: "neutral", stance: "Wait" };
 }
 
+function slopeAlignedForDirection(ema20Slope, ema50Slope, tone) {
+  return tone === "up"
+    ? ema20Slope > 0.02 && ema50Slope >= -0.01
+    : ema20Slope < -0.02 && ema50Slope <= 0.01;
+}
+
 function buildPotentialTrade(context) {
   const supportLevels = [...context.supportLevels].filter(Boolean).sort((left, right) => right - left);
   const resistanceLevels = [...context.resistanceLevels].filter(Boolean).sort((left, right) => left - right);
   const tone = context.bias.tone === "neutral" ? (context.cvdSlope >= 0 ? "up" : "down") : context.bias.tone;
   const stance = tone === "down" ? "Short" : "Long";
-  const entry = context.currentPrice;
+  const currentPrice = context.currentPrice;
   const leverage = DEFAULT_LEVERAGE;
   const targetReturnPct = TARGET_MARGIN_RETURN_PCT;
   const stopReturnPct = STOP_MARGIN_RETURN_PCT;
   const riskUnit = Math.max(context.latestAtr * 0.9, context.currentPrice * 0.006);
   const bandBuffer = Math.max(context.bandWidth || 0, riskUnit * 0.18);
-  const targetMove = Math.max(entry * (targetReturnPct / leverage / 100), riskUnit * 1.4);
-  const stopMove = Math.max(entry * (stopReturnPct / leverage / 100), riskUnit * 0.75);
+  const targetMove = Math.max(currentPrice * (targetReturnPct / leverage / 100), riskUnit * 1.4);
+  const stopMove = Math.max(currentPrice * (stopReturnPct / leverage / 100), riskUnit * 0.75);
   let stopLoss;
   let takeProfit;
+  let entry;
+  let referenceLevel;
+  let mode;
+  let nearestTarget;
 
   if (tone === "up") {
-    const nearestSupport = supportLevels.find((level) => level < entry) ?? entry - riskUnit;
-    const nearestResistance = resistanceLevels.find((level) => level > entry) ?? entry + riskUnit * 1.2;
-    stopLoss = Math.max(nearestSupport - bandBuffer, entry - stopMove);
-    takeProfit = Math.max(nearestResistance, entry + targetMove);
+    const nearestSupport = supportLevels.find((level) => level < currentPrice) ?? context.ema20;
+    const nearestResistance = resistanceLevels.find((level) => level > currentPrice) ?? currentPrice + riskUnit * 1.2;
+    const breakoutResistance =
+      resistanceLevels.find((level) => level >= currentPrice - riskUnit * 0.15) ?? nearestResistance;
+    const pullbackReference = Number.isFinite(nearestSupport)
+      ? Math.max(nearestSupport, context.ema20 - riskUnit * 0.18)
+      : context.ema20;
+    const pullbackDistanceAtr = Math.abs(currentPrice - pullbackReference) / Math.max(context.latestAtr, 0.0000001);
+    const breakoutDistanceAtr = Math.abs(currentPrice - breakoutResistance) / Math.max(context.latestAtr, 0.0000001);
+    const pullbackEligible =
+      currentPrice >= pullbackReference - riskUnit * 0.28 &&
+      pullbackDistanceAtr <= MAX_ENTRY_DISTANCE_FROM_LEVEL_ATR &&
+      Math.abs(pctChange(context.ema20, currentPrice)) <= MAX_ENTRY_DISTANCE_FROM_EMA20_ATR;
+    const breakoutEligible =
+      currentPrice >= breakoutResistance &&
+      breakoutDistanceAtr <= 0.8 &&
+      context.recentPriceChange > 0.55;
+
+    mode = pullbackEligible ? "pullback" : breakoutEligible ? "breakout" : "extended";
+    entry = currentPrice;
+    referenceLevel = pullbackEligible ? pullbackReference : breakoutResistance;
+    stopLoss = pullbackEligible
+      ? Math.max((nearestSupport ?? pullbackReference) - bandBuffer, entry - stopMove)
+      : Math.max((breakoutResistance ?? entry) - bandBuffer, entry - stopMove);
+    nearestTarget = pullbackEligible
+      ? nearestResistance
+      : resistanceLevels.find((level) => level > breakoutResistance + bandBuffer) ?? nearestResistance;
+    takeProfit = Math.max(nearestTarget || entry + targetMove, entry + targetMove);
   } else {
-    const nearestResistance = resistanceLevels.find((level) => level > entry) ?? entry + riskUnit;
-    const nearestSupport = supportLevels.find((level) => level < entry) ?? entry - riskUnit * 1.2;
-    stopLoss = Math.min(nearestResistance + bandBuffer, entry + stopMove);
-    takeProfit = Math.min(nearestSupport, entry - targetMove);
+    const nearestResistance = resistanceLevels.find((level) => level > currentPrice) ?? context.ema20;
+    const nearestSupport = supportLevels.find((level) => level < currentPrice) ?? currentPrice - riskUnit * 1.2;
+    const breakoutSupport =
+      supportLevels.find((level) => level <= currentPrice + riskUnit * 0.15) ?? nearestSupport;
+    const pullbackReference = Number.isFinite(nearestResistance)
+      ? Math.min(nearestResistance, context.ema20 + riskUnit * 0.18)
+      : context.ema20;
+    const pullbackDistanceAtr = Math.abs(currentPrice - pullbackReference) / Math.max(context.latestAtr, 0.0000001);
+    const breakoutDistanceAtr = Math.abs(currentPrice - breakoutSupport) / Math.max(context.latestAtr, 0.0000001);
+    const pullbackEligible =
+      currentPrice <= pullbackReference + riskUnit * 0.28 &&
+      pullbackDistanceAtr <= MAX_ENTRY_DISTANCE_FROM_LEVEL_ATR &&
+      Math.abs(pctChange(context.ema20, currentPrice)) <= MAX_ENTRY_DISTANCE_FROM_EMA20_ATR;
+    const breakoutEligible =
+      currentPrice <= breakoutSupport &&
+      breakoutDistanceAtr <= 0.8 &&
+      context.recentPriceChange < -0.55;
+
+    mode = pullbackEligible ? "pullback" : breakoutEligible ? "breakout" : "extended";
+    entry = currentPrice;
+    referenceLevel = pullbackEligible ? pullbackReference : breakoutSupport;
+    stopLoss = pullbackEligible
+      ? Math.min((nearestResistance ?? pullbackReference) + bandBuffer, entry + stopMove)
+      : Math.min((breakoutSupport ?? entry) + bandBuffer, entry + stopMove);
+    nearestTarget = pullbackEligible
+      ? nearestSupport
+      : supportLevels.find((level) => level < breakoutSupport - bandBuffer) ?? nearestSupport;
+    takeProfit = Math.min(nearestTarget || entry - targetMove, entry - targetMove);
   }
 
   const rr = Math.abs(takeProfit - entry) / Math.max(Math.abs(entry - stopLoss), 0.0000001);
+  const nearestTargetRr = Math.abs((nearestTarget ?? takeProfit) - entry) / Math.max(Math.abs(entry - stopLoss), 0.0000001);
   return {
     stance,
     tone,
+    mode,
     entry,
     stopLoss,
     takeProfit,
     rr,
+    nearestTargetRr,
+    referenceLevel,
+    entryLocationQuality: mode !== "extended",
+    distanceFromEma20Atr: Math.abs(entry - context.ema20) / Math.max(context.latestAtr, 0.0000001),
+    distanceFromLevelAtr: Math.abs(entry - (referenceLevel ?? entry)) / Math.max(context.latestAtr, 0.0000001),
     leverage,
     targetReturnPct,
     stopReturnPct,
@@ -1471,11 +1544,19 @@ function analyzeSnapshot(snapshot) {
   const globalLongShortRatio = snapshot.globalLongShort?.length
     ? Number(snapshot.globalLongShort[snapshot.globalLongShort.length - 1].longShortRatio)
     : 1;
+  const ema20Value = latestDefinedValue(ema20Series) ?? currentPrice;
+  const ema50Value = latestDefinedValue(ema50Series) ?? currentPrice;
+  const ema20Slope = slopePercentage(ema20Series, 4);
+  const ema50Slope = slopePercentage(ema50Series, 4);
+  const emaSpreadAtr = Math.abs(ema20Value - ema50Value) / Math.max(latestAtr, 0.0000001);
+  const atrPct = currentPrice ? (latestAtr / Math.abs(currentPrice)) * 100 : 0;
+  const compressedStructure = emaSpreadAtr < MIN_EMA_SPREAD_ATR;
+  const lowVolatilityChop = atrPct < MIN_ATR_PCT_FOR_CONTINUATION && Math.abs(recentPriceChange) < 0.75;
   const venueConsensus = buildVenueConsensus(snapshot.venues || []);
   const biasScore = buildBiasScore({
     currentPrice,
-    ema20: latestDefinedValue(ema20Series) ?? currentPrice,
-    ema50: latestDefinedValue(ema50Series) ?? currentPrice,
+    ema20: ema20Value,
+    ema50: ema50Value,
     rsi: latestDefinedValue(rsiSeries) ?? 50,
     macdHistogram: latestDefinedValue(macdSeries.histogram) ?? 0,
     cvdSlope: tradeSummary.cvdSlope,
@@ -1488,14 +1569,22 @@ function analyzeSnapshot(snapshot) {
     venueConsensus,
   });
   const bias = biasDescriptor(biasScore);
+  const ema20SlopeAligned = slopeAlignedForDirection(ema20Slope, ema50Slope, bias.tone);
+  const ema50SlopeAligned = bias.tone === "up" ? ema50Slope > -0.01 : ema50Slope < 0.01;
+  const crowdedLong = fundingRate > 0.03 && oiChange1h > 0 && globalLongShortRatio > 1.12;
+  const crowdedShort = fundingRate < -0.03 && oiChange1h > 0 && globalLongShortRatio < 0.88;
+  const crowdedContinuation = bias.tone === "up" ? crowdedLong : bias.tone === "down" ? crowdedShort : false;
   const potentialTrade = buildPotentialTrade({
     currentPrice,
+    ema20: ema20Value,
+    ema50: ema50Value,
     latestAtr,
     bandWidth: supportResistance.bandWidth,
     supportLevels: supportResistance.supportLevels,
     resistanceLevels: supportResistance.resistanceLevels,
     bias,
     cvdSlope: tradeSummary.cvdSlope,
+    recentPriceChange,
   });
   const rr = potentialTrade.rr;
   const qualityScore = Math.round(
@@ -1523,14 +1612,23 @@ function analyzeSnapshot(snapshot) {
     ema20Series,
     ema50Series,
     bollingerSeries,
-    ema20: latestDefinedValue(ema20Series) ?? currentPrice,
-    ema50: latestDefinedValue(ema50Series) ?? currentPrice,
+    ema20: ema20Value,
+    ema50: ema50Value,
+    ema20Slope,
+    ema50Slope,
+    ema20SlopeAligned,
+    ema50SlopeAligned,
+    emaSpreadAtr,
+    atrPct,
+    compressedStructure,
+    lowVolatilityChop,
     rsi: latestDefinedValue(rsiSeries) ?? 50,
     latestAtr,
     fundingRate,
     quoteVolume,
     oiChange1h,
     recentPriceChange,
+    crowdedContinuation,
     cvdSlope: tradeSummary.cvdSlope,
     depthImbalance: depthSummary.imbalance,
     takerRatio: takerSummary.latestRatio,
@@ -1553,10 +1651,19 @@ function highQualityCandidates(candidates, threshold) {
     .filter(
       (candidate) =>
         candidate.bias.tone !== "neutral" &&
-        (candidate.refinedQualityScore ?? candidate.qualityScore) >= effectiveThreshold &&
-        candidate.entryQualityScore >= 16 &&
+        (candidate.refinedQualityScore ?? candidate.qualityScore) >= Math.max(effectiveThreshold, candidate.requiredQualityGate || 0) &&
+        candidate.entryQualityScore >= (candidate.requiredEntryScore || 16) &&
         candidate.alignedCount >= 2 &&
         candidate.conflictCount === 0 &&
+        !candidate.htfAgreementHardRejected &&
+        candidate.trade?.entryLocationQuality &&
+        candidate.trade?.distanceFromEma20Atr <= MAX_ENTRY_DISTANCE_FROM_EMA20_ATR &&
+        candidate.trade?.distanceFromLevelAtr <= MAX_ENTRY_DISTANCE_FROM_LEVEL_ATR &&
+        candidate.trade?.nearestTargetRr >= MIN_NEAREST_TARGET_RR &&
+        candidate.ema20SlopeAligned &&
+        candidate.ema50SlopeAligned &&
+        !candidate.compressedStructure &&
+        !candidate.lowVolatilityChop &&
         hasGoodTradingVolume(candidate.quoteVolume) &&
         candidate.rr >= MIN_RR &&
         candidate.trade.projectedMovePct >= MIN_PROJECTED_MOVE_PCT
@@ -2038,6 +2145,11 @@ function applyCandidateConfirmation(candidate, ticker, confirmation) {
     candidate.cvdSlope > 0 && candidate.takerRatio > 1.01 && candidate.depthImbalance > 0.01;
   const sellerLed =
     candidate.cvdSlope < 0 && candidate.takerRatio < 0.99 && candidate.depthImbalance < -0.01;
+  const lowerLiquiditySetup = quoteVolume < HIGH_VOLUME_FLOOR * 1.6;
+  const crowdedSetup = Boolean(candidate.crowdedContinuation);
+  const htfAgreementHardRejected = alignedCount < 3 || conflictCount > 0;
+  const locationQuality = Boolean(candidate.trade?.entryLocationQuality);
+  const slopesAligned = Boolean(candidate.ema20SlopeAligned) && Boolean(candidate.ema50SlopeAligned);
 
   if (hasGoodTradingVolume(quoteVolume)) entryQualityScore += 12;
   else entryQualityScore -= 20;
@@ -2058,10 +2170,27 @@ function applyCandidateConfirmation(candidate, ticker, confirmation) {
     if (candidate.fundingRate < -0.03) entryQualityScore -= 10;
   }
 
+  entryQualityScore += locationQuality ? 10 : -24;
+  entryQualityScore += candidate.trade?.mode === "pullback" ? 6 : candidate.trade?.mode === "breakout" ? 2 : -18;
+  entryQualityScore += candidate.trade?.distanceFromEma20Atr <= MAX_ENTRY_DISTANCE_FROM_EMA20_ATR ? 6 : -14;
+  entryQualityScore += candidate.trade?.distanceFromLevelAtr <= MAX_ENTRY_DISTANCE_FROM_LEVEL_ATR ? 6 : -12;
+  entryQualityScore += slopesAligned ? 12 : -22;
+  entryQualityScore += candidate.trade?.nearestTargetRr >= MIN_NEAREST_TARGET_RR ? 8 : -18;
+  if (candidate.compressedStructure) entryQualityScore -= 16;
+  if (candidate.lowVolatilityChop) entryQualityScore -= 18;
+  if (crowdedSetup) entryQualityScore -= 16;
   entryQualityScore += alignedCount >= 3 ? 20 : alignedCount === 2 ? 8 : -20;
-  if (conflictCount > 0) entryQualityScore -= 14;
+  if (conflictCount > 0) entryQualityScore -= 40;
   entryQualityScore += distanceFromEma20Pct <= 2.5 ? 4 : -10;
   entryQualityScore += Math.abs(candidate.recentPriceChange) >= 0.8 ? 3 : -3;
+  const requiredQualityGate =
+    effectiveHouseQualityGate() +
+    (crowdedSetup ? 10 : 0) +
+    (lowerLiquiditySetup ? 6 : 0);
+  const requiredEntryScore =
+    HOUSE_MIN_ENTRY_SCORE +
+    (crowdedSetup ? 4 : 0) +
+    (lowerLiquiditySetup ? 2 : 0);
 
   return {
     ...candidate,
@@ -2071,6 +2200,11 @@ function applyCandidateConfirmation(candidate, ticker, confirmation) {
     conflictCount,
     buyerLed,
     sellerLed,
+    crowdedSetup,
+    lowerLiquiditySetup,
+    htfAgreementHardRejected,
+    requiredQualityGate,
+    requiredEntryScore,
     entryQualityScore,
     entryScore: entryQualityScore,
     refinedQualityScore: candidate.qualityScore + entryQualityScore,
@@ -2117,17 +2251,30 @@ function buildCoreTrendStrategySignal(candidate) {
   const entryScore = candidate.entryQualityScore ?? 0;
   const leadershipOk =
     candidate.trade?.tone === "up" ? Boolean(candidate.buyerLed) : Boolean(candidate.sellerLed);
-  const effectiveGate = Math.max(effectiveHouseQualityGate(state.qualityThreshold), HOUSE_MIN_REFINED_SCORE);
+  const effectiveGate = Math.max(
+    effectiveHouseQualityGate(state.qualityThreshold),
+    HOUSE_MIN_REFINED_SCORE,
+    candidate.requiredQualityGate || 0
+  );
 
   if (
     candidate.bias.tone === "neutral" ||
     candidate.alignedCount < 3 ||
     candidate.conflictCount > 0 ||
+    candidate.htfAgreementHardRejected ||
     !hasGoodTradingVolume(candidate.quoteVolume) ||
     candidate.rr < MIN_RR ||
-    entryScore < HOUSE_MIN_ENTRY_SCORE ||
+    entryScore < Math.max(HOUSE_MIN_ENTRY_SCORE, candidate.requiredEntryScore || 0) ||
     refinedScore < effectiveGate ||
     !leadershipOk ||
+    !candidate.trade?.entryLocationQuality ||
+    candidate.trade?.distanceFromEma20Atr > MAX_ENTRY_DISTANCE_FROM_EMA20_ATR ||
+    candidate.trade?.distanceFromLevelAtr > MAX_ENTRY_DISTANCE_FROM_LEVEL_ATR ||
+    candidate.trade?.nearestTargetRr < MIN_NEAREST_TARGET_RR ||
+    !candidate.ema20SlopeAligned ||
+    !candidate.ema50SlopeAligned ||
+    candidate.compressedStructure ||
+    candidate.lowVolatilityChop ||
     candidate.trade?.projectedMovePct < MIN_PROJECTED_MOVE_PCT
   ) {
     return null;
@@ -2661,6 +2808,16 @@ function recentlyClosed(symbol, strategyId = "core") {
   );
 }
 
+function recentlyStoppedOut(symbol, strategyId = "core") {
+  return state.closedTrades.some(
+    (trade) =>
+      trade.symbol === symbol &&
+      trade.strategyId === strategyId &&
+      trade.reason === "SL" &&
+      Date.now() - Number(trade.closedAt || 0) < STOP_LOSS_COOLDOWN_MS
+  );
+}
+
 function tradeReturnPct(trade, exitPrice) {
   const direction = trade.side === "Short" ? -1 : 1;
   return pctChange(trade.entryPrice, exitPrice) * direction * (trade.leverage || DEFAULT_LEVERAGE);
@@ -2914,7 +3071,10 @@ function openQualifiedTrades(candidates) {
   const opened = [];
   const spec = STRATEGY_SPECS[0];
   const eligible = highQualityCandidates(candidates, state.qualityThreshold).filter(
-    (entry) => !strategyHasOpenTrade(spec.id, entry.symbol) && !recentlyClosed(entry.symbol, spec.id)
+    (entry) =>
+      !strategyHasOpenTrade(spec.id, entry.symbol) &&
+      !recentlyClosed(entry.symbol, spec.id) &&
+      !recentlyStoppedOut(entry.symbol, spec.id)
   );
 
   for (const candidate of eligible) {
