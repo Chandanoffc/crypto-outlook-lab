@@ -4041,8 +4041,10 @@ body.token-analysis-page .timeframe-switcher {
 }
 
 body.token-analysis-page .hero-form {
-  align-self: auto;
-  width: min(920px, 100%);
+  align-self: center;
+  width: 100%;
+  max-width: 920px;
+  margin-inline: auto;
   padding: 16px;
   border: 1px solid rgba(34, 211, 238, 0.1);
   border-radius: 26px;
@@ -4060,6 +4062,7 @@ body.token-analysis-page .token-analysis-center-form {
   gap: 14px;
   align-items: center;
   justify-content: center;
+  margin-inline: auto;
 }
 
 body.token-analysis-page .token-analysis-token-input {
@@ -4104,7 +4107,9 @@ body.token-analysis-page .timeframe-button.is-active {
 }
 
 body.token-analysis-page .token-analysis-brief-panel {
-  grid-column: 1 / -1;
+  grid-column: 1;
+  grid-row: 2;
+  min-width: 0;
   padding: 22px;
   border-radius: 28px;
   background:
@@ -4170,6 +4175,8 @@ body.token-analysis-page .research-copy {
 }
 
 body.token-analysis-page .panel-hero {
+  grid-column: 1;
+  grid-row: 1;
   min-height: 0;
   padding: 22px;
   border-radius: 30px;
@@ -4265,10 +4272,10 @@ body.token-analysis-page .token-analysis-trade-card {
 }
 
 body.token-analysis-page .panel-outlook {
-  position: sticky;
-  top: 24px;
+  grid-column: 2;
+  grid-row: 1;
+  position: static;
   align-self: start;
-  z-index: 4;
   gap: 16px;
   padding: 22px;
   border-radius: 30px;
