@@ -6021,3 +6021,347 @@ body.shell-page:not(.tradez-page) .chart-shell,
 body.tradez-page .chart-shell {
   box-shadow: none;
 }
+
+/* Premium motion and interaction polish */
+:root {
+  --motion-duration-fast: 140ms;
+  --motion-duration-base: 180ms;
+  --motion-duration-slow: 280ms;
+  --motion-ease-premium: cubic-bezier(0.22, 1, 0.36, 1);
+  --hover-shadow-soft: 0 10px 20px rgba(2, 6, 23, 0.09);
+  --hover-shadow-panel: 0 14px 26px rgba(2, 6, 23, 0.11);
+  --focus-ring-soft: 0 0 0 3px rgba(34, 211, 238, 0.055);
+}
+
+@keyframes premium-fade-up {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes premium-shimmer {
+  0% {
+    background-position: -220% 0;
+  }
+
+  100% {
+    background-position: 220% 0;
+  }
+}
+
+body.shell-page .app-header,
+body.tradez-page .app-header,
+body.shell-page .shell-top-shell,
+body.tradez-page .tradez-top-shell,
+body.main-shell-page .main-grid,
+body.auto-shell-page .auto-grid,
+body.arena-shell-page .arena-grid-shell,
+body.tradez-page .tradez-grid,
+body.token-analysis-page .main-grid {
+  animation: premium-fade-up var(--motion-duration-slow) var(--motion-ease-premium) both;
+}
+
+body.shell-page .shell-top-shell,
+body.tradez-page .tradez-top-shell {
+  animation-delay: 40ms;
+}
+
+body.main-shell-page .main-grid,
+body.auto-shell-page .auto-grid,
+body.arena-shell-page .arena-grid-shell,
+body.tradez-page .tradez-grid,
+body.token-analysis-page .main-grid {
+  animation-delay: 80ms;
+}
+
+body.shell-page .page-tab,
+body.tradez-page .page-tab,
+body.shell-page .mini-button,
+body.tradez-page .mini-button,
+body.shell-page .token-form button,
+body.tradez-page .token-form button,
+body.shell-page .token-form input,
+body.shell-page .token-form select,
+body.tradez-page .token-form input,
+body.tradez-page .token-form select,
+body.token-analysis-page .timeframe-button,
+body.token-analysis-page .token-analysis-summary-tab,
+body.shell-page .header-icon-button,
+body.tradez-page .header-icon-button,
+body.shell-page .feed-tab,
+body.tradez-page .feed-tab,
+body.tradez-page .tradez-symbol-button,
+body.shell-page .nav-link,
+body.tradez-page .nav-link,
+body.shell-page .metric-card,
+body.shell-page .analysis-card,
+body.shell-page .signal-item,
+body.shell-page .setup-card,
+body.tradez-page .metric-card,
+body.tradez-page .analysis-card,
+body.tradez-page .signal-item,
+body.tradez-page .setup-card,
+body.token-analysis-page .panel-outlook .signal-item,
+body.shell-page .chart-shell,
+body.tradez-page .chart-shell,
+body.shell-page .status-banner,
+body.tradez-page .status-banner {
+  transition:
+    background-color var(--motion-duration-base) var(--motion-ease-premium),
+    background var(--motion-duration-base) var(--motion-ease-premium),
+    border-color var(--motion-duration-base) var(--motion-ease-premium),
+    box-shadow var(--motion-duration-base) var(--motion-ease-premium),
+    transform var(--motion-duration-fast) var(--motion-ease-premium),
+    opacity var(--motion-duration-base) var(--motion-ease-premium),
+    color var(--motion-duration-fast) var(--motion-ease-premium),
+    filter var(--motion-duration-fast) var(--motion-ease-premium);
+  will-change: transform, opacity;
+}
+
+body.shell-page:not(.tradez-page) .page-tab:hover,
+body.tradez-page .page-tab:hover {
+  transform: translate3d(0, -1px, 0);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+}
+
+body.shell-page:not(.tradez-page) .page-tab.is-current,
+body.tradez-page .page-tab.is-current {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.055),
+    inset 0 0 0 1px rgba(34, 211, 238, 0.035),
+    0 1px 0 rgba(34, 211, 238, 0.08);
+}
+
+body.shell-page:not(.tradez-page) .token-form button:hover,
+body.tradez-page .token-form button:hover,
+body.shell-page:not(.tradez-page) .mini-button:hover,
+body.tradez-page .mini-button:hover,
+body.shell-page:not(.tradez-page) .header-icon-button:hover,
+body.tradez-page .header-icon-button:hover,
+body.token-analysis-page .timeframe-button:hover,
+body.token-analysis-page .token-analysis-summary-tab:hover,
+body.shell-page:not(.tradez-page) .feed-tab:hover,
+body.tradez-page .feed-tab:hover,
+body.tradez-page .tradez-symbol-button:hover {
+  transform: translate3d(0, -1px, 0);
+  filter: brightness(1.03);
+}
+
+body.shell-page:not(.tradez-page) .token-form button:active,
+body.tradez-page .token-form button:active,
+body.shell-page:not(.tradez-page) .mini-button:active,
+body.tradez-page .mini-button:active,
+body.shell-page:not(.tradez-page) .header-icon-button:active,
+body.tradez-page .header-icon-button:active,
+body.token-analysis-page .timeframe-button:active,
+body.token-analysis-page .token-analysis-summary-tab:active,
+body.shell-page:not(.tradez-page) .feed-tab:active,
+body.tradez-page .feed-tab:active,
+body.tradez-page .tradez-symbol-button:active {
+  transform: translate3d(0, 0, 0);
+  filter: brightness(0.985);
+}
+
+body.shell-page:not(.tradez-page) .token-form button:disabled,
+body.tradez-page .token-form button:disabled,
+body.shell-page:not(.tradez-page) .mini-button:disabled,
+body.tradez-page .mini-button:disabled,
+body.shell-page:not(.tradez-page) .feed-tab:disabled,
+body.tradez-page .feed-tab:disabled {
+  opacity: 0.56;
+  cursor: not-allowed;
+  filter: saturate(0.72);
+  box-shadow: none;
+}
+
+body.shell-page:not(.tradez-page) .token-form input:hover,
+body.shell-page:not(.tradez-page) .token-form select:hover,
+body.tradez-page .token-form input:hover,
+body.tradez-page .token-form select:hover {
+  background-color: rgba(12, 16, 23, 0.76);
+}
+
+body.shell-page:not(.tradez-page) .token-form input:focus,
+body.shell-page:not(.tradez-page) .token-form select:focus,
+body.tradez-page .token-form input:focus,
+body.tradez-page .token-form select:focus {
+  box-shadow:
+    var(--focus-ring-soft),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+body.shell-page:not(.tradez-page) .metric-card:hover,
+body.shell-page:not(.tradez-page) .analysis-card:hover,
+body.shell-page:not(.tradez-page) .signal-item:hover,
+body.shell-page:not(.tradez-page) .setup-card:hover,
+body.tradez-page .metric-card:hover,
+body.tradez-page .analysis-card:hover,
+body.tradez-page .signal-item:hover,
+body.tradez-page .setup-card:hover,
+body.token-analysis-page .panel-outlook .signal-item:hover {
+  transform: translate3d(0, -1px, 0);
+  border-color: rgba(100, 116, 139, 0.14);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.02),
+    var(--hover-shadow-soft);
+}
+
+body.shell-page:not(.tradez-page) .panel:hover,
+body.tradez-page .panel:hover {
+  border-color: rgba(100, 116, 139, 0.12);
+}
+
+body.token-analysis-page .timeframe-button.is-active,
+body.token-analysis-page .token-analysis-summary-tab.is-active,
+body.shell-page:not(.tradez-page) .feed-tab.is-active,
+body.tradez-page .feed-tab.is-active,
+body.shell-page:not(.tradez-page) .mini-button.is-active,
+body.tradez-page .mini-button.is-active {
+  transition:
+    background var(--motion-duration-base) var(--motion-ease-premium),
+    border-color var(--motion-duration-base) var(--motion-ease-premium),
+    box-shadow var(--motion-duration-base) var(--motion-ease-premium),
+    color var(--motion-duration-fast) var(--motion-ease-premium);
+}
+
+body.shell-page:not(.tradez-page) .chart-shell,
+body.tradez-page .chart-shell {
+  position: relative;
+}
+
+body.shell-page:not(.tradez-page) .chart-shell::after,
+body.tradez-page .chart-shell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.012);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity var(--motion-duration-base) var(--motion-ease-premium),
+    border-color var(--motion-duration-base) var(--motion-ease-premium);
+}
+
+body.shell-page:not(.tradez-page) .chart-shell:hover::after,
+body.tradez-page .chart-shell:hover::after {
+  opacity: 1;
+  border-color: rgba(34, 211, 238, 0.05);
+}
+
+body.shell-page:not(.tradez-page) .status-banner.status-banner-flash,
+body.tradez-page .status-banner.status-banner-flash {
+  transition:
+    background var(--motion-duration-base) var(--motion-ease-premium),
+    border-color var(--motion-duration-base) var(--motion-ease-premium),
+    color var(--motion-duration-base) var(--motion-ease-premium),
+    box-shadow var(--motion-duration-base) var(--motion-ease-premium);
+}
+
+body.shell-page :where(.metric-card strong, .headline-chip strong, .chart-hud-item strong, .score-badge),
+body.tradez-page :where(.metric-card strong, .headline-chip strong, .chart-hud-item strong, .score-badge) {
+  transition:
+    color var(--motion-duration-base) var(--motion-ease-premium),
+    opacity var(--motion-duration-base) var(--motion-ease-premium),
+    filter var(--motion-duration-base) var(--motion-ease-premium);
+}
+
+body.shell-page :where(.metric-card, .headline-chip, .analysis-card, .signal-item, .chart-hud-item, .panel-outlook .signal-item):has(strong:empty),
+body.tradez-page :where(.metric-card, .headline-chip, .analysis-card, .signal-item, .chart-hud-item):has(strong:empty) {
+  position: relative;
+  overflow: hidden;
+}
+
+body.shell-page :where(.metric-card, .headline-chip, .analysis-card, .signal-item, .chart-hud-item, .panel-outlook .signal-item):has(strong:empty)::after,
+body.tradez-page :where(.metric-card, .headline-chip, .analysis-card, .signal-item, .chart-hud-item):has(strong:empty)::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.04) 50%, transparent 100%);
+  background-size: 220% 100%;
+  animation: premium-shimmer 1.8s linear infinite;
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+body.shell-page :where(#status-banner, #paper-status-banner, #arena-status-banner, #tradez-status-banner),
+body.tradez-page :where(#status-banner, #paper-status-banner, #arena-status-banner, #tradez-status-banner) {
+  position: relative;
+  overflow: hidden;
+}
+
+body.shell-page :where(#status-banner, #paper-status-banner, #arena-status-banner, #tradez-status-banner)::after,
+body.tradez-page :where(#status-banner, #paper-status-banner, #arena-status-banner, #tradez-status-banner)::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.03) 48%, transparent 100%);
+  background-size: 220% 100%;
+  animation: premium-shimmer 2.4s linear infinite;
+  opacity: 0.28;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.shell-page .app-header,
+  body.tradez-page .app-header,
+  body.shell-page .shell-top-shell,
+  body.tradez-page .tradez-top-shell,
+  body.main-shell-page .main-grid,
+  body.auto-shell-page .auto-grid,
+  body.arena-shell-page .arena-grid-shell,
+  body.tradez-page .tradez-grid,
+  body.token-analysis-page .main-grid {
+    animation: none;
+  }
+
+  body.shell-page .page-tab,
+  body.tradez-page .page-tab,
+  body.shell-page .mini-button,
+  body.tradez-page .mini-button,
+  body.shell-page .token-form button,
+  body.tradez-page .token-form button,
+  body.shell-page .token-form input,
+  body.shell-page .token-form select,
+  body.tradez-page .token-form input,
+  body.tradez-page .token-form select,
+  body.token-analysis-page .timeframe-button,
+  body.token-analysis-page .token-analysis-summary-tab,
+  body.shell-page .header-icon-button,
+  body.tradez-page .header-icon-button,
+  body.shell-page .feed-tab,
+  body.tradez-page .feed-tab,
+  body.tradez-page .tradez-symbol-button,
+  body.shell-page .nav-link,
+  body.tradez-page .nav-link,
+  body.shell-page .metric-card,
+  body.shell-page .analysis-card,
+  body.shell-page .signal-item,
+  body.shell-page .setup-card,
+  body.tradez-page .metric-card,
+  body.tradez-page .analysis-card,
+  body.tradez-page .signal-item,
+  body.tradez-page .setup-card,
+  body.token-analysis-page .panel-outlook .signal-item,
+  body.shell-page .chart-shell,
+  body.tradez-page .chart-shell,
+  body.shell-page .status-banner,
+  body.tradez-page .status-banner {
+    transition: none;
+  }
+
+  body.shell-page :where(#status-banner, #paper-status-banner, #arena-status-banner, #tradez-status-banner)::after,
+  body.tradez-page :where(#status-banner, #paper-status-banner, #arena-status-banner, #tradez-status-banner)::after,
+  body.shell-page :where(.metric-card, .headline-chip, .analysis-card, .signal-item, .chart-hud-item, .panel-outlook .signal-item):has(strong:empty)::after,
+  body.tradez-page :where(.metric-card, .headline-chip, .analysis-card, .signal-item, .chart-hud-item):has(strong:empty)::after {
+    animation: none;
+  }
+}
