@@ -139,6 +139,11 @@ const dom = {
   tradeSummary: document.getElementById("tradez-trade-summary"),
   planNote: document.getElementById("tradez-plan-note"),
   signalList: document.getElementById("tradez-signal-list"),
+  workspaceTabLive: document.getElementById("tradez-workspace-tab-live"),
+  workspaceTabCompare: document.getElementById("tradez-workspace-tab-compare"),
+  workspaceNote: document.getElementById("tradez-workspace-note"),
+  workspacePanelLive: document.getElementById("tradez-workspace-panel-live"),
+  workspacePanelCompare: document.getElementById("tradez-workspace-panel-compare"),
   tabSignals: document.getElementById("tradez-tab-signals"),
   tabAlerts: document.getElementById("tradez-tab-alerts"),
   tabNotes: document.getElementById("tradez-tab-notes"),
@@ -276,6 +281,7 @@ function loadState() {
     selectedFeedSymbol: stored.selectedFeedSymbol || null,
     qualityThreshold: Number(stored.qualityThreshold) || DEFAULT_QUALITY_THRESHOLD,
     activeTab: stored.activeTab || "signals",
+    workspaceMode: stored.workspaceMode === "compare" ? "compare" : "live",
     lastScanAt: Number(stored.lastScanAt) || 0,
     alertEvents: readStoredJson(ALERT_EVENTS_KEY, []).slice(0, 36),
     seenSignalIds: new Set(readStoredJson(SIGNAL_IDS_KEY, [])),
@@ -293,6 +299,7 @@ function persistState() {
     selectedFeedSymbol: state.selectedFeedSymbol,
     qualityThreshold: state.qualityThreshold,
     activeTab: state.activeTab,
+    workspaceMode: state.workspaceMode,
     lastScanAt: state.lastScanAt,
   });
   writeStoredJson(ALERT_EVENTS_KEY, state.alertEvents.slice(0, 36));
@@ -4214,6 +4221,22 @@ function updateTabs() {
   });
 }
 
+function updateWorkspaceMode() {
+  if (!dom.workspaceTabLive || !dom.workspacePanelLive || !dom.workspacePanelCompare) return;
+
+  const isLiveMode = state.workspaceMode !== "compare";
+  dom.workspaceTabLive.classList.toggle("is-active", isLiveMode);
+  dom.workspaceTabCompare.classList.toggle("is-active", !isLiveMode);
+  dom.workspacePanelLive.hidden = !isLiveMode;
+  dom.workspacePanelCompare.hidden = isLiveMode;
+
+  if (dom.workspaceNote) {
+    dom.workspaceNote.textContent = isLiveMode
+      ? "Live Desk keeps the signal stream front and center while the heavier benchmarking workspace stays tucked away until needed."
+      : "System Compare brings the benchmark cards, Auto Trade 2 controls, and execution workspace forward when you want to review system performance.";
+  }
+}
+
 function pushAlertEvent(candidate) {
   const signal = candidate.activeSignal;
   if (!signal || signal.qualityScore < state.qualityThreshold) return;
@@ -4507,6 +4530,22 @@ function bindEvents() {
     updateTabs();
   });
 
+  if (dom.workspaceTabLive) {
+    dom.workspaceTabLive.addEventListener("click", () => {
+      state.workspaceMode = "live";
+      persistState();
+      updateWorkspaceMode();
+    });
+  }
+
+  if (dom.workspaceTabCompare) {
+    dom.workspaceTabCompare.addEventListener("click", () => {
+      state.workspaceMode = "compare";
+      persistState();
+      updateWorkspaceMode();
+    });
+  }
+
   if (dom.auto2Toggle) {
     dom.auto2Toggle.addEventListener("click", () => {
       tradezPaper.autoEnabled = !tradezPaper.autoEnabled;
@@ -4576,6 +4615,7 @@ async function init() {
   syncTradezDeliveryInputs();
   refreshTradezDeliverySummary();
   updateAlertPermissionButton();
+  updateWorkspaceMode();
   updateTabs();
   renderStrategyNotes();
   renderAlertFeed();
