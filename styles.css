@@ -4224,7 +4224,8 @@ body.token-analysis-page .chart-shell {
 }
 
 body.token-analysis-page .chart-frame {
-  min-height: 520px;
+  height: clamp(340px, 42vh, 420px);
+  min-height: 340px;
   border-radius: 22px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.015), transparent 16%),
@@ -4549,7 +4550,8 @@ body.token-analysis-page .token-analysis-advanced-panel {
   }
 
   body.token-analysis-page .chart-frame {
-    min-height: 420px;
+    height: 320px;
+    min-height: 320px;
   }
 
   body.token-analysis-page .token-analysis-summary-tablist {
