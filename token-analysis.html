@@ -24,19 +24,18 @@
   </head>
   <body class="dashboard-home shell-page main-shell-page token-analysis-page">
     <div class="page-shell shell-layout">
-      <aside class="shell-sidebar">
-        <a class="brand-block brand-block-sidebar" href="./index.html">
-          <span class="brand-mark" aria-hidden="true">
-            <img src="./hyperdrive-mark.svg" alt="" />
-          </span>
-          <span class="brand-copy">
-            <strong>Soloris</strong>
-            <small>Signals</small>
-          </span>
-        </a>
+      <header class="app-header shell-app-header">
+        <div class="app-bar">
+          <a class="brand-block app-brand" href="./index.html">
+            <span class="brand-mark" aria-hidden="true">
+              <img src="./hyperdrive-mark.svg" alt="" />
+            </span>
+            <span class="brand-copy">
+              <strong>Soloris</strong>
+              <small>Signals</small>
+            </span>
+          </a>
 
-        <div class="shell-sidebar-nav">
-          <p class="panel-label">Workspace</p>
           <nav class="page-tabs shell-page-tabs" aria-label="Primary pages">
             <a class="page-tab" href="./index.html">Main</a>
             <a class="page-tab is-current" href="./token-analysis.html">Token Analysis</a>
@@ -44,20 +43,28 @@
             <a class="page-tab" href="./arena.html">Signals Arena</a>
             <a class="page-tab" href="./tradez.html">EMA Signals</a>
           </nav>
-        </div>
 
-        <div class="shell-sidebar-foot">
-          <div class="app-pill">AI Research</div>
-          <div class="shell-sidebar-card">
-            <span class="stack-label">Research Desk</span>
-            <strong>Token Narrative Engine</strong>
-            <small>
-              One token in, full AI read out: structure, momentum, catalysts, and forward
-              expectations in one tighter surface.
-            </small>
+          <div class="header-actions">
+            <span class="header-feed">
+              <span class="header-feed-dot" aria-hidden="true"></span>
+              Live Feeds
+            </span>
+            <span class="app-pill">Research Desk</span>
+            <a class="header-icon-button" href="./token-analysis.html" aria-label="Refresh Token Analysis">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="M20 11a8 8 0 1 1-2.34-5.66M20 4v5h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.8"
+                />
+              </svg>
+            </a>
           </div>
         </div>
-      </aside>
+      </header>
 
       <div class="shell-main">
         <header class="shell-top-shell">

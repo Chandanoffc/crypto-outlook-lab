@@ -23,19 +23,18 @@
   </head>
   <body class="dashboard-home shell-page main-shell-page">
     <div class="page-shell shell-layout">
-      <aside class="shell-sidebar">
-        <a class="brand-block brand-block-sidebar" href="./index.html">
-          <span class="brand-mark" aria-hidden="true">
-            <img src="./hyperdrive-mark.svg" alt="" />
-          </span>
-          <span class="brand-copy">
-            <strong>Soloris</strong>
-            <small>Signals</small>
-          </span>
-        </a>
+      <header class="app-header shell-app-header">
+        <div class="app-bar">
+          <a class="brand-block app-brand" href="./index.html">
+            <span class="brand-mark" aria-hidden="true">
+              <img src="./hyperdrive-mark.svg" alt="" />
+            </span>
+            <span class="brand-copy">
+              <strong>Soloris</strong>
+              <small>Signals</small>
+            </span>
+          </a>
 
-        <div class="shell-sidebar-nav">
-          <p class="panel-label">Workspace</p>
           <nav class="page-tabs shell-page-tabs" aria-label="Primary pages">
             <a class="page-tab is-current" href="./index.html">Main</a>
             <a class="page-tab" href="./token-analysis.html">Token Analysis</a>
@@ -43,20 +42,28 @@
             <a class="page-tab" href="./arena.html">Signals Arena</a>
             <a class="page-tab" href="./tradez.html">EMA Signals</a>
           </nav>
-        </div>
 
-        <div class="shell-sidebar-foot">
-          <div class="app-pill">Live Perps</div>
-          <div class="shell-sidebar-card">
-            <span class="stack-label">Main Desk</span>
-            <strong>Institutional Workspace</strong>
-            <small>
-              Structure, flow, funding, catalysts, and execution context in one tighter trading
-              surface.
-            </small>
+          <div class="header-actions">
+            <span class="header-feed">
+              <span class="header-feed-dot" aria-hidden="true"></span>
+              Live Feeds
+            </span>
+            <span class="app-pill">Main Desk</span>
+            <a class="header-icon-button" href="./index.html" aria-label="Refresh Main">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="M20 11a8 8 0 1 1-2.34-5.66M20 4v5h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.8"
+                />
+              </svg>
+            </a>
           </div>
         </div>
-      </aside>
+      </header>
 
       <div class="shell-main">
         <header class="shell-top-shell">

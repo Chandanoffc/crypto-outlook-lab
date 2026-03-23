@@ -4626,3 +4626,783 @@ body.token-analysis-page .token-analysis-advanced-panel {
     flex: 1 1 0;
   }
 }
+
+/* Premium terminal shell redesign */
+body.shell-page,
+body.tradez-page {
+  font-family: var(--ui-font);
+}
+
+body.shell-page::before,
+body.tradez-page::before {
+  opacity: 0.6;
+}
+
+body.shell-page::after,
+body.tradez-page::after {
+  background-size: 100% 64px, 64px 100%;
+  opacity: 0.012;
+}
+
+body.shell-page:not(.tradez-page) .page-shell.shell-layout,
+body.tradez-page .page-shell.tradez-layout {
+  width: min(1720px, calc(100% - 40px));
+  padding: 16px 0 32px;
+  display: block;
+  min-height: auto;
+}
+
+body.shell-page:not(.tradez-page) .shell-app-header,
+body.tradez-page .shell-app-header {
+  margin-bottom: 24px;
+}
+
+body.shell-page:not(.tradez-page) .shell-main,
+body.tradez-page .tradez-main {
+  min-width: 0;
+  display: grid;
+  gap: 24px;
+}
+
+body.shell-page:not(.tradez-page) .shell-top-shell,
+body.tradez-page .tradez-top-shell {
+  display: grid;
+  gap: 24px;
+}
+
+body.shell-page:not(.tradez-page) .app-bar,
+body.tradez-page .app-bar {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 16px;
+  padding: 12px 16px;
+  top: 12px;
+  border: 1px solid rgba(100, 116, 139, 0.22);
+  border-radius: 20px;
+  background: rgba(16, 20, 28, 0.78);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 16px 36px rgba(2, 6, 23, 0.18);
+  backdrop-filter: blur(18px);
+}
+
+body.shell-page:not(.tradez-page) .app-brand,
+body.tradez-page .app-brand {
+  align-items: center;
+  gap: 12px;
+}
+
+body.shell-page:not(.tradez-page) .app-brand .brand-mark,
+body.tradez-page .app-brand .brand-mark {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  border-color: rgba(34, 211, 238, 0.18);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 26%),
+    rgba(17, 21, 29, 0.96);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 10px 22px rgba(2, 6, 23, 0.16);
+}
+
+body.shell-page:not(.tradez-page) .app-brand .brand-mark img,
+body.tradez-page .app-brand .brand-mark img {
+  filter: none;
+}
+
+body.shell-page:not(.tradez-page) .app-brand .brand-copy,
+body.tradez-page .app-brand .brand-copy {
+  gap: 2px;
+  padding-top: 0;
+}
+
+body.shell-page:not(.tradez-page) .app-brand .brand-copy strong,
+body.tradez-page .app-brand .brand-copy strong {
+  font-size: 1.78rem;
+  line-height: 0.96;
+}
+
+body.shell-page:not(.tradez-page) .app-brand .brand-copy small,
+body.tradez-page .app-brand .brand-copy small {
+  margin-top: -6px;
+  margin-left: 5px;
+  font-size: 0.92rem;
+}
+
+body.shell-page:not(.tradez-page) .shell-page-tabs,
+body.tradez-page .tradez-page-tabs {
+  display: inline-flex;
+  justify-self: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid rgba(100, 116, 139, 0.18);
+  border-radius: 999px;
+  background: rgba(10, 14, 22, 0.58);
+  box-shadow: none;
+}
+
+body.shell-page:not(.tradez-page) .page-tab,
+body.tradez-page .page-tab {
+  width: auto;
+  min-height: 38px;
+  justify-content: center;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #95a3b8;
+  box-shadow: none;
+}
+
+body.shell-page:not(.tradez-page) .page-tab:hover,
+body.tradez-page .page-tab:hover {
+  border-color: rgba(34, 211, 238, 0.14);
+  background: rgba(19, 24, 32, 0.9);
+  color: #dbe7f4;
+}
+
+body.shell-page:not(.tradez-page) .page-tab.is-current,
+body.tradez-page .page-tab.is-current {
+  border-color: rgba(34, 211, 238, 0.22);
+  background:
+    linear-gradient(180deg, rgba(34, 211, 238, 0.12), rgba(34, 211, 238, 0.04)),
+    rgba(15, 22, 31, 0.98);
+  color: #f8fbff;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 0 0 1px rgba(34, 211, 238, 0.04);
+}
+
+body.shell-page:not(.tradez-page) .header-actions,
+body.tradez-page .header-actions {
+  display: inline-flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+}
+
+body.shell-page:not(.tradez-page) .header-feed,
+body.tradez-page .header-feed {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(100, 116, 139, 0.18);
+  border-radius: 999px;
+  background: rgba(10, 14, 22, 0.64);
+  color: #cdd8e5;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+body.shell-page:not(.tradez-page) .header-feed-dot,
+body.tradez-page .header-feed-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #22d3ee;
+  box-shadow: 0 0 0 4px rgba(34, 211, 238, 0.12);
+}
+
+body.shell-page:not(.tradez-page) .app-pill,
+body.tradez-page .app-pill {
+  justify-self: auto;
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(34, 211, 238, 0.18);
+  background: rgba(13, 18, 26, 0.72);
+  box-shadow: none;
+}
+
+body.shell-page:not(.tradez-page) .header-icon-button,
+body.tradez-page .header-icon-button {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(100, 116, 139, 0.18);
+  border-radius: 999px;
+  background: rgba(10, 14, 22, 0.64);
+  color: #cdd8e5;
+  text-decoration: none;
+}
+
+body.shell-page:not(.tradez-page) .header-icon-button svg,
+body.tradez-page .header-icon-button svg {
+  width: 16px;
+  height: 16px;
+}
+
+body.shell-page:not(.tradez-page) .hero-shell,
+body.tradez-page .tradez-hero-shell {
+  grid-template-columns: minmax(0, 1.15fr) minmax(360px, 0.9fr);
+  gap: 20px;
+  padding: 20px;
+  border: 1px solid rgba(100, 116, 139, 0.18);
+  border-radius: 24px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.024), transparent 28%),
+    rgba(18, 22, 30, 0.9);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.03),
+    0 18px 34px rgba(2, 6, 23, 0.16);
+}
+
+body.shell-page:not(.tradez-page) .hero-copy,
+body.tradez-page .hero-copy {
+  gap: 8px;
+}
+
+body.shell-page:not(.tradez-page) .hero-copy .subtitle,
+body.tradez-page .hero-copy .subtitle {
+  max-width: 62ch;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: #9eaab9;
+}
+
+body.shell-page:not(.tradez-page) .status-banner,
+body.tradez-page .status-banner {
+  margin-bottom: 0;
+  padding: 10px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(100, 116, 139, 0.16);
+  background:
+    linear-gradient(90deg, rgba(34, 211, 238, 0.08), transparent 36%),
+    rgba(16, 20, 28, 0.82);
+  color: #b7c3d4;
+  box-shadow: none;
+}
+
+body.shell-page:not(.tradez-page) .status-banner.up,
+body.tradez-page .status-banner.up {
+  border-color: rgba(16, 185, 129, 0.22);
+  background:
+    linear-gradient(90deg, rgba(16, 185, 129, 0.1), transparent 40%),
+    rgba(16, 20, 28, 0.82);
+}
+
+body.shell-page:not(.tradez-page) .status-banner.down,
+body.tradez-page .status-banner.down {
+  border-color: rgba(239, 68, 68, 0.22);
+  background:
+    linear-gradient(90deg, rgba(239, 68, 68, 0.1), transparent 40%),
+    rgba(16, 20, 28, 0.82);
+}
+
+body.shell-page:not(.tradez-page) .panel,
+body.shell-page:not(.tradez-page) .metric-strip,
+body.shell-page:not(.tradez-page) .subpanel,
+body.tradez-page .panel,
+body.tradez-page .metric-strip,
+body.tradez-page .subpanel {
+  border: 1px solid rgba(100, 116, 139, 0.16);
+  border-radius: 20px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 28%),
+    rgba(18, 22, 30, 0.88);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.025),
+    0 16px 30px rgba(2, 6, 23, 0.12);
+  backdrop-filter: blur(16px);
+}
+
+body.shell-page:not(.tradez-page) .panel::before,
+body.shell-page:not(.tradez-page) .panel::after,
+body.shell-page:not(.tradez-page) .metric-strip::before,
+body.shell-page:not(.tradez-page) .metric-strip::after,
+body.tradez-page .panel::before,
+body.tradez-page .panel::after,
+body.tradez-page .metric-strip::before,
+body.tradez-page .metric-strip::after {
+  display: none;
+}
+
+body.shell-page:not(.tradez-page) .panel,
+body.tradez-page .panel {
+  padding: 16px;
+}
+
+body.shell-page:not(.tradez-page) .metric-strip,
+body.tradez-page .metric-strip,
+body.tradez-page .tradez-auto2-metrics {
+  gap: 12px;
+  padding: 12px;
+  border-radius: 20px;
+}
+
+body.shell-page:not(.tradez-page) .headline-chip,
+body.shell-page:not(.tradez-page) .metric-card,
+body.shell-page:not(.tradez-page) .analysis-card,
+body.shell-page:not(.tradez-page) .setup-card,
+body.shell-page:not(.tradez-page) .news-item,
+body.shell-page:not(.tradez-page) .signal-item,
+body.shell-page:not(.tradez-page) .table-row,
+body.shell-page:not(.tradez-page) .chart-hud-item,
+body.shell-page:not(.tradez-page) .timeframe-inline,
+body.shell-page:not(.tradez-page) .trade-idea-card,
+body.shell-page:not(.tradez-page) .trade-idea-stat,
+body.shell-page:not(.tradez-page) .stack-card,
+body.tradez-page .headline-chip,
+body.tradez-page .metric-card,
+body.tradez-page .analysis-card,
+body.tradez-page .setup-card,
+body.tradez-page .news-item,
+body.tradez-page .signal-item,
+body.tradez-page .table-row,
+body.tradez-page .chart-hud-item,
+body.tradez-page .timeframe-inline,
+body.tradez-page .trade-idea-card,
+body.tradez-page .trade-idea-stat,
+body.tradez-page .stack-card {
+  border: 1px solid rgba(71, 85, 105, 0.2);
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.016), transparent 30%),
+    rgba(12, 16, 23, 0.78);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+}
+
+body.shell-page:not(.tradez-page) .metric-card,
+body.tradez-page .metric-card {
+  min-height: 88px;
+  padding: 12px 13px;
+}
+
+body.shell-page:not(.tradez-page) .headline-chip,
+body.tradez-page .headline-chip {
+  min-width: 118px;
+  padding: 10px 12px;
+}
+
+body.shell-page:not(.tradez-page) .metric-card strong,
+body.shell-page:not(.tradez-page) .headline-chip strong,
+body.shell-page:not(.tradez-page) .chart-hud-item strong,
+body.shell-page:not(.tradez-page) .score-badge,
+body.tradez-page .metric-card strong,
+body.tradez-page .headline-chip strong,
+body.tradez-page .chart-hud-item strong,
+body.tradez-page .score-badge {
+  font-family: var(--font-stack);
+}
+
+body.shell-page:not(.tradez-page) .panel-label,
+body.shell-page:not(.tradez-page) .eyebrow,
+body.tradez-page .panel-label,
+body.tradez-page .eyebrow {
+  color: #77dff0;
+  letter-spacing: 0.18em;
+}
+
+body.shell-page:not(.tradez-page) .subtitle,
+body.shell-page:not(.tradez-page) .subtitle-inline,
+body.shell-page:not(.tradez-page) .subsection-meta,
+body.shell-page:not(.tradez-page) .trade-copy,
+body.shell-page:not(.tradez-page) .outlook-copy,
+body.tradez-page .subtitle,
+body.tradez-page .subtitle-inline,
+body.tradez-page .subsection-meta,
+body.tradez-page .trade-copy,
+body.tradez-page .outlook-copy {
+  color: #97a4b6;
+}
+
+body.shell-page:not(.tradez-page) .token-form input,
+body.shell-page:not(.tradez-page) .token-form select,
+body.tradez-page .token-form input,
+body.tradez-page .token-form select {
+  border: 1px solid rgba(100, 116, 139, 0.2);
+  background: rgba(11, 15, 22, 0.76);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+}
+
+body.shell-page:not(.tradez-page) .token-form button,
+body.tradez-page .token-form button {
+  border: 1px solid rgba(34, 211, 238, 0.22);
+  background:
+    linear-gradient(180deg, rgba(34, 211, 238, 0.18), rgba(34, 211, 238, 0.08)),
+    rgba(12, 16, 23, 0.98);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 10px 22px rgba(2, 6, 23, 0.12);
+}
+
+body.shell-page:not(.tradez-page) .mini-button,
+body.tradez-page .mini-button {
+  border: 1px solid rgba(100, 116, 139, 0.18);
+  background: rgba(12, 16, 23, 0.78);
+  color: #d7e0eb;
+  box-shadow: none;
+}
+
+body.shell-page:not(.tradez-page) .mini-button.is-active,
+body.shell-page:not(.tradez-page) .feed-tab.is-active,
+body.tradez-page .mini-button.is-active,
+body.tradez-page .feed-tab.is-active {
+  border-color: rgba(34, 211, 238, 0.22);
+  background:
+    linear-gradient(180deg, rgba(34, 211, 238, 0.14), rgba(34, 211, 238, 0.04)),
+    rgba(13, 18, 26, 0.98);
+  color: #effbff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+body.shell-page:not(.tradez-page) .dashboard-grid,
+body.tradez-page .dashboard-grid {
+  gap: 24px;
+}
+
+body.main-shell-page .main-grid {
+  grid-template-columns: minmax(0, 1.92fr) minmax(300px, 0.72fr);
+}
+
+body.auto-shell-page .auto-grid {
+  grid-template-columns: minmax(0, 1.78fr) minmax(280px, 0.72fr);
+  gap: 24px;
+}
+
+body.arena-shell-page .arena-grid-shell {
+  gap: 24px;
+}
+
+body.shell-page:not(.tradez-page) .chart-shell,
+body.tradez-page .chart-shell {
+  padding: 10px;
+  border: 1px solid rgba(100, 116, 139, 0.14);
+  border-radius: 20px;
+  background: rgba(9, 13, 19, 0.84);
+  box-shadow: none;
+}
+
+body.shell-page:not(.tradez-page) .chart-frame,
+body.tradez-page .chart-frame {
+  border: 1px solid rgba(148, 163, 184, 0.08);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.01), transparent 16%),
+    #06090f;
+  box-shadow: none;
+}
+
+body.tradez-page .tradez-grid {
+  gap: 24px;
+}
+
+body.tradez-page .tradez-stage,
+body.tradez-page .tradez-side-stack {
+  gap: 24px;
+}
+
+body.tradez-page .tradez-chart-panel,
+body.tradez-page .tradez-pulse-panel,
+body.tradez-page .tradez-control-panel,
+body.tradez-page .tradez-workspace-panel {
+  border-radius: 20px;
+}
+
+body.tradez-page .tradez-chart-panel .chart-frame {
+  height: clamp(420px, 50vh, 560px);
+}
+
+body.tradez-page .tradez-feed-panel .feed-tabs,
+body.tradez-page .tradez-workspace-tabs {
+  gap: 8px;
+}
+
+body.token-analysis-page .shell-top-shell {
+  gap: 20px;
+}
+
+body.token-analysis-page .main-grid {
+  grid-template-columns: minmax(0, 2.08fr) minmax(280px, 0.7fr);
+  gap: 24px;
+}
+
+body.token-analysis-page .shell-hero-shell {
+  padding: 24px 24px 20px;
+  border-radius: 24px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 28%),
+    rgba(18, 22, 30, 0.9);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.03),
+    0 18px 34px rgba(2, 6, 23, 0.16);
+}
+
+body.token-analysis-page .shell-hero-shell::before {
+  display: none;
+}
+
+body.token-analysis-page .hero-copy {
+  gap: 8px;
+}
+
+body.token-analysis-page .hero-copy h1 {
+  letter-spacing: -0.03em;
+}
+
+body.token-analysis-page .hero-copy .subtitle {
+  max-width: 58ch;
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+body.token-analysis-page .token-analysis-hero-copy {
+  margin-bottom: 14px;
+}
+
+body.token-analysis-page .hero-form {
+  max-width: 820px;
+  padding: 12px;
+  border: 1px solid rgba(100, 116, 139, 0.18);
+  border-radius: 24px;
+  background: rgba(10, 14, 22, 0.72);
+  box-shadow: none;
+}
+
+body.token-analysis-page .token-analysis-center-form {
+  gap: 12px;
+}
+
+body.token-analysis-page .token-analysis-token-input {
+  min-height: 56px;
+  border-radius: 16px;
+  padding: 0 16px;
+  font-size: 0.98rem;
+}
+
+body.token-analysis-page .timeframe-switcher {
+  gap: 6px;
+  padding: 4px;
+  background: rgba(7, 11, 18, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(100, 116, 139, 0.16);
+}
+
+body.token-analysis-page .timeframe-button {
+  min-width: 56px;
+  min-height: 44px;
+  border-radius: 999px;
+}
+
+body.token-analysis-page .token-analysis-submit {
+  min-width: 148px;
+  min-height: 56px;
+  border-radius: 16px;
+  font-size: 0.98rem;
+}
+
+body.token-analysis-page .panel-hero {
+  padding: 18px;
+  border-radius: 20px;
+}
+
+body.token-analysis-page .panel-hero .panel-head {
+  margin-bottom: 16px;
+}
+
+body.token-analysis-page .panel-hero .panel-head h2 {
+  max-width: none;
+}
+
+body.token-analysis-page .headline-metrics {
+  gap: 8px;
+}
+
+body.token-analysis-page .headline-chip {
+  min-width: 124px;
+  border-radius: 14px;
+}
+
+body.token-analysis-page .chart-shell {
+  padding: 8px;
+  border-radius: 20px;
+  background: rgba(8, 12, 18, 0.9);
+}
+
+body.token-analysis-page .chart-frame {
+  height: clamp(430px, 52vh, 580px);
+  min-height: 430px;
+  border-radius: 16px;
+}
+
+body.token-analysis-page .chart-hud {
+  top: 12px;
+  left: 12px;
+  gap: 8px;
+}
+
+body.token-analysis-page .chart-hud-item {
+  min-width: 104px;
+  padding: 9px 10px;
+  border-radius: 14px;
+  backdrop-filter: blur(12px);
+}
+
+body.token-analysis-page .token-analysis-summary-tabs {
+  gap: 12px;
+  margin-top: 14px;
+}
+
+body.token-analysis-page .token-analysis-summary-head h3 {
+  font-size: 1.05rem;
+  line-height: 1.12;
+}
+
+body.token-analysis-page .token-analysis-summary-tablist {
+  gap: 6px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(8, 12, 18, 0.86);
+  box-shadow: inset 0 0 0 1px rgba(100, 116, 139, 0.14);
+}
+
+body.token-analysis-page .token-analysis-summary-tab {
+  min-height: 36px;
+  padding-inline: 14px;
+  border-radius: 999px;
+  background: transparent;
+}
+
+body.token-analysis-page .token-analysis-summary-tab.is-active {
+  box-shadow: none;
+}
+
+body.token-analysis-page .panel-outlook {
+  gap: 12px;
+  padding: 16px;
+  border-radius: 20px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent 26%),
+    rgba(17, 21, 29, 0.9);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.025),
+    0 16px 28px rgba(2, 6, 23, 0.12);
+}
+
+body.token-analysis-page .panel-outlook .signal-item {
+  padding: 12px;
+  border-radius: 14px;
+}
+
+body.token-analysis-page .score-badge {
+  min-width: 72px;
+  min-height: 72px;
+  border-radius: 18px;
+}
+
+body.token-analysis-page .outlook-copy {
+  padding: 14px;
+  border-radius: 14px;
+}
+
+body.token-analysis-page .panel-outlook .signal-list {
+  max-height: 500px;
+}
+
+body.token-analysis-page .workspace-panel {
+  padding: 18px;
+  border-radius: 20px;
+}
+
+body.token-analysis-page .subpanel,
+body.token-analysis-page .analysis-card,
+body.token-analysis-page .setup-card,
+body.token-analysis-page .news-item,
+body.token-analysis-page .table-row {
+  border-radius: 14px;
+}
+
+@media (max-width: 1280px) {
+  body.shell-page:not(.tradez-page) .app-bar,
+  body.tradez-page .app-bar {
+    grid-template-columns: 1fr;
+    justify-items: stretch;
+  }
+
+  body.shell-page:not(.tradez-page) .app-brand,
+  body.tradez-page .app-brand {
+    justify-content: center;
+  }
+
+  body.shell-page:not(.tradez-page) .shell-page-tabs,
+  body.tradez-page .tradez-page-tabs {
+    justify-self: stretch;
+  }
+
+  body.shell-page:not(.tradez-page) .header-actions,
+  body.tradez-page .header-actions {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 1180px) {
+  body.shell-page:not(.tradez-page) .hero-shell,
+  body.tradez-page .tradez-hero-shell,
+  body.token-analysis-page .main-grid,
+  body.auto-shell-page .auto-grid,
+  body.main-shell-page .main-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 980px) {
+  body.shell-page:not(.tradez-page) .page-shell.shell-layout,
+  body.tradez-page .page-shell.tradez-layout {
+    width: min(1720px, calc(100% - 24px));
+  }
+
+  body.shell-page:not(.tradez-page) .metric-strip,
+  body.tradez-page .metric-strip,
+  body.tradez-page .tradez-auto2-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  body.shell-page:not(.tradez-page) .shell-page-tabs,
+  body.tradez-page .tradez-page-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    border-radius: 20px;
+  }
+
+  body.shell-page:not(.tradez-page) .page-tab,
+  body.tradez-page .page-tab {
+    width: 100%;
+  }
+
+  body.shell-page:not(.tradez-page) .header-actions,
+  body.tradez-page .header-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    width: 100%;
+  }
+
+  body.token-analysis-page .hero-form {
+    width: 100%;
+  }
+
+  body.token-analysis-page .token-analysis-center-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  body.token-analysis-page .token-analysis-summary-tablist {
+    display: grid;
+    grid-template-columns: 1fr;
+    border-radius: 18px;
+  }
+
+  body.token-analysis-page .chart-frame {
+    height: 360px;
+    min-height: 360px;
+  }
+}
