@@ -5406,3 +5406,475 @@ body.token-analysis-page .table-row {
     min-height: 360px;
   }
 }
+
+/* Premium polish pass */
+:root {
+  --surface-shadow-soft: 0 12px 24px rgba(2, 6, 23, 0.1);
+  --surface-shadow-card: 0 8px 18px rgba(2, 6, 23, 0.08);
+  --surface-edge-light: rgba(255, 255, 255, 0.035);
+}
+
+body.shell-page .app-bar,
+body.tradez-page .app-bar,
+body.shell-page .panel,
+body.shell-page .metric-strip,
+body.shell-page .subpanel,
+body.tradez-page .panel,
+body.tradez-page .metric-strip,
+body.tradez-page .subpanel,
+body.shell-page .headline-chip,
+body.shell-page .metric-card,
+body.shell-page .analysis-card,
+body.shell-page .setup-card,
+body.shell-page .news-item,
+body.shell-page .signal-item,
+body.shell-page .table-row,
+body.shell-page .chart-hud-item,
+body.shell-page .timeframe-inline,
+body.shell-page .trade-idea-card,
+body.shell-page .trade-idea-stat,
+body.shell-page .stack-card,
+body.tradez-page .headline-chip,
+body.tradez-page .metric-card,
+body.tradez-page .analysis-card,
+body.tradez-page .setup-card,
+body.tradez-page .news-item,
+body.tradez-page .signal-item,
+body.tradez-page .table-row,
+body.tradez-page .chart-hud-item,
+body.tradez-page .timeframe-inline,
+body.tradez-page .trade-idea-card,
+body.tradez-page .trade-idea-stat,
+body.tradez-page .stack-card,
+body.shell-page .page-tab,
+body.tradez-page .page-tab,
+body.shell-page .mini-button,
+body.tradez-page .mini-button,
+body.shell-page .token-form button,
+body.tradez-page .token-form button,
+body.shell-page .token-form input,
+body.shell-page .token-form select,
+body.tradez-page .token-form input,
+body.tradez-page .token-form select,
+body.token-analysis-page .token-analysis-summary-tab {
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    background-color 180ms ease,
+    background 180ms ease,
+    box-shadow 180ms ease,
+    color 180ms ease,
+    opacity 180ms ease;
+}
+
+body.shell-page:not(.tradez-page) .app-bar,
+body.tradez-page .app-bar {
+  padding: 10px 16px;
+  border-color: rgba(100, 116, 139, 0.18);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.028), transparent 34%),
+    rgba(15, 19, 27, 0.76);
+  box-shadow:
+    inset 0 1px 0 var(--surface-edge-light),
+    0 10px 26px rgba(2, 6, 23, 0.14);
+}
+
+body.shell-page:not(.tradez-page) .shell-page-tabs,
+body.tradez-page .tradez-page-tabs {
+  padding: 3px;
+  gap: 4px;
+  border-color: rgba(100, 116, 139, 0.14);
+  background: rgba(8, 12, 18, 0.46);
+}
+
+body.shell-page:not(.tradez-page) .page-tab,
+body.tradez-page .page-tab {
+  min-height: 36px;
+  padding: 0 13px;
+  color: #9aa7b7;
+}
+
+body.shell-page:not(.tradez-page) .page-tab:hover,
+body.tradez-page .page-tab:hover {
+  transform: translateY(-1px);
+  border-color: rgba(34, 211, 238, 0.1);
+  background: rgba(18, 24, 33, 0.8);
+  color: #dde6f0;
+}
+
+body.shell-page:not(.tradez-page) .page-tab.is-current,
+body.tradez-page .page-tab.is-current {
+  border-color: rgba(34, 211, 238, 0.16);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.026), transparent 40%),
+    rgba(18, 25, 34, 0.96);
+  color: #f6fbff;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 1px 0 rgba(34, 211, 238, 0.12);
+}
+
+body.shell-page:not(.tradez-page) .header-feed,
+body.tradez-page .header-feed,
+body.shell-page:not(.tradez-page) .app-pill,
+body.tradez-page .app-pill,
+body.shell-page:not(.tradez-page) .header-icon-button,
+body.tradez-page .header-icon-button {
+  border-color: rgba(100, 116, 139, 0.14);
+  background: rgba(9, 13, 19, 0.54);
+}
+
+body.shell-page:not(.tradez-page) .header-icon-button:hover,
+body.tradez-page .header-icon-button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(34, 211, 238, 0.14);
+  color: #eef8ff;
+}
+
+body.shell-page:not(.tradez-page) .hero-shell,
+body.tradez-page .tradez-hero-shell {
+  gap: 18px;
+  padding: 18px 20px;
+  border-color: rgba(100, 116, 139, 0.14);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.022), transparent 30%),
+    rgba(17, 21, 29, 0.84);
+  box-shadow:
+    inset 0 1px 0 var(--surface-edge-light),
+    0 14px 28px rgba(2, 6, 23, 0.12);
+}
+
+body.shell-page:not(.tradez-page) .hero-copy h1,
+body.tradez-page .hero-copy h1 {
+  letter-spacing: -0.035em;
+}
+
+body.shell-page:not(.tradez-page) .hero-copy .subtitle,
+body.tradez-page .hero-copy .subtitle {
+  color: #a8b4c3;
+}
+
+body.shell-page:not(.tradez-page) .status-banner,
+body.tradez-page .status-banner {
+  padding: 9px 13px;
+  border-color: rgba(100, 116, 139, 0.12);
+  background:
+    linear-gradient(90deg, rgba(34, 211, 238, 0.055), transparent 34%),
+    rgba(15, 19, 27, 0.74);
+}
+
+body.shell-page:not(.tradez-page) .panel,
+body.shell-page:not(.tradez-page) .metric-strip,
+body.shell-page:not(.tradez-page) .subpanel,
+body.tradez-page .panel,
+body.tradez-page .metric-strip,
+body.tradez-page .subpanel {
+  border-color: rgba(100, 116, 139, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent 32%),
+    rgba(17, 21, 29, 0.84);
+  box-shadow:
+    inset 0 1px 0 var(--surface-edge-light),
+    var(--surface-shadow-soft);
+}
+
+body.shell-page:not(.tradez-page) .metric-strip,
+body.tradez-page .metric-strip,
+body.tradez-page .tradez-auto2-metrics {
+  gap: 10px;
+  padding: 10px;
+}
+
+body.shell-page:not(.tradez-page) .headline-chip,
+body.shell-page:not(.tradez-page) .metric-card,
+body.shell-page:not(.tradez-page) .analysis-card,
+body.shell-page:not(.tradez-page) .setup-card,
+body.shell-page:not(.tradez-page) .news-item,
+body.shell-page:not(.tradez-page) .signal-item,
+body.shell-page:not(.tradez-page) .table-row,
+body.shell-page:not(.tradez-page) .chart-hud-item,
+body.shell-page:not(.tradez-page) .timeframe-inline,
+body.shell-page:not(.tradez-page) .trade-idea-card,
+body.shell-page:not(.tradez-page) .trade-idea-stat,
+body.shell-page:not(.tradez-page) .stack-card,
+body.tradez-page .headline-chip,
+body.tradez-page .metric-card,
+body.tradez-page .analysis-card,
+body.tradez-page .setup-card,
+body.tradez-page .news-item,
+body.tradez-page .signal-item,
+body.tradez-page .table-row,
+body.tradez-page .chart-hud-item,
+body.tradez-page .timeframe-inline,
+body.tradez-page .trade-idea-card,
+body.tradez-page .trade-idea-stat,
+body.tradez-page .stack-card {
+  border-color: rgba(100, 116, 139, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.012), transparent 36%),
+    rgba(11, 15, 22, 0.72);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.018),
+    var(--surface-shadow-card);
+}
+
+body.shell-page:not(.tradez-page) .metric-card:hover,
+body.shell-page:not(.tradez-page) .analysis-card:hover,
+body.shell-page:not(.tradez-page) .setup-card:hover,
+body.tradez-page .metric-card:hover,
+body.tradez-page .analysis-card:hover,
+body.tradez-page .setup-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(100, 116, 139, 0.16);
+}
+
+body.shell-page:not(.tradez-page) .panel-head,
+body.tradez-page .panel-head {
+  margin-bottom: 14px;
+}
+
+body.shell-page:not(.tradez-page) .panel-label,
+body.shell-page:not(.tradez-page) .eyebrow,
+body.tradez-page .panel-label,
+body.tradez-page .eyebrow {
+  color: #7edceb;
+  font-size: 0.72rem;
+}
+
+body.shell-page:not(.tradez-page) .panel-head h2,
+body.tradez-page .panel-head h2 {
+  letter-spacing: -0.025em;
+}
+
+body.shell-page:not(.tradez-page) .subtitle,
+body.shell-page:not(.tradez-page) .subtitle-inline,
+body.shell-page:not(.tradez-page) .subsection-meta,
+body.shell-page:not(.tradez-page) .trade-copy,
+body.shell-page:not(.tradez-page) .outlook-copy,
+body.tradez-page .subtitle,
+body.tradez-page .subtitle-inline,
+body.tradez-page .subsection-meta,
+body.tradez-page .trade-copy,
+body.tradez-page .outlook-copy {
+  color: #a7b2c0;
+}
+
+body.shell-page:not(.tradez-page) .token-form input,
+body.shell-page:not(.tradez-page) .token-form select,
+body.tradez-page .token-form input,
+body.tradez-page .token-form select {
+  border-color: rgba(100, 116, 139, 0.16);
+  background: rgba(9, 13, 19, 0.66);
+}
+
+body.shell-page:not(.tradez-page) .token-form input:hover,
+body.shell-page:not(.tradez-page) .token-form select:hover,
+body.tradez-page .token-form input:hover,
+body.tradez-page .token-form select:hover {
+  border-color: rgba(100, 116, 139, 0.22);
+}
+
+body.shell-page:not(.tradez-page) .token-form input:focus,
+body.shell-page:not(.tradez-page) .token-form select:focus,
+body.tradez-page .token-form input:focus,
+body.tradez-page .token-form select:focus {
+  border-color: rgba(34, 211, 238, 0.22);
+  box-shadow:
+    0 0 0 3px rgba(34, 211, 238, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.025);
+}
+
+body.shell-page:not(.tradez-page) .token-form button,
+body.tradez-page .token-form button {
+  border-color: rgba(34, 211, 238, 0.16);
+  background:
+    linear-gradient(180deg, rgba(54, 200, 224, 0.22), rgba(28, 131, 149, 0.16)),
+    rgba(11, 16, 23, 0.98);
+}
+
+body.shell-page:not(.tradez-page) .token-form button:hover,
+body.tradez-page .token-form button:hover,
+body.shell-page:not(.tradez-page) .mini-button:hover,
+body.tradez-page .mini-button:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 10px 20px rgba(2, 6, 23, 0.12);
+}
+
+body.shell-page:not(.tradez-page) .mini-button,
+body.tradez-page .mini-button {
+  border-color: rgba(100, 116, 139, 0.14);
+  background: rgba(10, 14, 20, 0.72);
+  color: #d5dee8;
+}
+
+body.shell-page:not(.tradez-page) .mini-button.is-active,
+body.shell-page:not(.tradez-page) .feed-tab.is-active,
+body.tradez-page .mini-button.is-active,
+body.tradez-page .feed-tab.is-active {
+  border-color: rgba(34, 211, 238, 0.16);
+  background:
+    linear-gradient(180deg, rgba(34, 211, 238, 0.12), rgba(34, 211, 238, 0.03)),
+    rgba(12, 17, 24, 0.94);
+}
+
+body.shell-page:not(.tradez-page) .chart-shell,
+body.tradez-page .chart-shell {
+  padding: 8px;
+  border-color: rgba(100, 116, 139, 0.1);
+  background: rgba(7, 10, 15, 0.74);
+}
+
+body.shell-page:not(.tradez-page) .chart-frame,
+body.tradez-page .chart-frame {
+  border-color: rgba(148, 163, 184, 0.06);
+}
+
+body.shell-page:not(.tradez-page) .chart-hud-item,
+body.tradez-page .chart-hud-item {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent 36%),
+    rgba(8, 12, 18, 0.72);
+}
+
+body.token-analysis-page .shell-hero-shell {
+  padding: 22px 22px 18px;
+}
+
+body.token-analysis-page .hero-copy {
+  gap: 6px;
+}
+
+body.token-analysis-page .hero-copy h1 {
+  line-height: 0.98;
+}
+
+body.token-analysis-page .token-analysis-hero-copy {
+  margin-bottom: 12px;
+}
+
+body.token-analysis-page .hero-form {
+  padding: 10px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent 36%),
+    rgba(8, 12, 18, 0.62);
+}
+
+body.token-analysis-page .token-analysis-center-form {
+  justify-content: center;
+}
+
+body.token-analysis-page .token-analysis-token-input {
+  font-family: var(--ui-font);
+}
+
+body.token-analysis-page .timeframe-switcher {
+  gap: 4px;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(8, 12, 18, 0.82);
+}
+
+body.token-analysis-page .timeframe-button {
+  min-width: 58px;
+  min-height: 42px;
+  font-size: 0.8rem;
+}
+
+body.token-analysis-page .timeframe-button:hover {
+  transform: translateY(-1px);
+}
+
+body.token-analysis-page .timeframe-button.is-active {
+  border-color: rgba(34, 211, 238, 0.18);
+  background:
+    linear-gradient(180deg, rgba(34, 211, 238, 0.12), rgba(34, 211, 238, 0.03)),
+    rgba(13, 19, 26, 0.94);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 6px 14px rgba(2, 6, 23, 0.1);
+}
+
+body.token-analysis-page .token-analysis-submit {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 12px 22px rgba(2, 6, 23, 0.12);
+}
+
+body.token-analysis-page .panel-hero {
+  padding: 16px;
+}
+
+body.token-analysis-page .chart-shell {
+  padding: 6px;
+}
+
+body.token-analysis-page .chart-frame {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.012);
+}
+
+body.token-analysis-page .token-analysis-summary-head h3 {
+  color: #f1f6fb;
+}
+
+body.token-analysis-page .token-analysis-summary-tablist {
+  gap: 4px;
+  padding: 3px;
+}
+
+body.token-analysis-page .token-analysis-summary-tab {
+  min-height: 34px;
+  border-color: transparent;
+  color: #9ca9b8;
+}
+
+body.token-analysis-page .token-analysis-summary-tab:hover {
+  transform: translateY(-1px);
+  background: rgba(18, 24, 33, 0.78);
+  color: #deebf5;
+}
+
+body.token-analysis-page .token-analysis-summary-tab.is-active {
+  border-color: rgba(34, 211, 238, 0.14);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 38%),
+    rgba(17, 23, 32, 0.96);
+  color: #f5fbff;
+}
+
+body.token-analysis-page .panel-outlook {
+  gap: 10px;
+  padding: 14px;
+  border-color: rgba(100, 116, 139, 0.1);
+}
+
+body.token-analysis-page .panel-outlook .panel-head {
+  margin-bottom: 2px;
+}
+
+body.token-analysis-page .score-stack {
+  gap: 8px;
+}
+
+body.token-analysis-page .score-badge {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.024), transparent 38%),
+    rgba(10, 14, 20, 0.82);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.022),
+    0 8px 18px rgba(2, 6, 23, 0.08);
+}
+
+body.token-analysis-page .outlook-copy,
+body.token-analysis-page .panel-outlook .signal-item {
+  border-color: rgba(100, 116, 139, 0.1);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.012), transparent 36%),
+    rgba(9, 13, 19, 0.68);
+  box-shadow: none;
+}
+
+body.token-analysis-page .panel-outlook .signal-item + .signal-item {
+  margin-top: 2px;
+}
