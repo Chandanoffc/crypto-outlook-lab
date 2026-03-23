@@ -1,4 +1,6 @@
 const upbitNoticeHandler = require("./upbit-notices");
+const { hasDatabase, getRuntimeState, upsertRuntimeState } = require("../lib/neon-db");
+const { defaultRuntimeState, runHouseScan, sanitizeRuntimeState } = require("../lib/house-runtime");
 
 const ALERT_WINDOW_MS = 5 * 60 * 1000;
 
@@ -82,6 +84,28 @@ function isFreshMarketSupportNotice(notice, now) {
   return ageMs >= 0 && ageMs <= ALERT_WINDOW_MS;
 }
 
+async function runHouseBackgroundScan() {
+  if (!hasDatabase()) {
+    return {
+      ok: true,
+      skipped: true,
+      reason: "DATABASE_URL not configured.",
+    };
+  }
+
+  const stored = await getRuntimeState("house_auto_trade");
+  const currentState =
+    stored.found && stored.state ? sanitizeRuntimeState(stored.state) : defaultRuntimeState();
+  const result = await runHouseScan(currentState, { manual: false });
+  const saved = await upsertRuntimeState("house_auto_trade", result.state);
+
+  return {
+    ok: true,
+    updatedAt: saved.updatedAt,
+    summary: result.summary,
+  };
+}
+
 module.exports = async function handler(req, res) {
   if (req.method !== "GET" && req.method !== "POST") {
     buildJsonResponse(res, 405, {
@@ -92,12 +116,18 @@ module.exports = async function handler(req, res) {
 
   try {
     requireAuthorized(req);
+    const houseScanPromise = runHouseBackgroundScan().catch((error) => ({
+      ok: false,
+      error: error.message || "House background scan failed.",
+    }));
     const destinations = getDestinations();
     if (!destinations.discordWebhook && !(destinations.telegramToken && destinations.telegramChatId)) {
+      const houseAutoTrade = await houseScanPromise;
       buildJsonResponse(res, 200, {
         ok: true,
         skipped: true,
         reason: "No Upbit delivery destinations configured.",
+        houseAutoTrade,
       });
       return;
     }
@@ -136,12 +166,15 @@ module.exports = async function handler(req, res) {
       results.push(outcome);
     }
 
+    const houseAutoTrade = await houseScanPromise;
+
     buildJsonResponse(res, 200, {
       ok: true,
       checkedAt: now,
       checked: notices.length,
       matched: freshNotices.length,
       results,
+      houseAutoTrade,
     });
   } catch (error) {
     buildJsonResponse(res, error.statusCode || 500, {

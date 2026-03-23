@@ -68,6 +68,8 @@ const MIN_EMA_SPREAD_ATR = 0.22;
 const MIN_ATR_PCT_FOR_CONTINUATION = 0.45;
 const MIN_RECENT_BODY_RATIO = 0.33;
 const MAX_RECENT_WICKY_CANDLES = 2;
+const REMOTE_RUNTIME_POLL_MS = 60 * 1000;
+const REMOTE_DISPLAY_REFRESH_MS = 2 * 60 * 1000;
 
 const dom = {
   autoForm: document.getElementById("auto-form"),
@@ -140,6 +142,10 @@ let universeTickerMap = new Map();
 let analysisCache = new Map();
 let confirmationCache = new Map();
 let scanCursor = 0;
+let remoteRuntimeEnabled = false;
+let remoteRuntimeHydrating = false;
+let remoteRuntimePollTimer = null;
+let remoteDisplayRefreshTimer = null;
 
 function buildDefaultStrategyBalances() {
   return STRATEGY_SPECS.reduce((accumulator, spec) => {
@@ -845,6 +851,115 @@ function getFallbackExchangeInfo() {
 function setStatus(message, tone = "neutral") {
   dom.statusBanner.textContent = message;
   dom.statusBanner.className = `status-banner ${tone}`;
+}
+
+function applyRemoteRuntimeState(remoteState) {
+  if (!remoteState || typeof remoteState !== "object") return;
+  const localTab = state.activeTab;
+  remoteRuntimeHydrating = true;
+  Object.assign(state, {
+    startingBalance: Number(remoteState.startingBalance) || START_BALANCE,
+    balance: Number(remoteState.balance) || START_BALANCE,
+    strategyBalances: normalizeStrategyBalances(remoteState.strategyBalances),
+    autoEnabled: remoteState.autoEnabled !== false,
+    interval: remoteState.interval || DEFAULT_INTERVAL,
+    qualityThreshold: Math.max(50, Number(remoteState.qualityThreshold) || DEFAULT_QUALITY_THRESHOLD),
+    openTrades: Array.isArray(remoteState.openTrades) ? remoteState.openTrades : [],
+    strategyVersion: Number(remoteState.strategyVersion) || STRATEGY_VERSION,
+    activeTab: localTab || remoteState.activeTab || "positions",
+    closedTrades: Array.isArray(remoteState.closedTrades) ? remoteState.closedTrades : [],
+    activity: Array.isArray(remoteState.activity) ? remoteState.activity : [],
+    lastCandidates: Array.isArray(remoteState.lastCandidates) ? remoteState.lastCandidates : [],
+    lastScanAt: Number(remoteState.lastScanAt) || 0,
+  });
+  analysisCache = new Map(
+    state.lastCandidates
+      .filter((candidate) => candidate?.symbol)
+      .map((candidate) => [
+        candidate.symbol,
+        {
+          ...candidate,
+          analyzedAt: candidate.analyzedAt || state.lastScanAt || Date.now(),
+        },
+      ])
+  );
+  persistState();
+  remoteRuntimeHydrating = false;
+}
+
+async function fetchRemoteRuntimeState() {
+  const response = await fetch("/api/house-runtime", {
+    cache: "no-store",
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || `House runtime failed (${response.status})`);
+  }
+  return payload;
+}
+
+async function postRemoteRuntimeAction(action, settings = {}) {
+  const response = await fetch("/api/house-runtime", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+    },
+    body: JSON.stringify({
+      action,
+      settings,
+    }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || `House runtime update failed (${response.status})`);
+  }
+  return payload;
+}
+
+async function refreshUniverseDisplay() {
+  const universe = await getPerpUniverse();
+  const tickers = await fetchUniverseTickers();
+  universeTickerMap = buildTickerLookup(tickers);
+  renderDashboard(universe);
+  return universe;
+}
+
+function stopRemoteRuntimePolling() {
+  if (remoteRuntimePollTimer) window.clearInterval(remoteRuntimePollTimer);
+  if (remoteDisplayRefreshTimer) window.clearInterval(remoteDisplayRefreshTimer);
+  remoteRuntimePollTimer = null;
+  remoteDisplayRefreshTimer = null;
+}
+
+async function pullRemoteRuntimeState({ renderUniverse = false } = {}) {
+  const payload = await fetchRemoteRuntimeState();
+  remoteRuntimeEnabled = Boolean(payload.backgroundAvailable);
+  if (!remoteRuntimeEnabled) return payload;
+  applyRemoteRuntimeState(payload.state || {});
+  syncControls();
+  if (payload.state?.lastStatusMessage) {
+    setStatus(payload.state.lastStatusMessage, payload.state.lastStatusTone || "neutral");
+  }
+  if (renderUniverse) {
+    await refreshUniverseDisplay();
+  } else {
+    renderDashboard(perpUniverseCache || []);
+  }
+  return payload;
+}
+
+function startRemoteRuntimePolling() {
+  stopRemoteRuntimePolling();
+  remoteRuntimePollTimer = window.setInterval(() => {
+    pullRemoteRuntimeState().catch(() => {
+      // Keep the last-known remote state visible if a sync poll fails.
+    });
+  }, REMOTE_RUNTIME_POLL_MS);
+  remoteDisplayRefreshTimer = window.setInterval(() => {
+    refreshUniverseDisplay().catch(() => {
+      // Display refresh is best-effort only.
+    });
+  }, REMOTE_DISPLAY_REFRESH_MS);
 }
 
 function renderPaperTabs() {
@@ -3243,9 +3358,13 @@ function renderDashboard(universe = []) {
   dom.metricLastScan.textContent = state.lastScanAt
     ? new Date(state.lastScanAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     : "-";
-  dom.metricLastScanNote.textContent = state.autoEnabled
-    ? "Auto engine armed across full perp universe"
-    : "Auto engine paused";
+  dom.metricLastScanNote.textContent = remoteRuntimeEnabled
+    ? state.autoEnabled
+      ? "Background House engine active"
+      : "Background House engine paused"
+    : state.autoEnabled
+      ? "Auto engine armed across full perp universe"
+      : "Auto engine paused";
 
   if (dom.engineSummary) {
     dom.engineSummary.textContent = summarizeEngine(state.lastCandidates, state.qualityThreshold);
@@ -3330,13 +3449,34 @@ function renderDashboard(universe = []) {
   );
 
   dom.autoToggleButton.textContent = state.autoEnabled ? "Pause Auto" : "Resume Auto";
-  dom.autoRunNote.textContent = state.autoEnabled
-    ? `Auto-scans every 90 seconds, can open up to ${MAX_NEW_TRADES_PER_SCAN} fresh trades per pass, can hold up to ${MAX_CONCURRENT_TRADES} quality positions, and currently requires an effective house bar of Q${effectiveHouseQualityGate()}.`
-    : "Auto engine paused. Manual scans still work.";
+  dom.autoRunNote.textContent = remoteRuntimeEnabled
+    ? state.autoEnabled
+      ? `Background House engine is active server-side, syncs here every minute, and currently requires an effective house bar of Q${effectiveHouseQualityGate()}.`
+      : "Background House engine paused. Manual scans still work through the server runtime."
+    : state.autoEnabled
+      ? `Auto-scans every 90 seconds, can open up to ${MAX_NEW_TRADES_PER_SCAN} fresh trades per pass, can hold up to ${MAX_CONCURRENT_TRADES} quality positions, and currently requires an effective house bar of Q${effectiveHouseQualityGate()}.`
+      : "Auto engine paused. Manual scans still work.";
   renderPaperTabs();
 }
 
 async function scanUniverse({ manual = false } = {}) {
+  if (remoteRuntimeEnabled) {
+    if (!manual) return;
+    setStatus("Requesting a manual House scan from the background runtime...", "neutral");
+    const payload = await postRemoteRuntimeAction("scan", {
+      interval: state.interval,
+      qualityThreshold: state.qualityThreshold,
+      autoEnabled: state.autoEnabled,
+    });
+    applyRemoteRuntimeState(payload.state || {});
+    syncControls();
+    await refreshUniverseDisplay();
+    if (payload.state?.lastStatusMessage) {
+      setStatus(payload.state.lastStatusMessage, payload.state.lastStatusTone || "neutral");
+    }
+    return;
+  }
+
   if (scanning) return;
   scanning = true;
 
@@ -3471,6 +3611,7 @@ async function scanUniverse({ manual = false } = {}) {
 function scheduleAutoScan() {
   if (autoTimer) window.clearInterval(autoTimer);
   autoTimer = null;
+  if (remoteRuntimeEnabled) return;
   if (!state.autoEnabled) return;
   autoTimer = window.setInterval(() => {
     scanUniverse();
@@ -3491,23 +3632,73 @@ function syncControls() {
   if (dom.alertNotifyExits) dom.alertNotifyExits.checked = Boolean(autoDelivery.notifyExits);
 }
 
-dom.autoForm.addEventListener("submit", (event) => {
+dom.autoForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   state.interval = dom.scanInterval.value || DEFAULT_INTERVAL;
   state.qualityThreshold = Math.max(50, Number(dom.qualityThreshold.value) || DEFAULT_QUALITY_THRESHOLD);
   persistState();
+  if (remoteRuntimeEnabled) {
+    try {
+      const payload = await postRemoteRuntimeAction("scan", {
+        interval: state.interval,
+        qualityThreshold: state.qualityThreshold,
+        autoEnabled: state.autoEnabled,
+      });
+      applyRemoteRuntimeState(payload.state || {});
+      syncControls();
+      await refreshUniverseDisplay();
+      if (payload.state?.lastStatusMessage) {
+        setStatus(payload.state.lastStatusMessage, payload.state.lastStatusTone || "neutral");
+      }
+    } catch (error) {
+      setStatus(error.message || "Background House scan failed.", "down");
+    }
+    return;
+  }
   scanUniverse({ manual: true });
 });
 
-dom.autoToggleButton.addEventListener("click", () => {
+dom.autoToggleButton.addEventListener("click", async () => {
   state.autoEnabled = !state.autoEnabled;
   persistState();
+  if (remoteRuntimeEnabled) {
+    try {
+      const payload = await postRemoteRuntimeAction("settings", {
+        autoEnabled: state.autoEnabled,
+      });
+      applyRemoteRuntimeState(payload.state || {});
+      syncControls();
+      await refreshUniverseDisplay();
+      setStatus(
+        state.autoEnabled ? "Background House engine resumed." : "Background House engine paused.",
+        state.autoEnabled ? "up" : "neutral"
+      );
+    } catch (error) {
+      state.autoEnabled = !state.autoEnabled;
+      syncControls();
+      persistState();
+      setStatus(error.message || "Unable to update background House runtime.", "down");
+    }
+    return;
+  }
   scheduleAutoScan();
   renderDashboard();
   setStatus(state.autoEnabled ? "Auto paper trader resumed." : "Auto paper trader paused.", state.autoEnabled ? "up" : "neutral");
 });
 
-dom.resetSimButton.addEventListener("click", () => {
+dom.resetSimButton.addEventListener("click", async () => {
+  if (remoteRuntimeEnabled) {
+    try {
+      const payload = await postRemoteRuntimeAction("reset");
+      applyRemoteRuntimeState(payload.state || {});
+      syncControls();
+      await refreshUniverseDisplay();
+      setStatus("Background House simulation reset to the $1,000 book.", "neutral");
+    } catch (error) {
+      setStatus(error.message || "Unable to reset background House runtime.", "down");
+    }
+    return;
+  }
   state.startingBalance = START_BALANCE;
   state.strategyBalances = buildDefaultStrategyBalances();
   state.balance = START_BALANCE;
@@ -3629,8 +3820,34 @@ if (dom.paperTabAlerts) {
   });
 }
 
-syncControls();
-applyStrategyUpgradeNotice();
-renderDashboard();
-scheduleAutoScan();
-scanUniverse();
+async function bootstrapPaperRuntime() {
+  syncControls();
+  applyStrategyUpgradeNotice();
+  renderDashboard();
+
+  try {
+    const payload = await fetchRemoteRuntimeState();
+    if (payload.backgroundAvailable) {
+      remoteRuntimeEnabled = true;
+      applyRemoteRuntimeState(payload.state || {});
+      syncControls();
+      await refreshUniverseDisplay();
+      if (payload.state?.lastStatusMessage) {
+        setStatus(payload.state.lastStatusMessage, payload.state.lastStatusTone || "neutral");
+      } else {
+        setStatus("Background House engine connected.", "up");
+      }
+      startRemoteRuntimePolling();
+      return;
+    }
+  } catch (error) {
+    // Fall back to the legacy in-browser scanner when the server runtime is unavailable.
+  }
+
+  remoteRuntimeEnabled = false;
+  stopRemoteRuntimePolling();
+  scheduleAutoScan();
+  scanUniverse();
+}
+
+bootstrapPaperRuntime();
