@@ -3,6 +3,8 @@ const STRATEGY_INTERVAL = "1h";
 const QUOTE_ASSET = "USDT";
 const DEFAULT_QUALITY_THRESHOLD = 78;
 const AUTO_SCAN_MS = 5 * 60 * 1000;
+const REMOTE_RUNTIME_POLL_MS = 60 * 1000;
+const REMOTE_DISPLAY_REFRESH_MS = 2 * 60 * 1000;
 const PRIORITY_SCAN_COUNT = 12;
 const ROTATION_SCAN_COUNT = 20;
 const ANALYSIS_CONCURRENCY = 5;
@@ -242,6 +244,10 @@ let universeTickerMap = new Map();
 let candidateMap = new Map();
 let latestBatchMap = new Map();
 let chartResizeBound = false;
+let remoteRuntimeEnabled = false;
+let remoteRuntimeHydrating = false;
+let remoteRuntimePollTimer = null;
+let remoteDisplayRefreshTimer = null;
 
 function loadTradezPaperState() {
   const stored = readStoredJson(TRADEZ_AUTO_STORAGE_KEY, {});
@@ -1087,6 +1093,117 @@ function getFallbackExchangeInfo() {
 function setStatus(message, tone = "neutral") {
   dom.statusBanner.textContent = message;
   dom.statusBanner.className = `status-banner ${tone}`;
+}
+
+function applyRemoteRuntimeState(remoteState) {
+  if (!remoteState || typeof remoteState !== "object") return;
+  const localTradezTab = tradezPaper.activeTab;
+  remoteRuntimeHydrating = true;
+  state.qualityThreshold = Math.max(50, Number(remoteState.qualityThreshold) || DEFAULT_QUALITY_THRESHOLD);
+  state.lastScanAt = Number(remoteState.lastScanAt) || 0;
+  state.candidates = Array.isArray(remoteState.lastCandidates) ? remoteState.lastCandidates : [];
+  tradezPaper.startingBalance = Number(remoteState.startingBalance) || TRADEZ_AUTO_START_BALANCE;
+  tradezPaper.balance =
+    Number(remoteState.balance) || Number(remoteState.startingBalance) || TRADEZ_AUTO_START_BALANCE;
+  tradezPaper.autoEnabled = remoteState.autoEnabled !== false;
+  tradezPaper.openTrades = Array.isArray(remoteState.openTrades) ? remoteState.openTrades : [];
+  tradezPaper.closedTrades = Array.isArray(remoteState.closedTrades) ? remoteState.closedTrades : [];
+  tradezPaper.demoOrders = Array.isArray(remoteState.demoOrders) ? remoteState.demoOrders : [];
+  tradezPaper.activity = Array.isArray(remoteState.activity) ? remoteState.activity : [];
+  tradezPaper.activeTab = localTradezTab || remoteState.activeTab || "positions";
+  tradezPaper.lastScanAt = Number(remoteState.lastScanAt) || 0;
+  tradezPaper.lastDailyBriefingUtcDate =
+    remoteState.lastDailyBriefingUtcDate || utcDayKey(Date.now() - UTC_DAY_MS);
+  tradezPaper.strategyVersion = Number(remoteState.strategyVersion) || TRADEZ_AUTO_VERSION;
+  dom.qualityThreshold.value = `${state.qualityThreshold}`;
+  candidateMap = new Map(state.candidates.map((candidate) => [candidate.symbol, candidate]));
+  latestBatchMap = new Map(candidateMap);
+  persistState();
+  persistTradezPaperState();
+  remoteRuntimeHydrating = false;
+}
+
+async function fetchRemoteRuntimeState() {
+  const response = await fetch("/api/tradez-runtime", {
+    cache: "no-store",
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || `Tradez runtime failed (${response.status})`);
+  }
+  return payload;
+}
+
+async function postRemoteRuntimeAction(action, settings = {}) {
+  const response = await fetch("/api/tradez-runtime", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+    },
+    body: JSON.stringify({
+      action,
+      settings,
+    }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || `Tradez runtime update failed (${response.status})`);
+  }
+  return payload;
+}
+
+async function refreshRemoteDisplayData() {
+  try {
+    const universe = await getPerpUniverse();
+    if (!universe?.length) return;
+    const tickers = await fetchUniverseTickers();
+    universeTickerMap = buildTickerLookup(tickers);
+  } catch (error) {
+    // Display refresh is best-effort only.
+  }
+}
+
+function renderTradezRuntimeState() {
+  state.candidates.forEach(pushAlertEvent);
+  renderSignalFeed();
+  renderAlertFeed();
+  updateMetrics();
+  renderTradezPaperDashboard();
+}
+
+function stopRemoteRuntimePolling() {
+  if (remoteRuntimePollTimer) window.clearInterval(remoteRuntimePollTimer);
+  if (remoteDisplayRefreshTimer) window.clearInterval(remoteDisplayRefreshTimer);
+  remoteRuntimePollTimer = null;
+  remoteDisplayRefreshTimer = null;
+}
+
+async function pullRemoteRuntimeState() {
+  const payload = await fetchRemoteRuntimeState();
+  remoteRuntimeEnabled = Boolean(payload.backgroundAvailable);
+  if (!remoteRuntimeEnabled) return payload;
+  applyRemoteRuntimeState(payload.state || {});
+  renderTradezRuntimeState();
+  if (payload.state?.lastStatusMessage) {
+    setStatus(payload.state.lastStatusMessage, payload.state.lastStatusTone || "neutral");
+  }
+  return payload;
+}
+
+function startRemoteRuntimePolling() {
+  stopRemoteRuntimePolling();
+  remoteRuntimePollTimer = window.setInterval(() => {
+    pullRemoteRuntimeState().catch(() => {
+      // Keep last-known remote state visible if a sync poll fails.
+    });
+  }, REMOTE_RUNTIME_POLL_MS);
+  remoteDisplayRefreshTimer = window.setInterval(() => {
+    refreshRemoteDisplayData().then(() => {
+      renderTradezRuntimeState();
+    }).catch(() => {
+      // Best effort only.
+    });
+  }, REMOTE_DISPLAY_REFRESH_MS);
 }
 
 function setStreamStatus(message, tone = "neutral") {
@@ -2607,13 +2724,17 @@ function renderTradezPaperDashboard() {
   }
   if (dom.auto2MetricLastScanNote) {
     dom.auto2MetricLastScanNote.textContent = tradezPaper.autoEnabled
-      ? "EMA book scans every 5m in parallel"
+      ? remoteRuntimeEnabled
+        ? "EMA book scans every 5m on the background runtime"
+        : "EMA book scans every 5m in parallel"
       : "EMA book paused";
   }
   if (dom.auto2Toggle) dom.auto2Toggle.textContent = tradezPaper.autoEnabled ? "Pause Auto 2" : "Resume Auto 2";
   if (dom.auto2Note) {
     dom.auto2Note.textContent = tradezPaper.autoEnabled
-      ? `Auto Trade 2 scans every 5 minutes, can open up to ${TRADEZ_AUTO_MAX_NEW_TRADES} fresh trades per pass, can hold up to ${TRADEZ_AUTO_MAX_CONCURRENT_TRADES} EMA positions, and is running on the $${TRADEZ_AUTO_START_BALANCE.toLocaleString()} research book in ${tradezModeLabel()} mode.`
+      ? remoteRuntimeEnabled
+        ? `Auto Trade 2 scans every 5 minutes on the shared background runtime, can open up to ${TRADEZ_AUTO_MAX_NEW_TRADES} fresh trades per pass, can hold up to ${TRADEZ_AUTO_MAX_CONCURRENT_TRADES} EMA positions, and is running on the $${TRADEZ_AUTO_START_BALANCE.toLocaleString()} research book in ${tradezModeLabel()} mode.`
+        : `Auto Trade 2 scans every 5 minutes, can open up to ${TRADEZ_AUTO_MAX_NEW_TRADES} fresh trades per pass, can hold up to ${TRADEZ_AUTO_MAX_CONCURRENT_TRADES} EMA positions, and is running on the $${TRADEZ_AUTO_START_BALANCE.toLocaleString()} research book in ${tradezModeLabel()} mode.`
       : `Auto Trade 2 is paused. The feed still monitors EMA setups while the $${TRADEZ_AUTO_START_BALANCE.toLocaleString()} research book stays armed in ${tradezModeLabel()} mode.`;
   }
 
@@ -4580,8 +4701,14 @@ function updateMetrics() {
   dom.metricAlerts.textContent = `${state.alertEvents.length}`;
   dom.metricAlertsNote.textContent = state.alertEvents.length ? "Stored alert events on this browser" : "No alert events stored yet";
   dom.metricLastScan.textContent = formatClock(state.lastScanAt);
-  dom.metricLastScanNote.textContent = state.lastScanAt ? "Universe rotated every 5m" : "First scan pending";
-  dom.autoNote.textContent = `Universe scan refreshes every 5 minutes. ${qualified.length} qualified right now.`;
+  dom.metricLastScanNote.textContent = state.lastScanAt
+    ? remoteRuntimeEnabled
+      ? "Universe rotated every 5m on the background runtime"
+      : "Universe rotated every 5m"
+    : "First scan pending";
+  dom.autoNote.textContent = remoteRuntimeEnabled
+    ? `Universe scan refreshes every 5 minutes on the background runtime. ${qualified.length} qualified right now.`
+    : `Universe scan refreshes every 5 minutes. ${qualified.length} qualified right now.`;
 }
 
 function updateAlertPermissionButton() {
@@ -4648,6 +4775,26 @@ async function loadSelectedToken(tokenOrSymbol) {
 }
 
 async function scanUniverse(manual = false) {
+  if (remoteRuntimeEnabled) {
+    if (!manual) return;
+    setStatus("Running manual Tradez background scan...", "neutral");
+    try {
+      const payload = await postRemoteRuntimeAction("scan", {
+        qualityThreshold: state.qualityThreshold,
+        autoEnabled: tradezPaper.autoEnabled,
+      });
+      applyRemoteRuntimeState(payload.state || {});
+      renderTradezRuntimeState();
+      setStatus(
+        payload.state?.lastStatusMessage || "Tradez background scan complete.",
+        payload.state?.lastStatusTone || "neutral"
+      );
+    } catch (error) {
+      setStatus(error.message || "Tradez background scan failed.", "down");
+    }
+    return;
+  }
+
   setStatus(
     manual
       ? "Running manual Tradez universe scan..."
@@ -4747,6 +4894,7 @@ async function scanUniverse(manual = false) {
 }
 
 function startAutoScan() {
+  if (remoteRuntimeEnabled) return;
   if (scanTimer) window.clearInterval(scanTimer);
   scanTimer = window.setInterval(() => {
     scanUniverse(false);
@@ -4763,10 +4911,10 @@ function bindEvents() {
     await scanUniverse(true);
   });
 
-  dom.scanButton.addEventListener("click", () => {
+  dom.scanButton.addEventListener("click", async () => {
     state.qualityThreshold = Math.max(50, Number(dom.qualityThreshold.value) || DEFAULT_QUALITY_THRESHOLD);
     persistState();
-    scanUniverse(true);
+    await scanUniverse(true);
   });
 
   dom.alertPermissionButton.addEventListener("click", requestAlertPermission);
@@ -4846,8 +4994,21 @@ function bindEvents() {
   }
 
   if (dom.auto2Toggle) {
-    dom.auto2Toggle.addEventListener("click", () => {
+    dom.auto2Toggle.addEventListener("click", async () => {
       tradezPaper.autoEnabled = !tradezPaper.autoEnabled;
+      if (remoteRuntimeEnabled) {
+        try {
+          const payload = await postRemoteRuntimeAction("settings", {
+            autoEnabled: tradezPaper.autoEnabled,
+            qualityThreshold: state.qualityThreshold,
+          });
+          applyRemoteRuntimeState(payload.state || {});
+        } catch (error) {
+          tradezPaper.autoEnabled = !tradezPaper.autoEnabled;
+          setStatus(error.message || "Unable to update Auto Trade 2.", "down");
+          return;
+        }
+      }
       persistTradezPaperState();
       renderTradezPaperDashboard();
       setStatus(
@@ -4858,7 +5019,18 @@ function bindEvents() {
   }
 
   if (dom.auto2Reset) {
-    dom.auto2Reset.addEventListener("click", () => {
+    dom.auto2Reset.addEventListener("click", async () => {
+      if (remoteRuntimeEnabled) {
+        try {
+          const payload = await postRemoteRuntimeAction("reset");
+          applyRemoteRuntimeState(payload.state || {});
+          renderTradezRuntimeState();
+          setStatus("Auto Trade 2 reset to the $1,000 EMA research book.", "neutral");
+        } catch (error) {
+          setStatus(error.message || "Unable to reset Auto Trade 2.", "down");
+        }
+        return;
+      }
       tradezPaper.balance = TRADEZ_AUTO_START_BALANCE;
       tradezPaper.startingBalance = TRADEZ_AUTO_START_BALANCE;
       tradezPaper.openTrades = [];
@@ -4922,9 +5094,35 @@ async function init() {
   initChart();
   bindEvents();
   updateMetrics();
+  await refreshRemoteDisplayData();
   await loadSelectedToken(state.selectedToken);
+}
+
+async function bootstrapTradezRuntime() {
+  await init();
+
+  try {
+    const payload = await fetchRemoteRuntimeState();
+    if (payload.backgroundAvailable) {
+      remoteRuntimeEnabled = true;
+      applyRemoteRuntimeState(payload.state || {});
+      renderTradezRuntimeState();
+      if (payload.state?.lastStatusMessage) {
+        setStatus(payload.state.lastStatusMessage, payload.state.lastStatusTone || "neutral");
+      } else {
+        setStatus("Background Auto Trade 2 engine connected.", "up");
+      }
+      startRemoteRuntimePolling();
+      return;
+    }
+  } catch (error) {
+    // Fall back to the legacy in-browser scanner when the server runtime is unavailable.
+  }
+
+  remoteRuntimeEnabled = false;
+  stopRemoteRuntimePolling();
   await scanUniverse(false);
   startAutoScan();
 }
 
-init();
+bootstrapTradezRuntime();

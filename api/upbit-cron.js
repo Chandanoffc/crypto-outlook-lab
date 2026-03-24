@@ -1,6 +1,11 @@
 const upbitNoticeHandler = require("./upbit-notices");
 const { hasDatabase, getRuntimeState, upsertRuntimeState } = require("../lib/neon-db");
 const { defaultRuntimeState, runHouseScan, sanitizeRuntimeState } = require("../lib/house-runtime");
+const {
+  defaultRuntimeState: defaultTradezRuntimeState,
+  runTradezScan,
+  sanitizeRuntimeState: sanitizeTradezRuntimeState,
+} = require("../lib/tradez-runtime");
 
 const ALERT_WINDOW_MS = 5 * 60 * 1000;
 
@@ -106,6 +111,28 @@ async function runHouseBackgroundScan() {
   };
 }
 
+async function runTradezBackgroundScan() {
+  if (!hasDatabase()) {
+    return {
+      ok: true,
+      skipped: true,
+      reason: "DATABASE_URL not configured.",
+    };
+  }
+
+  const stored = await getRuntimeState("tradez_auto_trade");
+  const currentState =
+    stored.found && stored.state ? sanitizeTradezRuntimeState(stored.state) : defaultTradezRuntimeState();
+  const result = await runTradezScan(currentState, { manual: false });
+  const saved = await upsertRuntimeState("tradez_auto_trade", result.state);
+
+  return {
+    ok: true,
+    updatedAt: saved.updatedAt,
+    summary: result.summary,
+  };
+}
+
 module.exports = async function handler(req, res) {
   if (req.method !== "GET" && req.method !== "POST") {
     buildJsonResponse(res, 405, {
@@ -120,14 +147,20 @@ module.exports = async function handler(req, res) {
       ok: false,
       error: error.message || "House background scan failed.",
     }));
+    const tradezScanPromise = runTradezBackgroundScan().catch((error) => ({
+      ok: false,
+      error: error.message || "Tradez background scan failed.",
+    }));
     const destinations = getDestinations();
     if (!destinations.discordWebhook && !(destinations.telegramToken && destinations.telegramChatId)) {
       const houseAutoTrade = await houseScanPromise;
+      const tradezAutoTrade = await tradezScanPromise;
       buildJsonResponse(res, 200, {
         ok: true,
         skipped: true,
         reason: "No Upbit delivery destinations configured.",
         houseAutoTrade,
+        tradezAutoTrade,
       });
       return;
     }
@@ -167,6 +200,7 @@ module.exports = async function handler(req, res) {
     }
 
     const houseAutoTrade = await houseScanPromise;
+    const tradezAutoTrade = await tradezScanPromise;
 
     buildJsonResponse(res, 200, {
       ok: true,
@@ -175,6 +209,7 @@ module.exports = async function handler(req, res) {
       matched: freshNotices.length,
       results,
       houseAutoTrade,
+      tradezAutoTrade,
     });
   } catch (error) {
     buildJsonResponse(res, error.statusCode || 500, {
