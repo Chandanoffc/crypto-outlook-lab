@@ -38,7 +38,8 @@ const MIN_EMA_SEPARATION_ATR = 0.2;
 const MAX_STALE_SIGNAL_BARS = 2;
 const MAX_AUTO_ENTRY_SIGNAL_BARS = 2;
 const MAX_POST_TOUCH_EXTENSION_ATR = 1.5;
-const MIN_EXECUTION_RR = 1.5;
+const MIN_VISIBLE_SIGNAL_RR = 1.2;
+const MIN_EXECUTION_RR = 1.4;
 const MIN_VISIBLE_SIGNAL_VOLUME_FACTOR = 1.05;
 const MIN_AUTO_EXECUTION_VOLUME_FACTOR = 1.1;
 const STRICT_LEVEL_TOUCH_BUFFER_ATR = 0.05;
@@ -3751,7 +3752,7 @@ function buildTradezSignals(snapshot, quoteVolume = 0) {
       (useLevelTwo || touch20 || touch50);
     if (!elite) qualityCap = Math.min(qualityCap, 138);
     qualityScore = Math.min(qualityScore, qualityCap);
-    if (rr < 1 || tp2 === tp1) continue;
+    if (rr < MIN_VISIBLE_SIGNAL_RR || tp2 === tp1) continue;
 
     const signal = {
       id: `${snapshot.symbol}:${side}:${confluenceLabel}:${touchedCandle.time}`,
@@ -4693,7 +4694,7 @@ async function scanUniverse(manual = false) {
     latestBatchMap = new Map(analyzedCandidates.map((candidate) => [candidate.symbol, candidate]));
 
     state.candidates = analyzedCandidates
-      .filter((candidate) => candidate.activeSignal && candidate.activeSignal.sinceTouchBars <= 3)
+      .filter((candidate) => candidate.activeSignal && candidate.activeSignal.sinceTouchBars <= MAX_STALE_SIGNAL_BARS)
       .sort((left, right) => right.qualityScore - left.qualityScore)
       .slice(0, 28);
 
