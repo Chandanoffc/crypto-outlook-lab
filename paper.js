@@ -21,7 +21,7 @@ const TRADE_COOLDOWN_MS = 4 * 60 * 1000;
 const STOP_LOSS_COOLDOWN_MS = 2 * 60 * 60 * 1000;
 const HIGH_VOLUME_FLOOR = 100_000_000;
 const MIN_RR = 1.6;
-const MIN_PROJECTED_MOVE_PCT = 2.1;
+const MIN_PROJECTED_MOVE_PCT = 1.6;
 const STRATEGY_VERSION = 6;
 const TICKER_STORAGE_KEY = "apex-signals-auto-paper-tickers";
 const SHARED_TRADEZ_AUTO_STORAGE_KEY = "hyperdrive-tradez-auto-paper";
@@ -59,11 +59,11 @@ Opened: {openedAt}
 Mode: {mode}
 Open on Binance: {binanceLink}`,
 };
-const HOUSE_MIN_ENTRY_SCORE = 18;
-const HOUSE_MIN_REFINED_SCORE = 85;
-const MIN_NEAREST_TARGET_RR = 1.5;
-const MAX_ENTRY_DISTANCE_FROM_EMA20_ATR = 1.15;
-const MAX_ENTRY_DISTANCE_FROM_LEVEL_ATR = 0.95;
+const HOUSE_MIN_ENTRY_SCORE = 15;
+const HOUSE_MIN_REFINED_SCORE = 78;
+const MIN_NEAREST_TARGET_RR = 1.3;
+const MAX_ENTRY_DISTANCE_FROM_EMA20_ATR = 1.35;
+const MAX_ENTRY_DISTANCE_FROM_LEVEL_ATR = 1.1;
 const MIN_EMA_SPREAD_ATR = 0.22;
 const MIN_ATR_PCT_FOR_CONTINUATION = 0.45;
 const MIN_RECENT_BODY_RATIO = 0.33;
@@ -1712,13 +1712,18 @@ function analyzeSnapshot(snapshot) {
   const bias = biasDescriptor(biasScore);
   const ema20SlopeAligned = slopeAlignedForDirection(ema20Slope, ema50Slope, bias.tone);
   const ema50SlopeAligned = bias.tone === "up" ? ema50Slope > -0.01 : ema50Slope < 0.01;
-  const crowdedLong = fundingRate > 0.03 && oiChange1h > 0 && globalLongShortRatio > 1.12;
-  const crowdedShort = fundingRate < -0.03 && oiChange1h > 0 && globalLongShortRatio < 0.88;
-  const crowdedHardRejectLong = fundingRate > 0.05 && oiChange1h > 0 && globalLongShortRatio > 1.18;
-  const crowdedHardRejectShort = fundingRate < -0.05 && oiChange1h > 0 && globalLongShortRatio < 0.82;
+  const crowdedLong = fundingRate > 0.025 && oiChange1h > 0 && globalLongShortRatio > 1.1;
+  const crowdedShort = fundingRate < -0.025 && oiChange1h > 0 && globalLongShortRatio < 0.9;
+  const crowdedHardRejectLong = fundingRate > 0.045 && oiChange1h > 0 && globalLongShortRatio > 1.16;
+  const crowdedHardRejectShort = fundingRate < -0.045 && oiChange1h > 0 && globalLongShortRatio < 0.84;
   const crowdedContinuation = bias.tone === "up" ? crowdedLong : bias.tone === "down" ? crowdedShort : false;
   const crowdedHardReject =
     bias.tone === "up" ? crowdedHardRejectLong : bias.tone === "down" ? crowdedHardRejectShort : false;
+  const extremeCompressedStructure = emaSpreadAtr < MIN_EMA_SPREAD_ATR * 0.6;
+  const extremeLowVolatilityChop =
+    atrPct < MIN_ATR_PCT_FOR_CONTINUATION * 0.7 &&
+    Math.abs(recentPriceChange) < 0.55 &&
+    (recentStructure.isWickyChop || recentStructure.avgBodyRatio < MIN_RECENT_BODY_RATIO * 0.8);
   const potentialTrade = buildPotentialTrade({
     currentPrice,
     ema20: ema20Value,
@@ -1769,6 +1774,8 @@ function analyzeSnapshot(snapshot) {
     recentWickyCount: recentStructure.wickyCount,
     compressedStructure,
     lowVolatilityChop,
+    extremeCompressedStructure,
+    extremeLowVolatilityChop,
     rsi: latestDefinedValue(rsiSeries) ?? 50,
     latestAtr,
     fundingRate,
@@ -1800,7 +1807,7 @@ function highQualityCandidates(candidates, threshold) {
       (candidate) =>
         candidate.bias.tone !== "neutral" &&
         (candidate.refinedQualityScore ?? candidate.qualityScore) >= Math.max(effectiveThreshold, candidate.requiredQualityGate || 0) &&
-        candidate.entryQualityScore >= (candidate.requiredEntryScore || 16) &&
+        candidate.entryQualityScore >= (candidate.requiredEntryScore || HOUSE_MIN_ENTRY_SCORE) &&
         candidate.alignedCount >= 2 &&
         candidate.conflictCount === 0 &&
         !candidate.htfAgreementHardRejected &&
@@ -1811,8 +1818,8 @@ function highQualityCandidates(candidates, threshold) {
         candidate.ema20SlopeAligned &&
         candidate.ema50SlopeAligned &&
         !candidate.crowdedHardReject &&
-        !candidate.compressedStructure &&
-        !candidate.lowVolatilityChop &&
+        !candidate.extremeCompressedStructure &&
+        !candidate.extremeLowVolatilityChop &&
         hasGoodTradingVolume(candidate.quoteVolume) &&
         candidate.rr >= MIN_RR &&
         candidate.trade.projectedMovePct >= MIN_PROJECTED_MOVE_PCT
@@ -2297,7 +2304,7 @@ function applyCandidateConfirmation(candidate, ticker, confirmation) {
   const lowerLiquiditySetup = quoteVolume < HIGH_VOLUME_FLOOR * 1.6;
   const crowdedSetup = Boolean(candidate.crowdedContinuation);
   const crowdedHardReject = Boolean(candidate.crowdedHardReject);
-  const htfAgreementHardRejected = alignedCount < 3 || conflictCount > 0;
+  const htfAgreementHardRejected = alignedCount < 2 || conflictCount > 0;
   const locationQuality = Boolean(candidate.trade?.entryLocationQuality);
   const slopesAligned = Boolean(candidate.ema20SlopeAligned) && Boolean(candidate.ema50SlopeAligned);
 
@@ -2326,14 +2333,16 @@ function applyCandidateConfirmation(candidate, ticker, confirmation) {
   entryQualityScore += candidate.trade?.distanceFromLevelAtr <= MAX_ENTRY_DISTANCE_FROM_LEVEL_ATR ? 6 : -12;
   entryQualityScore += slopesAligned ? 12 : -22;
   entryQualityScore += candidate.trade?.nearestTargetRr >= MIN_NEAREST_TARGET_RR ? 8 : -18;
-  if (candidate.compressedStructure) entryQualityScore -= 16;
-  if (candidate.lowVolatilityChop) entryQualityScore -= 18;
+  if (candidate.compressedStructure) entryQualityScore -= 10;
+  if (candidate.extremeCompressedStructure) entryQualityScore -= 12;
+  if (candidate.lowVolatilityChop) entryQualityScore -= 12;
+  if (candidate.extremeLowVolatilityChop) entryQualityScore -= 14;
   if (Number.isFinite(candidate.recentBodyRatio) && candidate.recentBodyRatio < MIN_RECENT_BODY_RATIO) {
     entryQualityScore -= 12;
   }
-  if (crowdedSetup) entryQualityScore -= 16;
-  if (crowdedHardReject) entryQualityScore -= 18;
-  entryQualityScore += alignedCount >= 3 ? 20 : alignedCount === 2 ? 8 : -20;
+  if (crowdedSetup) entryQualityScore -= 20;
+  if (crowdedHardReject) entryQualityScore -= 24;
+  entryQualityScore += alignedCount >= 3 ? 20 : alignedCount === 2 ? 10 : -20;
   if (conflictCount > 0) entryQualityScore -= 40;
   entryQualityScore += distanceFromEma20Pct <= 2.5 ? 4 : -10;
   entryQualityScore += Math.abs(candidate.recentPriceChange) >= 0.8 ? 3 : -3;
@@ -2416,7 +2425,7 @@ function buildCoreTrendStrategySignal(candidate) {
 
   if (
     candidate.bias.tone === "neutral" ||
-    candidate.alignedCount < 3 ||
+    candidate.alignedCount < 2 ||
     candidate.conflictCount > 0 ||
     candidate.htfAgreementHardRejected ||
     !hasGoodTradingVolume(candidate.quoteVolume) ||
@@ -2431,8 +2440,8 @@ function buildCoreTrendStrategySignal(candidate) {
     !candidate.ema20SlopeAligned ||
     !candidate.ema50SlopeAligned ||
     candidate.crowdedHardReject ||
-    candidate.compressedStructure ||
-    candidate.lowVolatilityChop ||
+    candidate.extremeCompressedStructure ||
+    candidate.extremeLowVolatilityChop ||
     candidate.trade?.projectedMovePct < MIN_PROJECTED_MOVE_PCT
   ) {
     return null;

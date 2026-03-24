@@ -36,16 +36,16 @@ const HIGHER_TIMEFRAME_INTERVAL = "4h";
 const EMA_SLOPE_LOOKBACK = 4;
 const MIN_EMA_SEPARATION_ATR = 0.2;
 const MAX_STALE_SIGNAL_BARS = 2;
-const MAX_AUTO_ENTRY_SIGNAL_BARS = 1;
+const MAX_AUTO_ENTRY_SIGNAL_BARS = 2;
 const MAX_POST_TOUCH_EXTENSION_ATR = 1.5;
 const MIN_EXECUTION_RR = 1.5;
-const MIN_VISIBLE_SIGNAL_VOLUME_FACTOR = 1.1;
-const MIN_AUTO_EXECUTION_VOLUME_FACTOR = 1.15;
+const MIN_VISIBLE_SIGNAL_VOLUME_FACTOR = 1.05;
+const MIN_AUTO_EXECUTION_VOLUME_FACTOR = 1.1;
 const STRICT_LEVEL_TOUCH_BUFFER_ATR = 0.05;
 const STRICT_LEVEL_RECLAIM_BUFFER_ATR = 0.04;
-const MAX_EXECUTION_DISTANCE_FROM_TOUCH_ATR = 0.45;
-const TRADEZ_AUTO_EXECUTION_THRESHOLD_BUFFER = 12;
-const TRADEZ_AUTO_MIN_EXECUTION_THRESHOLD = 92;
+const MAX_EXECUTION_DISTANCE_FROM_TOUCH_ATR = 0.6;
+const TRADEZ_AUTO_EXECUTION_THRESHOLD_BUFFER = 8;
+const TRADEZ_AUTO_MIN_EXECUTION_THRESHOLD = 88;
 const DEFAULT_ALERT_CHANNELS = {
   browser: true,
   discordWebhook: "",
@@ -3576,7 +3576,7 @@ function buildTradezSignals(snapshot, quoteVolume = 0) {
       higherTimeframeLongConfirmed &&
       longSlopeAligned &&
       emaSeparationAtr >= MIN_EMA_SEPARATION_ATR &&
-      longFlowConfirmations >= 2 &&
+      longFlowConfirmations >= 1 &&
       (
         ((currentLongTouchS1 || currentLongTouchS2) && bullishVolumeConfirmed) ||
         ((previousLongTouchS1 || previousLongTouchS2) && previousBullishVolumeConfirmed)
@@ -3586,7 +3586,7 @@ function buildTradezSignals(snapshot, quoteVolume = 0) {
       higherTimeframeShortConfirmed &&
       shortSlopeAligned &&
       emaSeparationAtr >= MIN_EMA_SEPARATION_ATR &&
-      shortFlowConfirmations >= 2 &&
+      shortFlowConfirmations >= 1 &&
       (
         ((currentShortTouchR1 || currentShortTouchR2) && bearishVolumeConfirmed) ||
         ((previousShortTouchR1 || previousShortTouchR2) && previousBearishVolumeConfirmed)
@@ -3624,7 +3624,22 @@ function buildTradezSignals(snapshot, quoteVolume = 0) {
     const levelTag = levelLabel(side, useLevelTwo);
     const confluenceLabel = buildConfluenceLabel(side, useLevelTwo, touch20, touch50);
     const flowConfirmations = side === "Long" ? longFlowConfirmations : shortFlowConfirmations;
+    const higherTimeframeConfirmed =
+      side === "Long" ? higherTimeframeLongConfirmed : higherTimeframeShortConfirmed;
     const rejectionVolumeFactor = touchIndex === index ? volumeFactor : previousVolumeFactor;
+    const softerDisplayFlowConfirmed =
+      flowConfirmations >= 2 ||
+      (
+        flowConfirmations >= 1 &&
+        higherTimeframeConfirmed &&
+        hasGoodTradingVolume(quoteVolume) &&
+        rejectionVolumeFactor >= MIN_VISIBLE_SIGNAL_VOLUME_FACTOR &&
+        (
+          side === "Long"
+            ? tradeSummary.cvdSlope > 0 || takerSummary.latestRatio > 1 || depthSummary.imbalance > 0
+            : tradeSummary.cvdSlope < 0 || takerSummary.latestRatio < 1 || depthSummary.imbalance < 0
+        )
+      );
     const rejectionRangePosition = rangePosition(touchedCandle, side);
     const wickRejected = wickRejectedLevel(touchedCandle, anchorLevel, side, strictLevelTouchBuffer, strictLevelReclaimBuffer);
     const retestCount = countLevelRetests(candles, anchorLevel, side, strictLevelTouchBuffer, touchIndex, 40);
@@ -3669,7 +3684,7 @@ function buildTradezSignals(snapshot, quoteVolume = 0) {
     const staleSetup = sinceTouchBars > MAX_STALE_SIGNAL_BARS;
     const overextendedSetup = extensionFromTouch > atrValue * MAX_POST_TOUCH_EXTENSION_ATR;
     const chasedSetup = executionDistanceFromTouch > atrValue * MAX_EXECUTION_DISTANCE_FROM_TOUCH_ATR;
-    if (!wickRejected || retestCount > 2 || staleSetup || overextendedSetup || chasedSetup || flowConfirmations < 2) continue;
+    if (!wickRejected || retestCount > 2 || staleSetup || overextendedSetup || chasedSetup || !softerDisplayFlowConfirmed) continue;
     const emaConfluenceScore = touch20 && touch50 ? 18 : touch50 ? 14 : touch20 ? 12 : 4;
     let qualityScore = 46;
     qualityScore += side === "Long" ? 18 : 18;
@@ -3763,8 +3778,7 @@ function buildTradezSignals(snapshot, quoteVolume = 0) {
       flowConfirmations,
       wickRejected,
       emaSeparationAtr,
-      higherTimeframeConfirmed:
-        side === "Long" ? higherTimeframeLongConfirmed : higherTimeframeShortConfirmed,
+      higherTimeframeConfirmed,
       extensionFromTouch,
       executionDistanceFromTouch,
       volumeFactor: rejectionVolumeFactor,
