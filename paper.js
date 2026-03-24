@@ -1801,7 +1801,7 @@ function analyzeSnapshot(snapshot) {
 }
 
 function highQualityCandidates(candidates, threshold) {
-  const effectiveThreshold = threshold + 8;
+  const effectiveThreshold = threshold + 6;
   return candidates
     .filter(
       (candidate) =>
@@ -1832,7 +1832,7 @@ function highQualityCandidates(candidates, threshold) {
 }
 
 function effectiveHouseQualityGate(threshold = state.qualityThreshold) {
-  return threshold + 8;
+  return threshold + 6;
 }
 
 function formatPrice(value, digits = 2) {
