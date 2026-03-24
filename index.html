@@ -20,8 +20,9 @@
     <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
     <script src="./fallback-perps.js" defer></script>
     <script src="./app.js" defer></script>
+    <script src="./token-analysis.js" defer></script>
   </head>
-  <body class="dashboard-home shell-page main-shell-page">
+  <body class="dashboard-home shell-page main-shell-page analysis-hub-page">
     <div class="page-shell shell-layout">
       <header class="app-header shell-app-header">
         <div class="app-bar">
@@ -37,7 +38,7 @@
 
           <nav class="page-tabs shell-page-tabs" aria-label="Primary pages">
             <a class="page-tab is-current" href="./index.html">Main</a>
-            <a class="page-tab" href="./token-analysis.html">Token Analysis</a>
+            <a class="page-tab" href="./index.html#research">Token Analysis</a>
             <a class="page-tab" href="./paper.html">Auto Trade</a>
             <a class="page-tab" href="./arena.html">Signals Arena</a>
             <a class="page-tab" href="./tradez.html">EMA Signals</a>
@@ -48,7 +49,7 @@
               <span class="header-feed-dot" aria-hidden="true"></span>
               Live Feeds
             </span>
-            <span class="app-pill">Main Desk</span>
+            <span class="app-pill">Market Desk</span>
             <a class="header-icon-button" href="./index.html" aria-label="Refresh Main">
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path
@@ -69,29 +70,28 @@
         <header class="shell-top-shell">
           <section class="panel hero-shell shell-hero-shell">
             <div class="hero-copy">
-              <p class="eyebrow">Main Dashboard</p>
-              <h1>Institutional perps workspace</h1>
+              <p class="eyebrow">Market Desk</p>
+              <h1>Analyze any token, then execute from one workspace</h1>
               <p class="subtitle">
-                Futures-first dashboard for structure, leverage, order flow, liquidation pressure,
-                and short-horizon setups.
+                One shared analysis page for structure, momentum, catalysts, tactical outlook,
+                and execution context across Binance USDT perps.
               </p>
             </div>
 
-            <form id="token-form" class="token-form hero-form">
-              <label>
-                Token
-                <input
-                  id="token-input"
-                  name="token"
-                  type="text"
-                  placeholder="BTC"
-                  value="BTC"
-                  autocomplete="off"
-                  spellcheck="false"
-                />
-              </label>
+            <form id="token-form" class="token-form hero-form token-analysis-center-form">
+              <label class="visually-hidden" for="token-input">Token</label>
+              <input
+                id="token-input"
+                name="token"
+                class="token-analysis-token-input"
+                type="text"
+                placeholder="Enter token ticker, for example BTC or SOL"
+                value="BTC"
+                autocomplete="off"
+                spellcheck="false"
+              />
 
-              <label>
+              <label class="visually-hidden" aria-hidden="true">
                 Chart Interval
                 <select id="interval-select" name="interval">
                   <option value="5m">5m</option>
@@ -101,7 +101,14 @@
                 </select>
               </label>
 
-              <button type="submit">Load Dashboard</button>
+              <div class="timeframe-switcher" role="group" aria-label="Chart timeframe">
+                <button type="button" class="mini-button timeframe-button" data-analysis-interval="5m">5m</button>
+                <button type="button" class="mini-button timeframe-button is-active" data-analysis-interval="15m">15m</button>
+                <button type="button" class="mini-button timeframe-button" data-analysis-interval="1h">1H</button>
+                <button type="button" class="mini-button timeframe-button" data-analysis-interval="4h">4H</button>
+              </div>
+
+              <button type="submit" class="token-analysis-submit">Analyze</button>
             </form>
           </section>
 
@@ -199,6 +206,203 @@
               </div>
             </div>
           </div>
+
+          <section id="research" class="token-analysis-summary-tabs" aria-label="AI Research Summary">
+            <div class="token-analysis-summary-head">
+              <div>
+                <p class="panel-label">AI Research Summary</p>
+                <h3>What matters at a glance</h3>
+              </div>
+            </div>
+
+            <div
+              class="token-analysis-summary-tablist"
+              role="tablist"
+              aria-label="AI Research Summary Tabs"
+            >
+              <button
+                id="summary-tab-past"
+                class="mini-button token-analysis-summary-tab is-active"
+                type="button"
+                role="tab"
+                aria-selected="true"
+                aria-controls="summary-panel-past"
+                data-summary-tab="past"
+              >
+                Past Sessions
+              </button>
+              <button
+                id="summary-tab-short-term"
+                class="mini-button token-analysis-summary-tab"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                aria-controls="summary-panel-short-term"
+                data-summary-tab="short-term"
+              >
+                Short Term
+              </button>
+              <button
+                id="summary-tab-long-term"
+                class="mini-button token-analysis-summary-tab"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                aria-controls="summary-panel-long-term"
+                data-summary-tab="long-term"
+              >
+                Long Term
+              </button>
+              <button
+                id="summary-tab-technical"
+                class="mini-button token-analysis-summary-tab"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                aria-controls="summary-panel-technical"
+                data-summary-tab="technical"
+              >
+                Technical
+              </button>
+              <button
+                id="summary-tab-prediction"
+                class="mini-button token-analysis-summary-tab"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                aria-controls="summary-panel-prediction"
+                data-summary-tab="prediction"
+              >
+                Prediction
+              </button>
+              <button
+                id="summary-tab-news"
+                class="mini-button token-analysis-summary-tab"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                aria-controls="summary-panel-news"
+                data-summary-tab="news"
+              >
+                News Context
+              </button>
+            </div>
+
+            <div class="token-analysis-summary-panels">
+              <article
+                id="summary-panel-past"
+                class="subpanel token-analysis-summary-panel"
+                role="tabpanel"
+                aria-labelledby="summary-tab-past"
+                data-summary-panel="past"
+              >
+                <div class="panel-head-inline">
+                  <div>
+                    <p class="panel-label">Past Sessions</p>
+                    <h3>What the token has done</h3>
+                  </div>
+                </div>
+                <p id="token-past-summary" class="research-copy">
+                  Recent price-action context will appear here after the token loads.
+                </p>
+              </article>
+
+              <article
+                id="summary-panel-short-term"
+                class="subpanel token-analysis-summary-panel"
+                role="tabpanel"
+                aria-labelledby="summary-tab-short-term"
+                data-summary-panel="short-term"
+                hidden
+              >
+                <div class="panel-head-inline">
+                  <div>
+                    <p class="panel-label">Short Term</p>
+                    <h3>Next few hours to days</h3>
+                  </div>
+                </div>
+                <p id="token-short-term-summary" class="research-copy">
+                  Short-term expectation will appear after the token loads.
+                </p>
+              </article>
+
+              <article
+                id="summary-panel-long-term"
+                class="subpanel token-analysis-summary-panel"
+                role="tabpanel"
+                aria-labelledby="summary-tab-long-term"
+                data-summary-panel="long-term"
+                hidden
+              >
+                <div class="panel-head-inline">
+                  <div>
+                    <p class="panel-label">Long Term</p>
+                    <h3>Next days to weeks</h3>
+                  </div>
+                </div>
+                <p id="token-long-term-summary" class="research-copy">
+                  Long-term expectation will appear after the token loads.
+                </p>
+              </article>
+
+              <article
+                id="summary-panel-technical"
+                class="subpanel token-analysis-summary-panel"
+                role="tabpanel"
+                aria-labelledby="summary-tab-technical"
+                data-summary-panel="technical"
+                hidden
+              >
+                <div class="panel-head-inline">
+                  <div>
+                    <p class="panel-label">Technical Analysis</p>
+                    <h3>Trend, momentum, and confirmation</h3>
+                  </div>
+                </div>
+                <p id="token-technical-summary" class="research-copy">
+                  Technical detail will populate after the token snapshot is ready.
+                </p>
+              </article>
+
+              <article
+                id="summary-panel-prediction"
+                class="subpanel token-analysis-summary-panel"
+                role="tabpanel"
+                aria-labelledby="summary-tab-prediction"
+                data-summary-panel="prediction"
+                hidden
+              >
+                <div class="panel-head-inline">
+                  <div>
+                    <p class="panel-label">Platform Prediction</p>
+                    <h3>What Soloris expects next</h3>
+                  </div>
+                </div>
+                <p id="token-prediction-summary" class="research-copy">
+                  The model prediction will appear after analysis runs.
+                </p>
+              </article>
+
+              <article
+                id="summary-panel-news"
+                class="subpanel token-analysis-summary-panel"
+                role="tabpanel"
+                aria-labelledby="summary-tab-news"
+                data-summary-panel="news"
+                hidden
+              >
+                <div class="panel-head-inline">
+                  <div>
+                    <p class="panel-label">News Context</p>
+                    <h3>Catalysts moving the token</h3>
+                  </div>
+                </div>
+                <p id="token-news-summary" class="research-copy">
+                  News context will appear here after analysis runs.
+                </p>
+              </article>
+            </div>
+          </section>
 
           <div class="level-badges">
             <div class="level-stack">
