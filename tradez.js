@@ -42,14 +42,14 @@ const MAX_AUTO_ENTRY_SIGNAL_BARS = 2;
 const MAX_POST_TOUCH_EXTENSION_ATR = 1.5;
 const MIN_VISIBLE_SIGNAL_RR = 1.2;
 const MIN_EXECUTION_RR = 1.2;
-const MIN_VISIBLE_SIGNAL_VOLUME_FACTOR = 1.05;
-const MIN_AUTO_EXECUTION_VOLUME_FACTOR = 1.03;
+const MIN_VISIBLE_SIGNAL_VOLUME_FACTOR = 1.02;
+const MIN_AUTO_EXECUTION_VOLUME_FACTOR = 1.0;
 const STRICT_LEVEL_TOUCH_BUFFER_ATR = 0.05;
 const STRICT_LEVEL_RECLAIM_BUFFER_ATR = 0.04;
 const MAX_EXECUTION_DISTANCE_FROM_TOUCH_ATR = 0.6;
 const LIVE_ENTRY_BUFFER_ATR = 0.35;
-const TRADEZ_AUTO_EXECUTION_THRESHOLD_BUFFER = 3;
-const TRADEZ_AUTO_MIN_EXECUTION_THRESHOLD = 76;
+const TRADEZ_AUTO_EXECUTION_THRESHOLD_BUFFER = 2;
+const TRADEZ_AUTO_MIN_EXECUTION_THRESHOLD = 74;
 const DEFAULT_ALERT_CHANNELS = {
   browser: true,
   discordWebhook: "",
@@ -2135,7 +2135,7 @@ function highQualityTradezAutoCandidates(candidates, threshold) {
       const strongSetup =
         candidate.activeSignal?.higherTimeframeConfirmed &&
         candidate.paperTrade.rr >= MIN_EXECUTION_RR &&
-        candidate.qualityScore >= executionThreshold + 1;
+        candidate.qualityScore >= executionThreshold;
       return flowConfirmations >= 2 || (flowConfirmations >= 1 && strongSetup);
     })
     .filter((candidate) => (candidate.activeSignal?.retestCount || 0) <= 2)
@@ -3693,25 +3693,25 @@ function buildTradezSignals(snapshot, quoteVolume = 0) {
     const bullishVolumeConfirmed =
       candle.close > candle.open &&
       volumeFactor >= MIN_VISIBLE_SIGNAL_VOLUME_FACTOR &&
-      rangePosition(candle, "Long") >= 0.56 &&
-      (!nextCandle || nextCandle.close >= candle.close * 0.996);
+      rangePosition(candle, "Long") >= 0.52 &&
+      (!nextCandle || nextCandle.close >= candle.close * 0.992);
     const previousBullishVolumeConfirmed =
       previousCandle &&
       previousCandle.close > previousCandle.open &&
       previousVolumeFactor >= MIN_VISIBLE_SIGNAL_VOLUME_FACTOR &&
-      rangePosition(previousCandle, "Long") >= 0.56 &&
-      candle.close >= previousCandle.close * 0.996;
+      rangePosition(previousCandle, "Long") >= 0.52 &&
+      candle.close >= previousCandle.close * 0.992;
     const bearishVolumeConfirmed =
       candle.close < candle.open &&
       volumeFactor >= MIN_VISIBLE_SIGNAL_VOLUME_FACTOR &&
-      rangePosition(candle, "Short") >= 0.56 &&
-      (!nextCandle || nextCandle.close <= candle.close * 1.004);
+      rangePosition(candle, "Short") >= 0.52 &&
+      (!nextCandle || nextCandle.close <= candle.close * 1.008);
     const previousBearishVolumeConfirmed =
       previousCandle &&
       previousCandle.close < previousCandle.open &&
       previousVolumeFactor >= MIN_VISIBLE_SIGNAL_VOLUME_FACTOR &&
-      rangePosition(previousCandle, "Short") >= 0.56 &&
-      candle.close <= previousCandle.close * 1.004;
+      rangePosition(previousCandle, "Short") >= 0.52 &&
+      candle.close <= previousCandle.close * 1.008;
     const longSlopeAligned = emaSlopeAligned(ema20Series, index, "Long", atrValue);
     const shortSlopeAligned = emaSlopeAligned(ema20Series, index, "Short", atrValue);
     const longSetup =
@@ -3775,8 +3775,7 @@ function buildTradezSignals(snapshot, quoteVolume = 0) {
       (
         flowConfirmations >= 1 &&
         higherTimeframeConfirmed &&
-        hasGoodTradingVolume(quoteVolume) &&
-        rejectionVolumeFactor >= MIN_VISIBLE_SIGNAL_VOLUME_FACTOR &&
+        (hasGoodTradingVolume(quoteVolume) || rejectionVolumeFactor >= MIN_VISIBLE_SIGNAL_VOLUME_FACTOR) &&
         (
           side === "Long"
             ? tradeSummary.cvdSlope > 0 || takerSummary.latestRatio > 1 || depthSummary.imbalance > 0
