@@ -2086,14 +2086,27 @@ function buildTradezAutoCandidate(candidate) {
   };
 }
 
-function candidateIsAtLiveEntry(candidate) {
+function candidateIsExecutable(candidate) {
   const plan = candidate.paperTrade;
-  if (!plan || !Number.isFinite(candidate.currentPrice)) return false;
+  const signal = candidate.activeSignal;
+  if (!plan || !signal || !Number.isFinite(candidate.currentPrice)) return false;
+  if (!Number.isFinite(candidate.latestAtr) || candidate.latestAtr <= 0) return false;
+  if (!Number.isFinite(signal.testedLevel)) return false;
   const atrBuffer = Math.max((candidate.latestAtr || 0) * LIVE_ENTRY_BUFFER_ATR, 0);
-  return (
+  const directionalLevelLimit = candidate.latestAtr * 0.8;
+  const insideZone =
+    candidate.currentPrice >= plan.entryZoneLow && candidate.currentPrice <= plan.entryZoneHigh;
+  const nearZone =
     candidate.currentPrice >= plan.entryZoneLow - atrBuffer &&
-    candidate.currentPrice <= plan.entryZoneHigh + atrBuffer
-  );
+    candidate.currentPrice <= plan.entryZoneHigh + atrBuffer;
+
+  if (signal.side === "Long") {
+    if (candidate.currentPrice > signal.testedLevel + directionalLevelLimit) return false;
+    return insideZone || nearZone;
+  }
+
+  if (candidate.currentPrice < signal.testedLevel - directionalLevelLimit) return false;
+  return insideZone || nearZone;
 }
 
 function signalIsAtLiveEntry(signal, currentPrice) {
@@ -2140,7 +2153,7 @@ function highQualityTradezAutoCandidates(candidates, threshold) {
         !Number.isFinite(candidate.activeSignal?.extensionFromTouch) ||
         candidate.activeSignal.extensionFromTouch <= candidate.latestAtr * MAX_POST_TOUCH_EXTENSION_ATR
     )
-    .filter(candidateIsAtLiveEntry)
+    .filter(candidateIsExecutable)
     .sort((left, right) => {
       const rightSeen = right.identifiedAt || right.activeSignal?.detectedAt || 0;
       const leftSeen = left.identifiedAt || left.activeSignal?.detectedAt || 0;
@@ -2151,7 +2164,7 @@ function highQualityTradezAutoCandidates(candidates, threshold) {
 function openTradezPaperTrade(candidate) {
   if (tradezPaperHasOpenTrade(candidate.symbol)) return false;
   if (tradezPaper.openTrades.length >= TRADEZ_AUTO_MAX_CONCURRENT_TRADES) return false;
-  if (!candidateIsAtLiveEntry(candidate)) return false;
+  if (!candidateIsExecutable(candidate)) return false;
 
   const freeCapital = Math.max(tradezPaper.balance - tradezPaperReservedMargin(), 0);
   if (freeCapital < 10) return false;
