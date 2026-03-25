@@ -1,7 +1,7 @@
 const DEFAULT_TOKEN = "BTC";
 const STRATEGY_INTERVAL = "1h";
 const QUOTE_ASSET = "USDT";
-const DEFAULT_QUALITY_THRESHOLD = 78;
+const DEFAULT_QUALITY_THRESHOLD = 74;
 const AUTO_SCAN_MS = 5 * 60 * 1000;
 const REMOTE_RUNTIME_POLL_MS = 60 * 1000;
 const REMOTE_DISPLAY_REFRESH_MS = 2 * 60 * 1000;
@@ -48,8 +48,8 @@ const STRICT_LEVEL_TOUCH_BUFFER_ATR = 0.05;
 const STRICT_LEVEL_RECLAIM_BUFFER_ATR = 0.04;
 const MAX_EXECUTION_DISTANCE_FROM_TOUCH_ATR = 0.6;
 const LIVE_ENTRY_BUFFER_ATR = 0.35;
-const TRADEZ_AUTO_EXECUTION_THRESHOLD_BUFFER = 5;
-const TRADEZ_AUTO_MIN_EXECUTION_THRESHOLD = 80;
+const TRADEZ_AUTO_EXECUTION_THRESHOLD_BUFFER = 3;
+const TRADEZ_AUTO_MIN_EXECUTION_THRESHOLD = 76;
 const DEFAULT_ALERT_CHANNELS = {
   browser: true,
   discordWebhook: "",
@@ -2130,14 +2130,14 @@ function highQualityTradezAutoCandidates(candidates, threshold) {
     .filter((candidate) => candidate.qualityScore >= executionThreshold)
     .filter((candidate) => candidate.paperTrade.rr >= MIN_EXECUTION_RR)
     .filter((candidate) => (candidate.activeSignal?.sinceTouchBars || 0) <= MAX_AUTO_ENTRY_SIGNAL_BARS)
-    .filter(
-      (candidate) =>
-        (candidate.activeSignal?.flowConfirmations || 0) >= 2 ||
-        ((candidate.activeSignal?.flowConfirmations || 0) >= 1 &&
-          candidate.activeSignal?.higherTimeframeConfirmed &&
-          candidate.paperTrade.rr >= MIN_EXECUTION_RR &&
-          candidate.qualityScore >= executionThreshold + 3)
-    )
+    .filter((candidate) => {
+      const flowConfirmations = candidate.activeSignal?.flowConfirmations || 0;
+      const strongSetup =
+        candidate.activeSignal?.higherTimeframeConfirmed &&
+        candidate.paperTrade.rr >= MIN_EXECUTION_RR &&
+        candidate.qualityScore >= executionThreshold + 1;
+      return flowConfirmations >= 2 || (flowConfirmations >= 1 && strongSetup);
+    })
     .filter((candidate) => (candidate.activeSignal?.retestCount || 0) <= 2)
     .filter((candidate) => (candidate.activeSignal?.volumeFactor || 0) >= MIN_AUTO_EXECUTION_VOLUME_FACTOR)
     .filter((candidate) => candidate.activeSignal?.higherTimeframeConfirmed)
