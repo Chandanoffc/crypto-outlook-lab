@@ -2093,7 +2093,7 @@ function candidateIsExecutable(candidate) {
   if (!Number.isFinite(candidate.latestAtr) || candidate.latestAtr <= 0) return false;
   if (!Number.isFinite(signal.testedLevel)) return false;
   const atrBuffer = Math.max(candidate.latestAtr * LIVE_ENTRY_BUFFER_ATR, 0);
-  const directionalLevelLimit = candidate.latestAtr * 0.8;
+  const directionalLevelLimit = candidate.latestAtr * 1.0;
   const insideZone =
     candidate.currentPrice >= plan.entryZoneLow && candidate.currentPrice <= plan.entryZoneHigh;
   const nearTouchedLevel =
