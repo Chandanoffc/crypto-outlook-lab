@@ -20,8 +20,8 @@ const STOP_MARGIN_RETURN_PCT = 10;
 const TRADE_COOLDOWN_MS = 4 * 60 * 1000;
 const STOP_LOSS_COOLDOWN_MS = 2 * 60 * 60 * 1000;
 const HIGH_VOLUME_FLOOR = 100_000_000;
-const MIN_RR = 1.6;
-const MIN_PROJECTED_MOVE_PCT = 1.6;
+const MIN_RR = 1.4;
+const MIN_PROJECTED_MOVE_PCT = 1.3;
 const STRATEGY_VERSION = 6;
 const TICKER_STORAGE_KEY = "apex-signals-auto-paper-tickers";
 const SHARED_TRADEZ_AUTO_STORAGE_KEY = "hyperdrive-tradez-auto-paper";
@@ -1801,7 +1801,7 @@ function analyzeSnapshot(snapshot) {
 }
 
 function highQualityCandidates(candidates, threshold) {
-  const effectiveThreshold = threshold + 5;
+  const effectiveThreshold = threshold + 4;
   return candidates
     .filter(
       (candidate) =>
@@ -1818,7 +1818,6 @@ function highQualityCandidates(candidates, threshold) {
         candidate.ema20SlopeAligned &&
         candidate.ema50SlopeAligned &&
         !candidate.crowdedHardReject &&
-        !candidate.extremeCompressedStructure &&
         !candidate.extremeLowVolatilityChop &&
         hasGoodTradingVolume(candidate.quoteVolume) &&
         candidate.rr >= MIN_RR &&
@@ -1832,7 +1831,7 @@ function highQualityCandidates(candidates, threshold) {
 }
 
 function effectiveHouseQualityGate(threshold = state.qualityThreshold) {
-  return threshold + 5;
+  return threshold + 4;
 }
 
 function formatPrice(value, digits = 2) {
@@ -2440,7 +2439,6 @@ function buildCoreTrendStrategySignal(candidate) {
     !candidate.ema20SlopeAligned ||
     !candidate.ema50SlopeAligned ||
     candidate.crowdedHardReject ||
-    candidate.extremeCompressedStructure ||
     candidate.extremeLowVolatilityChop ||
     candidate.trade?.projectedMovePct < MIN_PROJECTED_MOVE_PCT
   ) {
