@@ -38,7 +38,7 @@ const HIGHER_TIMEFRAME_INTERVAL = "4h";
 const EMA_SLOPE_LOOKBACK = 4;
 const MIN_EMA_SEPARATION_ATR = 0.2;
 const MAX_STALE_SIGNAL_BARS = 2;
-const MAX_AUTO_ENTRY_SIGNAL_BARS = 2;
+const MAX_AUTO_ENTRY_SIGNAL_BARS = 4;
 const MAX_POST_TOUCH_EXTENSION_ATR = 1.5;
 const MIN_VISIBLE_SIGNAL_RR = 1.2;
 const MIN_EXECUTION_RR = 1.2;
@@ -3641,7 +3641,7 @@ function buildTradezSignals(snapshot, quoteVolume = 0) {
   const higherTimeframeShortConfirmed =
     higherTimeframeEma20 < higherTimeframeEma50 && higherTimeframeRsi < 50;
   const bias = buildSetupBias(currentPrice, latestEma20, latestEma50, latestRsi);
-  const completedLimit = Math.max(55, candles.length - 10);
+  const completedLimit = Math.max(55, candles.length - 20);
   const markers = [];
   const historicalSignals = [];
   let activeSignal = null;

@@ -1654,8 +1654,8 @@ function summarizeTimeframe(candles) {
   score += rsiValue >= 52 && rsiValue <= 66 ? 8 : rsiValue <= 48 && rsiValue >= 34 ? -8 : 0;
   score += changePct > 0.8 ? 6 : changePct < -0.8 ? -6 : 0;
 
-  if (score >= 14) return { label: "Bullish", tone: "up", score, rsi: rsiValue, changePct };
-  if (score <= -14) return { label: "Bearish", tone: "down", score, rsi: rsiValue, changePct };
+  if (score >= 10) return { label: "Bullish", tone: "up", score, rsi: rsiValue, changePct };
+  if (score <= -10) return { label: "Bearish", tone: "down", score, rsi: rsiValue, changePct };
   return { label: "Balanced", tone: "neutral", score, rsi: rsiValue, changePct };
 }
 
