@@ -1,7 +1,7 @@
 const DEFAULT_TOKEN = "BTC";
 const STRATEGY_INTERVAL = "1h";
 const QUOTE_ASSET = "USDT";
-const DEFAULT_QUALITY_THRESHOLD = 74;
+const DEFAULT_QUALITY_THRESHOLD = 70;
 const AUTO_SCAN_MS = 5 * 60 * 1000;
 const REMOTE_RUNTIME_POLL_MS = 60 * 1000;
 const REMOTE_DISPLAY_REFRESH_MS = 2 * 60 * 1000;
@@ -49,7 +49,7 @@ const STRICT_LEVEL_RECLAIM_BUFFER_ATR = 0.04;
 const MAX_EXECUTION_DISTANCE_FROM_TOUCH_ATR = 0.6;
 const LIVE_ENTRY_BUFFER_ATR = 0.35;
 const TRADEZ_AUTO_EXECUTION_THRESHOLD_BUFFER = 2;
-const TRADEZ_AUTO_MIN_EXECUTION_THRESHOLD = 76;
+const TRADEZ_AUTO_MIN_EXECUTION_THRESHOLD = 72;
 const DEFAULT_ALERT_CHANNELS = {
   browser: true,
   discordWebhook: "",
@@ -2093,7 +2093,7 @@ function candidateIsExecutable(candidate) {
   if (!Number.isFinite(candidate.latestAtr) || candidate.latestAtr <= 0) return false;
   if (!Number.isFinite(signal.testedLevel)) return false;
   const atrBuffer = Math.max(candidate.latestAtr * LIVE_ENTRY_BUFFER_ATR, 0);
-  const directionalLevelLimit = candidate.latestAtr * 1.0;
+  const directionalLevelLimit = candidate.latestAtr * 1.2;
   const insideZone =
     candidate.currentPrice >= plan.entryZoneLow && candidate.currentPrice <= plan.entryZoneHigh;
   const nearTouchedLevel =

@@ -1818,7 +1818,7 @@ function highQualityCandidates(candidates, threshold) {
         candidate.ema20SlopeAligned &&
         candidate.ema50SlopeAligned &&
         !candidate.crowdedHardReject &&
-        !candidate.extremeLowVolatilityChop &&
+        !candidate.extremeCompressedStructure &&
         hasGoodTradingVolume(candidate.quoteVolume) &&
         candidate.rr >= MIN_RR &&
         candidate.trade.projectedMovePct >= MIN_PROJECTED_MOVE_PCT
@@ -1831,7 +1831,7 @@ function highQualityCandidates(candidates, threshold) {
 }
 
 function effectiveHouseQualityGate(threshold = state.qualityThreshold) {
-  return threshold + 4;
+  return threshold + 2;
 }
 
 function formatPrice(value, digits = 2) {
@@ -2439,7 +2439,7 @@ function buildCoreTrendStrategySignal(candidate) {
     !candidate.ema20SlopeAligned ||
     !candidate.ema50SlopeAligned ||
     candidate.crowdedHardReject ||
-    candidate.extremeLowVolatilityChop ||
+    candidate.extremeCompressedStructure ||
     candidate.trade?.projectedMovePct < MIN_PROJECTED_MOVE_PCT
   ) {
     return null;
