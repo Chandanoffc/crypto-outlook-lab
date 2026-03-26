@@ -37,9 +37,9 @@ const DEMO_STATUS_SYNC_BATCH = 20;
 const HIGHER_TIMEFRAME_INTERVAL = "4h";
 const EMA_SLOPE_LOOKBACK = 4;
 const MIN_EMA_SEPARATION_ATR = 0.2;
-const MAX_STALE_SIGNAL_BARS = 2;
+const MAX_STALE_SIGNAL_BARS = 4;
 const MAX_AUTO_ENTRY_SIGNAL_BARS = 4;
-const MAX_POST_TOUCH_EXTENSION_ATR = 1.5;
+const MAX_POST_TOUCH_EXTENSION_ATR = 2.5;
 const MIN_VISIBLE_SIGNAL_RR = 1.2;
 const MIN_EXECUTION_RR = 1.2;
 const MIN_VISIBLE_SIGNAL_VOLUME_FACTOR = 1.02;
@@ -3546,10 +3546,10 @@ function wickRejectedLevel(candle, level, side, touchBuffer, reclaimBuffer) {
   const upperWick = Math.max(candle.high - Math.max(candle.open, candle.close), 0);
 
   if (side === "Long") {
-    return wickTouchesLevel(candle, level, side, touchBuffer) && candle.close > level + reclaimBuffer && lowerWick > body * 0.65;
+    return wickTouchesLevel(candle, level, side, touchBuffer) && candle.close > level + reclaimBuffer && lowerWick > body * 0.45;
   }
 
-  return wickTouchesLevel(candle, level, side, touchBuffer) && candle.close < level - reclaimBuffer && upperWick > body * 0.65;
+  return wickTouchesLevel(candle, level, side, touchBuffer) && candle.close < level - reclaimBuffer && upperWick > body * 0.45;
 }
 
 function countFlowConfirmations(side, tradeSummary, takerSummary, depthSummary) {
@@ -3641,7 +3641,7 @@ function buildTradezSignals(snapshot, quoteVolume = 0) {
   const higherTimeframeShortConfirmed =
     higherTimeframeEma20 < higherTimeframeEma50 && higherTimeframeRsi < 50;
   const bias = buildSetupBias(currentPrice, latestEma20, latestEma50, latestRsi);
-  const completedLimit = Math.max(55, candles.length - 20);
+  const completedLimit = Math.max(55, candles.length - 24);
   const markers = [];
   const historicalSignals = [];
   let activeSignal = null;
