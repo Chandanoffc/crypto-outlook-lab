@@ -1,7 +1,7 @@
 const DEFAULT_TOKEN = "BTC";
 const STRATEGY_INTERVAL = "1h";
 const QUOTE_ASSET = "USDT";
-const DEFAULT_QUALITY_THRESHOLD = 64;
+const DEFAULT_QUALITY_THRESHOLD = 63;
 const AUTO_SCAN_MS = 5 * 60 * 1000;
 const REMOTE_RUNTIME_POLL_MS = 60 * 1000;
 const REMOTE_DISPLAY_REFRESH_MS = 2 * 60 * 1000;
@@ -37,19 +37,19 @@ const DEMO_STATUS_SYNC_BATCH = 20;
 const HIGHER_TIMEFRAME_INTERVAL = "4h";
 const EMA_SLOPE_LOOKBACK = 4;
 const MIN_EMA_SEPARATION_ATR = 0.2;
-const MAX_STALE_SIGNAL_BARS = 6;
+const MAX_STALE_SIGNAL_BARS = 7;
 const MAX_AUTO_ENTRY_SIGNAL_BARS = 5;
-const MAX_POST_TOUCH_EXTENSION_ATR = 3.2;
-const MIN_VISIBLE_SIGNAL_RR = 1.15;
+const MAX_POST_TOUCH_EXTENSION_ATR = 3.3;
+const MIN_VISIBLE_SIGNAL_RR = 1.1;
 const MIN_EXECUTION_RR = 1.15;
-const MIN_VISIBLE_SIGNAL_VOLUME_FACTOR = 0.98;
-const MIN_AUTO_EXECUTION_VOLUME_FACTOR = 0.95;
+const MIN_VISIBLE_SIGNAL_VOLUME_FACTOR = 0.96;
+const MIN_AUTO_EXECUTION_VOLUME_FACTOR = 0.92;
 const STRICT_LEVEL_TOUCH_BUFFER_ATR = 0.05;
 const STRICT_LEVEL_RECLAIM_BUFFER_ATR = 0.04;
-const MAX_EXECUTION_DISTANCE_FROM_TOUCH_ATR = 1.0;
-const LIVE_ENTRY_BUFFER_ATR = 0.5;
+const MAX_EXECUTION_DISTANCE_FROM_TOUCH_ATR = 1.05;
+const LIVE_ENTRY_BUFFER_ATR = 0.55;
 const TRADEZ_AUTO_EXECUTION_THRESHOLD_BUFFER = 1;
-const TRADEZ_AUTO_MIN_EXECUTION_THRESHOLD = 68;
+const TRADEZ_AUTO_MIN_EXECUTION_THRESHOLD = 67;
 const DEFAULT_ALERT_CHANNELS = {
   browser: true,
   discordWebhook: "",
@@ -2116,7 +2116,7 @@ function candidateIsExecutable(candidate) {
   if (!Number.isFinite(candidate.latestAtr) || candidate.latestAtr <= 0) return false;
   if (!Number.isFinite(signal.testedLevel)) return false;
   const atrBuffer = Math.max(candidate.latestAtr * LIVE_ENTRY_BUFFER_ATR, 0);
-  const directionalLevelLimit = candidate.latestAtr * 1.35;
+  const directionalLevelLimit = candidate.latestAtr * 1.4;
   const insideZone =
     candidate.currentPrice >= plan.entryZoneLow && candidate.currentPrice <= plan.entryZoneHigh;
   const nearTouchedLevel =
