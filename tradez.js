@@ -1,7 +1,7 @@
 const DEFAULT_TOKEN = "BTC";
 const STRATEGY_INTERVAL = "1h";
 const QUOTE_ASSET = "USDT";
-const DEFAULT_QUALITY_THRESHOLD = 66;
+const DEFAULT_QUALITY_THRESHOLD = 64;
 const AUTO_SCAN_MS = 5 * 60 * 1000;
 const REMOTE_RUNTIME_POLL_MS = 60 * 1000;
 const REMOTE_DISPLAY_REFRESH_MS = 2 * 60 * 1000;
@@ -39,17 +39,17 @@ const EMA_SLOPE_LOOKBACK = 4;
 const MIN_EMA_SEPARATION_ATR = 0.2;
 const MAX_STALE_SIGNAL_BARS = 6;
 const MAX_AUTO_ENTRY_SIGNAL_BARS = 5;
-const MAX_POST_TOUCH_EXTENSION_ATR = 3.0;
-const MIN_VISIBLE_SIGNAL_RR = 1.2;
-const MIN_EXECUTION_RR = 1.2;
-const MIN_VISIBLE_SIGNAL_VOLUME_FACTOR = 1.0;
-const MIN_AUTO_EXECUTION_VOLUME_FACTOR = 0.98;
+const MAX_POST_TOUCH_EXTENSION_ATR = 3.2;
+const MIN_VISIBLE_SIGNAL_RR = 1.15;
+const MIN_EXECUTION_RR = 1.15;
+const MIN_VISIBLE_SIGNAL_VOLUME_FACTOR = 0.98;
+const MIN_AUTO_EXECUTION_VOLUME_FACTOR = 0.95;
 const STRICT_LEVEL_TOUCH_BUFFER_ATR = 0.05;
 const STRICT_LEVEL_RECLAIM_BUFFER_ATR = 0.04;
-const MAX_EXECUTION_DISTANCE_FROM_TOUCH_ATR = 0.9;
+const MAX_EXECUTION_DISTANCE_FROM_TOUCH_ATR = 1.0;
 const LIVE_ENTRY_BUFFER_ATR = 0.5;
 const TRADEZ_AUTO_EXECUTION_THRESHOLD_BUFFER = 1;
-const TRADEZ_AUTO_MIN_EXECUTION_THRESHOLD = 70;
+const TRADEZ_AUTO_MIN_EXECUTION_THRESHOLD = 68;
 const DEFAULT_ALERT_CHANNELS = {
   browser: true,
   discordWebhook: "",
@@ -2116,7 +2116,7 @@ function candidateIsExecutable(candidate) {
   if (!Number.isFinite(candidate.latestAtr) || candidate.latestAtr <= 0) return false;
   if (!Number.isFinite(signal.testedLevel)) return false;
   const atrBuffer = Math.max(candidate.latestAtr * LIVE_ENTRY_BUFFER_ATR, 0);
-  const directionalLevelLimit = candidate.latestAtr * 1.2;
+  const directionalLevelLimit = candidate.latestAtr * 1.35;
   const insideZone =
     candidate.currentPrice >= plan.entryZoneLow && candidate.currentPrice <= plan.entryZoneHigh;
   const nearTouchedLevel =
@@ -2156,10 +2156,9 @@ function highQualityTradezAutoCandidates(candidates, threshold) {
     .filter((candidate) => {
       const flowConfirmations = candidate.activeSignal?.flowConfirmations || 0;
       const higherTimeframeConfirmed = Boolean(candidate.activeSignal?.higherTimeframeConfirmed);
-      const rrOk = Number(candidate.paperTrade?.rr) >= MIN_EXECUTION_RR;
-      return flowConfirmations >= 2 || (flowConfirmations >= 1 && higherTimeframeConfirmed && rrOk);
+      return flowConfirmations >= 2 || (flowConfirmations >= 1 && (higherTimeframeConfirmed || candidate.paperTrade.rr >= MIN_EXECUTION_RR));
     })
-    .filter((candidate) => (candidate.activeSignal?.retestCount || 0) <= 3)
+    .filter((candidate) => (candidate.activeSignal?.retestCount || 0) <= 4)
     .filter((candidate) => (candidate.activeSignal?.volumeFactor || 0) >= MIN_AUTO_EXECUTION_VOLUME_FACTOR)
     .filter((candidate) => {
       const extension = candidate.activeSignal?.extensionFromTouch;

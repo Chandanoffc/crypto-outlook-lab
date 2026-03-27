@@ -4,7 +4,7 @@ const STRATEGY_SPECS = [
 const STRATEGY_START_BALANCE = 1000;
 const START_BALANCE = STRATEGY_START_BALANCE;
 const DEFAULT_INTERVAL = "15m";
-const DEFAULT_QUALITY_THRESHOLD = 64;
+const DEFAULT_QUALITY_THRESHOLD = 62;
 const QUOTE_ASSET = "USDT";
 const AUTO_SCAN_MS = 90 * 1000;
 const PRIORITY_SCAN_COUNT = 10;
@@ -20,8 +20,8 @@ const STOP_MARGIN_RETURN_PCT = 10;
 const TRADE_COOLDOWN_MS = 4 * 60 * 1000;
 const STOP_LOSS_COOLDOWN_MS = 2 * 60 * 60 * 1000;
 const HIGH_VOLUME_FLOOR = 100_000_000;
-const MIN_RR = 1.25;
-const MIN_PROJECTED_MOVE_PCT = 1.0;
+const MIN_RR = 1.2;
+const MIN_PROJECTED_MOVE_PCT = 0.9;
 const STRATEGY_VERSION = 6;
 const TICKER_STORAGE_KEY = "apex-signals-auto-paper-tickers";
 const SHARED_TRADEZ_AUTO_STORAGE_KEY = "hyperdrive-tradez-auto-paper";
@@ -59,11 +59,11 @@ Opened: {openedAt}
 Mode: {mode}
 Open on Binance: {binanceLink}`,
 };
-const HOUSE_MIN_ENTRY_SCORE = 12;
-const HOUSE_MIN_REFINED_SCORE = 72;
-const MIN_NEAREST_TARGET_RR = 1.1;
-const MAX_ENTRY_DISTANCE_FROM_EMA20_ATR = 1.7;
-const MAX_ENTRY_DISTANCE_FROM_LEVEL_ATR = 1.35;
+const HOUSE_MIN_ENTRY_SCORE = 11;
+const HOUSE_MIN_REFINED_SCORE = 70;
+const MIN_NEAREST_TARGET_RR = 1.05;
+const MAX_ENTRY_DISTANCE_FROM_EMA20_ATR = 1.85;
+const MAX_ENTRY_DISTANCE_FROM_LEVEL_ATR = 1.45;
 const MIN_EMA_SPREAD_ATR = 0.22;
 const MIN_ATR_PCT_FOR_CONTINUATION = 0.45;
 const MIN_RECENT_BODY_RATIO = 0.33;
@@ -1817,7 +1817,7 @@ function analyzeSnapshot(snapshot) {
 }
 
 function highQualityCandidates(candidates, threshold) {
-  const effectiveThreshold = threshold + 2;
+  const effectiveThreshold = threshold + 1;
   return candidates
     .filter(
       (candidate) =>
@@ -1846,7 +1846,7 @@ function highQualityCandidates(candidates, threshold) {
 }
 
 function effectiveHouseQualityGate(threshold = state.qualityThreshold) {
-  return threshold + 2;
+  return threshold + 1;
 }
 
 function formatPrice(value, digits = 2) {
@@ -2318,9 +2318,9 @@ function applyCandidateConfirmation(candidate, ticker, confirmation) {
   const lowerLiquiditySetup = quoteVolume < HIGH_VOLUME_FLOOR * 1.6;
   const crowdedSetup = Boolean(candidate.crowdedContinuation);
   const crowdedHardReject = Boolean(candidate.crowdedHardReject);
-  const htfAgreementHardRejected = alignedCount < 2 || conflictCount > 0;
+  const htfAgreementHardRejected = alignedCount < 1 || conflictCount > 0;
   const locationQuality = Boolean(candidate.trade?.entryLocationQuality);
-  const slopesAligned = Boolean(candidate.ema20SlopeAligned) && Boolean(candidate.ema50SlopeAligned);
+  const slopesAligned = Boolean(candidate.ema20SlopeAligned);
 
   if (hasGoodTradingVolume(quoteVolume)) entryQualityScore += 12;
   else entryQualityScore -= 20;
@@ -2348,7 +2348,7 @@ function applyCandidateConfirmation(candidate, ticker, confirmation) {
   entryQualityScore += slopesAligned ? 12 : -22;
   entryQualityScore += candidate.trade?.nearestTargetRr >= MIN_NEAREST_TARGET_RR ? 8 : -18;
   if (candidate.compressedStructure) entryQualityScore -= 10;
-  if (candidate.extremeCompressedStructure) entryQualityScore -= 12;
+  if (candidate.extremeCompressedStructure) entryQualityScore -= 6;
   if (candidate.lowVolatilityChop) entryQualityScore -= 12;
   if (candidate.extremeLowVolatilityChop) entryQualityScore -= 14;
   if (Number.isFinite(candidate.recentBodyRatio) && candidate.recentBodyRatio < MIN_RECENT_BODY_RATIO) {
