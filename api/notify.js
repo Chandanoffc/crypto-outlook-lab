@@ -22,7 +22,7 @@ function formatAlertMessage(title, event) {
     return String(event.formattedMessage);
   }
   const when = event?.time ? new Date(event.time).toLocaleString() : new Date().toLocaleString();
-  return `${title}\n${event?.message || ""}\n${event?.symbol || "Signal"} • ${when}`;
+  return `${title}\n${event?.message || ""}\n${event?.pair || event?.symbol || "Signal"} • ${when}`;
 }
 
 function inferBaseUrl(req) {
@@ -33,8 +33,56 @@ function inferBaseUrl(req) {
   return `${proto}://${host}`;
 }
 
+function formatBannerPair(value) {
+  const raw = String(value || "").trim().toUpperCase();
+  if (!raw) return "";
+  if (raw.includes("/")) return raw;
+  if (raw.endsWith("USDT")) return `${raw.slice(0, -4)}/USDT`;
+  if (raw.endsWith("USDC")) return `${raw.slice(0, -4)}/USDC`;
+  return raw;
+}
+
+function resolveNativeBannerLabel(event = {}) {
+  const type = String(event?.type || "").toLowerCase();
+  if (type === "perps") return "NEW PERPS ALERT";
+  if (type === "dlmm") return "NEW DLMM ALERT";
+  return "NEW SIGNAL";
+}
+
+function buildNativeBannerTitle(fallbackTitle, event = {}) {
+  const label = resolveNativeBannerLabel(event);
+  const pair = formatBannerPair(event?.pair || event?.symbol);
+  const direction = String(event?.direction || event?.side || "").trim().toUpperCase();
+  const strategy = String(event?.strategy || "").trim();
+
+  if (String(event?.type || "").toLowerCase() === "dlmm") {
+    return [label, strategy || "DLMM", pair].filter(Boolean).join(" | ");
+  }
+
+  if (String(event?.type || "").toLowerCase() === "perps") {
+    return [label, pair, direction].filter(Boolean).join(" | ");
+  }
+
+  if (pair || direction) {
+    return [label, pair, direction].filter(Boolean).join(" | ");
+  }
+
+  return fallbackTitle;
+}
+
 function resolveAlertBannerFile(event, meta = {}) {
-  if (meta?.strategy !== "ema_book") return "";
+  const strategy = String(meta?.strategy || "").toLowerCase();
+  const signalType = String(event?.type || "").toLowerCase();
+  const supportsNativeSignalBanner =
+    strategy === "ema_book" ||
+    strategy === "house_trend" ||
+    strategy === "perps_alerts" ||
+    strategy === "dlmm_alerts" ||
+    signalType === "house" ||
+    signalType === "tradez" ||
+    signalType === "perps" ||
+    signalType === "dlmm";
+  if (!supportsNativeSignalBanner) return "";
   const eventType = String(meta?.eventType || event?.deliveryType || "").toLowerCase();
   const titleText = String(event?.title || meta?.title || "").toLowerCase();
   const messageText = String(event?.message || event?.formattedMessage || "").toLowerCase();
@@ -245,11 +293,12 @@ module.exports = async function handler(req, res) {
 
   try {
     const body = await readJsonBody(req);
-    const title = String(body?.title || "Soloris Alert").slice(0, 140);
+    const inputTitle = String(body?.title || "Soloris Alert").slice(0, 140);
     const event = body?.event || {};
     const meta = body?.meta || {};
     const destinations = body?.destinations || {};
     const results = {};
+    const title = buildNativeBannerTitle(inputTitle, event);
     const bannerAttachment = await loadAlertBanner(event, meta);
 
     if (destinations.discordWebhook) {

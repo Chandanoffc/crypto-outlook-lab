@@ -173,6 +173,15 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
+function formatBannerPair(value) {
+  const raw = String(value || "").trim().toUpperCase();
+  if (!raw) return "";
+  if (raw.includes("/")) return raw;
+  if (raw.endsWith("USDT")) return `${raw.slice(0, -4)}/USDT`;
+  if (raw.endsWith("USDC")) return `${raw.slice(0, -4)}/USDC`;
+  return raw;
+}
+
 function formatDateTime(timestamp) {
   if (!Number.isFinite(Number(timestamp)) || Number(timestamp) <= 0) return "—";
   return new Date(Number(timestamp)).toLocaleString([], {
@@ -843,8 +852,27 @@ async function sendWebhookAlert(moduleKey, title, payload, meta) {
       .join("\n")}`,
   };
 
+  const pair = formatBannerPair(payload.pair || payload.symbol || event.symbol);
+  if (moduleKey === PERPS_MODULE) {
+    event.type = "perps";
+    event.pair = pair;
+    event.direction = String(payload.direction || payload.side || event.side || "").trim().toUpperCase();
+    event.strategy = String(payload.strategy || "Perps Alerts").trim();
+    event.bannerLabel = "NEW PERPS ALERT";
+    event.bannerFlashFrames = [event.bannerLabel, pair].filter(Boolean);
+    event.bannerTitle = [event.bannerLabel, pair, event.direction].filter(Boolean).join(" | ");
+  } else if (moduleKey === DLMM_MODULE) {
+    event.type = "dlmm";
+    event.pair = pair;
+    event.direction = String(payload.direction || payload.side || "").trim().toUpperCase();
+    event.strategy = String(payload.strategy || "DLMM Alerts").trim();
+    event.bannerLabel = "NEW DLMM ALERT";
+    event.bannerFlashFrames = [event.bannerLabel, pair].filter(Boolean);
+    event.bannerTitle = [event.bannerLabel, event.strategy, pair].filter(Boolean).join(" | ");
+  }
+
   const response = await postJson("/api/notify", {
-    title,
+    title: event.bannerTitle || title,
     event,
     meta,
     destinations: {

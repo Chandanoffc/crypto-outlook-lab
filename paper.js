@@ -4,7 +4,7 @@ const STRATEGY_SPECS = [
 const STRATEGY_START_BALANCE = 1000;
 const START_BALANCE = STRATEGY_START_BALANCE;
 const DEFAULT_INTERVAL = "15m";
-const DEFAULT_QUALITY_THRESHOLD = 68;
+const DEFAULT_QUALITY_THRESHOLD = 64;
 const QUOTE_ASSET = "USDT";
 const AUTO_SCAN_MS = 90 * 1000;
 const PRIORITY_SCAN_COUNT = 10;
@@ -20,8 +20,8 @@ const STOP_MARGIN_RETURN_PCT = 10;
 const TRADE_COOLDOWN_MS = 4 * 60 * 1000;
 const STOP_LOSS_COOLDOWN_MS = 2 * 60 * 60 * 1000;
 const HIGH_VOLUME_FLOOR = 100_000_000;
-const MIN_RR = 1.4;
-const MIN_PROJECTED_MOVE_PCT = 1.3;
+const MIN_RR = 1.25;
+const MIN_PROJECTED_MOVE_PCT = 1.0;
 const STRATEGY_VERSION = 6;
 const TICKER_STORAGE_KEY = "apex-signals-auto-paper-tickers";
 const SHARED_TRADEZ_AUTO_STORAGE_KEY = "hyperdrive-tradez-auto-paper";
@@ -59,11 +59,11 @@ Opened: {openedAt}
 Mode: {mode}
 Open on Binance: {binanceLink}`,
 };
-const HOUSE_MIN_ENTRY_SCORE = 15;
-const HOUSE_MIN_REFINED_SCORE = 78;
-const MIN_NEAREST_TARGET_RR = 1.3;
-const MAX_ENTRY_DISTANCE_FROM_EMA20_ATR = 1.35;
-const MAX_ENTRY_DISTANCE_FROM_LEVEL_ATR = 1.1;
+const HOUSE_MIN_ENTRY_SCORE = 12;
+const HOUSE_MIN_REFINED_SCORE = 72;
+const MIN_NEAREST_TARGET_RR = 1.1;
+const MAX_ENTRY_DISTANCE_FROM_EMA20_ATR = 1.7;
+const MAX_ENTRY_DISTANCE_FROM_LEVEL_ATR = 1.35;
 const MIN_EMA_SPREAD_ATR = 0.22;
 const MIN_ATR_PCT_FOR_CONTINUATION = 0.45;
 const MIN_RECENT_BODY_RATIO = 0.33;
@@ -441,6 +441,15 @@ function binanceFuturesLink(symbol) {
   return `https://www.binance.com/en/futures/${encodeURIComponent(String(symbol || "").trim())}`;
 }
 
+function formatBannerPair(value) {
+  const raw = String(value || "").trim().toUpperCase();
+  if (!raw) return "";
+  if (raw.includes("/")) return raw;
+  if (raw.endsWith("USDT")) return `${raw.slice(0, -4)}/USDT`;
+  if (raw.endsWith("USDC")) return `${raw.slice(0, -4)}/USDC`;
+  return raw;
+}
+
 function activeAutoSignalTemplate() {
   const template = String(autoDelivery.template || DEFAULT_AUTO_DELIVERY.template || "").trim();
   return template || DEFAULT_AUTO_DELIVERY.template;
@@ -603,7 +612,14 @@ function maybeSendAutoEntryNotification(candidate, trade) {
     trade.openedAt
   );
   event.deliveryType = "entry_opened";
-  dispatchAutoDelivery(event, event.title);
+  event.type = "house";
+  event.pair = formatBannerPair(trade.symbol);
+  event.direction = trade.side;
+  event.strategy = trade.strategyLabel || "House Trend";
+  event.bannerLabel = "NEW SIGNAL";
+  event.bannerFlashFrames = [event.bannerLabel, event.pair].filter(Boolean);
+  event.bannerTitle = [event.bannerLabel, event.pair, event.direction].filter(Boolean).join(" | ");
+  dispatchAutoDelivery(event, event.bannerTitle || event.title);
 }
 
 function maybeSendAutoExitNotification(kind, trade, exitPrice, time = Date.now()) {
@@ -1801,14 +1817,14 @@ function analyzeSnapshot(snapshot) {
 }
 
 function highQualityCandidates(candidates, threshold) {
-  const effectiveThreshold = threshold + 4;
+  const effectiveThreshold = threshold + 2;
   return candidates
     .filter(
       (candidate) =>
         candidate.bias.tone !== "neutral" &&
         (candidate.refinedQualityScore ?? candidate.qualityScore) >= Math.max(effectiveThreshold, candidate.requiredQualityGate || 0) &&
         candidate.entryQualityScore >= (candidate.requiredEntryScore || HOUSE_MIN_ENTRY_SCORE) &&
-        candidate.alignedCount >= 2 &&
+        candidate.alignedCount >= 1 &&
         candidate.conflictCount === 0 &&
         !candidate.htfAgreementHardRejected &&
         candidate.trade?.entryLocationQuality &&
@@ -1816,7 +1832,6 @@ function highQualityCandidates(candidates, threshold) {
         candidate.trade?.distanceFromLevelAtr <= MAX_ENTRY_DISTANCE_FROM_LEVEL_ATR &&
         candidate.trade?.nearestTargetRr >= MIN_NEAREST_TARGET_RR &&
         candidate.ema20SlopeAligned &&
-        candidate.ema50SlopeAligned &&
         !candidate.crowdedHardReject &&
         !candidate.extremeCompressedStructure &&
         hasGoodTradingVolume(candidate.quoteVolume) &&
@@ -2424,7 +2439,7 @@ function buildCoreTrendStrategySignal(candidate) {
 
   if (
     candidate.bias.tone === "neutral" ||
-    candidate.alignedCount < 2 ||
+    candidate.alignedCount < 1 ||
     candidate.conflictCount > 0 ||
     candidate.htfAgreementHardRejected ||
     !hasGoodTradingVolume(candidate.quoteVolume) ||
@@ -2437,7 +2452,6 @@ function buildCoreTrendStrategySignal(candidate) {
     candidate.trade?.distanceFromLevelAtr > MAX_ENTRY_DISTANCE_FROM_LEVEL_ATR ||
     candidate.trade?.nearestTargetRr < MIN_NEAREST_TARGET_RR ||
     !candidate.ema20SlopeAligned ||
-    !candidate.ema50SlopeAligned ||
     candidate.crowdedHardReject ||
     candidate.extremeCompressedStructure ||
     candidate.trade?.projectedMovePct < MIN_PROJECTED_MOVE_PCT
@@ -3802,7 +3816,14 @@ if (dom.alertTestButton) {
     };
     const event = buildAutoTradeNotificationEvent("Auto Trade Test Signal", demoTrade, ["Test delivery"], now);
     event.deliveryType = "test_signal";
-    dispatchAutoDelivery(event, event.title);
+    event.type = "house";
+    event.pair = formatBannerPair(demoTrade.symbol);
+    event.direction = demoTrade.side;
+    event.strategy = demoTrade.strategyLabel || "House Trend";
+    event.bannerLabel = "NEW SIGNAL";
+    event.bannerFlashFrames = [event.bannerLabel, event.pair].filter(Boolean);
+    event.bannerTitle = [event.bannerLabel, event.pair, event.direction].filter(Boolean).join(" | ");
+    dispatchAutoDelivery(event, event.bannerTitle || event.title);
     setStatus("Test alert sent to configured channels.", "up");
   });
 }

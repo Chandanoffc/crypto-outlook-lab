@@ -1,7 +1,7 @@
 const DEFAULT_TOKEN = "BTC";
 const STRATEGY_INTERVAL = "1h";
 const QUOTE_ASSET = "USDT";
-const DEFAULT_QUALITY_THRESHOLD = 70;
+const DEFAULT_QUALITY_THRESHOLD = 66;
 const AUTO_SCAN_MS = 5 * 60 * 1000;
 const REMOTE_RUNTIME_POLL_MS = 60 * 1000;
 const REMOTE_DISPLAY_REFRESH_MS = 2 * 60 * 1000;
@@ -37,19 +37,19 @@ const DEMO_STATUS_SYNC_BATCH = 20;
 const HIGHER_TIMEFRAME_INTERVAL = "4h";
 const EMA_SLOPE_LOOKBACK = 4;
 const MIN_EMA_SEPARATION_ATR = 0.2;
-const MAX_STALE_SIGNAL_BARS = 4;
-const MAX_AUTO_ENTRY_SIGNAL_BARS = 4;
-const MAX_POST_TOUCH_EXTENSION_ATR = 2.5;
+const MAX_STALE_SIGNAL_BARS = 6;
+const MAX_AUTO_ENTRY_SIGNAL_BARS = 5;
+const MAX_POST_TOUCH_EXTENSION_ATR = 3.0;
 const MIN_VISIBLE_SIGNAL_RR = 1.2;
 const MIN_EXECUTION_RR = 1.2;
-const MIN_VISIBLE_SIGNAL_VOLUME_FACTOR = 1.02;
-const MIN_AUTO_EXECUTION_VOLUME_FACTOR = 1.0;
+const MIN_VISIBLE_SIGNAL_VOLUME_FACTOR = 1.0;
+const MIN_AUTO_EXECUTION_VOLUME_FACTOR = 0.98;
 const STRICT_LEVEL_TOUCH_BUFFER_ATR = 0.05;
 const STRICT_LEVEL_RECLAIM_BUFFER_ATR = 0.04;
-const MAX_EXECUTION_DISTANCE_FROM_TOUCH_ATR = 0.6;
-const LIVE_ENTRY_BUFFER_ATR = 0.35;
-const TRADEZ_AUTO_EXECUTION_THRESHOLD_BUFFER = 2;
-const TRADEZ_AUTO_MIN_EXECUTION_THRESHOLD = 72;
+const MAX_EXECUTION_DISTANCE_FROM_TOUCH_ATR = 0.9;
+const LIVE_ENTRY_BUFFER_ATR = 0.5;
+const TRADEZ_AUTO_EXECUTION_THRESHOLD_BUFFER = 1;
+const TRADEZ_AUTO_MIN_EXECUTION_THRESHOLD = 70;
 const DEFAULT_ALERT_CHANNELS = {
   browser: true,
   discordWebhook: "",
@@ -693,7 +693,14 @@ async function sendTradezTestSignal() {
     testTime
   );
   event.deliveryType = "test_signal";
-  dispatchTradezDelivery(event, event.title);
+  event.type = "tradez";
+  event.pair = formatBannerPair(sampleTrade.symbol);
+  event.direction = sampleTrade.side;
+  event.strategy = "EMA 20/50 Pullback";
+  event.bannerLabel = "NEW SIGNAL";
+  event.bannerFlashFrames = [event.bannerLabel, event.pair].filter(Boolean);
+  event.bannerTitle = [event.bannerLabel, event.pair, event.direction].filter(Boolean).join(" | ");
+  dispatchTradezDelivery(event, event.bannerTitle || event.title);
   setStatus("Test signal sent to the currently saved delivery channels.", "up");
 }
 
@@ -1085,6 +1092,15 @@ function formatCompactUsd(value, digits = 2) {
   }).format(Math.abs(value))}`;
 }
 
+function formatBannerPair(value) {
+  const raw = String(value || "").trim().toUpperCase();
+  if (!raw) return "";
+  if (raw.includes("/")) return raw;
+  if (raw.endsWith("USDT")) return `${raw.slice(0, -4)}/USDT`;
+  if (raw.endsWith("USDC")) return `${raw.slice(0, -4)}/USDC`;
+  return raw;
+}
+
 function getFallbackExchangeInfo() {
   const fallback = window.APEX_FALLBACK_PERPS;
   if (!fallback || !Array.isArray(fallback.symbols) || !fallback.symbols.length) return null;
@@ -1448,7 +1464,14 @@ function maybeSendTradezEntryNotification(candidate, trade) {
     trade.openedAt
   );
   event.deliveryType = "entry_opened";
-  dispatchTradezDelivery(event, event.title);
+  event.type = "tradez";
+  event.pair = formatBannerPair(trade.symbol);
+  event.direction = trade.side;
+  event.strategy = "EMA 20/50 Pullback";
+  event.bannerLabel = "NEW SIGNAL";
+  event.bannerFlashFrames = [event.bannerLabel, event.pair].filter(Boolean);
+  event.bannerTitle = [event.bannerLabel, event.pair, event.direction].filter(Boolean).join(" | ");
+  dispatchTradezDelivery(event, event.bannerTitle || event.title);
 }
 
 function maybeSendTradezProgressNotification(kind, trade, extraLines = [], time = Date.now()) {
@@ -2132,20 +2155,16 @@ function highQualityTradezAutoCandidates(candidates, threshold) {
     .filter((candidate) => (candidate.activeSignal?.sinceTouchBars || 0) <= MAX_AUTO_ENTRY_SIGNAL_BARS)
     .filter((candidate) => {
       const flowConfirmations = candidate.activeSignal?.flowConfirmations || 0;
-      const strongSetup =
-        candidate.activeSignal?.higherTimeframeConfirmed &&
-        candidate.paperTrade.rr >= MIN_EXECUTION_RR &&
-        candidate.qualityScore >= executionThreshold;
-      return flowConfirmations >= 2 || (flowConfirmations >= 1 && strongSetup);
+      const higherTimeframeConfirmed = Boolean(candidate.activeSignal?.higherTimeframeConfirmed);
+      const rrOk = Number(candidate.paperTrade?.rr) >= MIN_EXECUTION_RR;
+      return flowConfirmations >= 2 || (flowConfirmations >= 1 && higherTimeframeConfirmed && rrOk);
     })
-    .filter((candidate) => (candidate.activeSignal?.retestCount || 0) <= 2)
+    .filter((candidate) => (candidate.activeSignal?.retestCount || 0) <= 3)
     .filter((candidate) => (candidate.activeSignal?.volumeFactor || 0) >= MIN_AUTO_EXECUTION_VOLUME_FACTOR)
-    .filter((candidate) => candidate.activeSignal?.higherTimeframeConfirmed)
-    .filter(
-      (candidate) =>
-        !Number.isFinite(candidate.activeSignal?.extensionFromTouch) ||
-        candidate.activeSignal.extensionFromTouch <= candidate.latestAtr * MAX_POST_TOUCH_EXTENSION_ATR
-    )
+    .filter((candidate) => {
+      const extension = candidate.activeSignal?.extensionFromTouch;
+      return !Number.isFinite(extension) || extension <= candidate.latestAtr * MAX_POST_TOUCH_EXTENSION_ATR;
+    })
     .filter(candidateIsExecutable)
     .sort((left, right) => {
       const rightSeen = right.identifiedAt || right.activeSignal?.detectedAt || 0;
