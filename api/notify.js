@@ -1,7 +1,15 @@
 const crypto = require("crypto");
 const fs = require("fs/promises");
 const path = require("path");
-const { insertAlertDelivery } = require("../lib/neon-db");
+const { hasDatabase, getRuntimeState, insertAlertDelivery, upsertRuntimeState } = require("../lib/neon-db");
+const {
+  applyRuntimeSettings,
+  buildResetRuntimeState,
+  defaultRuntimeState: defaultPlaygroundRuntimeState,
+  runPlaygroundScan,
+  sanitizeRuntimeState: sanitizePlaygroundRuntimeState,
+  sendTestAlert,
+} = require("../lib/playground-runtime");
 
 function buildJsonResponse(res, statusCode, payload) {
   res.statusCode = statusCode;
@@ -31,6 +39,116 @@ function inferBaseUrl(req) {
   const proto = forwardedProto ? String(forwardedProto).split(",")[0].trim() : "https";
   const host = forwardedHost || req.headers.host || "soloris-signals.vercel.app";
   return `${proto}://${host}`;
+}
+
+async function loadPersistedPlaygroundState() {
+  if (!hasDatabase()) {
+    return {
+      available: false,
+      state: defaultPlaygroundRuntimeState(),
+      updatedAt: null,
+    };
+  }
+
+  const stored = await getRuntimeState("playground_ops");
+  if (stored.found && stored.state) {
+    return {
+      available: true,
+      state: sanitizePlaygroundRuntimeState(stored.state),
+      updatedAt: stored.updatedAt || null,
+    };
+  }
+
+  const seeded = defaultPlaygroundRuntimeState();
+  const saved = await upsertRuntimeState("playground_ops", seeded);
+  return {
+    available: true,
+    state: sanitizePlaygroundRuntimeState(saved.state || seeded),
+    updatedAt: saved.updatedAt || null,
+  };
+}
+
+async function handlePlaygroundRuntimeAction(req, res, body) {
+  if (!hasDatabase()) {
+    buildJsonResponse(res, 200, {
+      ok: true,
+      backgroundAvailable: false,
+      reason: "DATABASE_URL not configured.",
+      state: defaultPlaygroundRuntimeState(),
+    });
+    return true;
+  }
+
+  const loaded = await loadPersistedPlaygroundState();
+  const runtimeBody = body?.runtime || {};
+  const action = String(runtimeBody?.action || "get").trim().toLowerCase();
+  const baseUrl = inferBaseUrl(req);
+
+  if (action === "get") {
+    buildJsonResponse(res, 200, {
+      ok: true,
+      backgroundAvailable: loaded.available,
+      state: loaded.state,
+      updatedAt: loaded.updatedAt,
+    });
+    return true;
+  }
+
+  if (action === "reset") {
+    const resetState = buildResetRuntimeState();
+    const saved = await upsertRuntimeState("playground_ops", resetState);
+    buildJsonResponse(res, 200, {
+      ok: true,
+      backgroundAvailable: true,
+      state: sanitizePlaygroundRuntimeState(saved.state || resetState),
+      updatedAt: saved.updatedAt,
+    });
+    return true;
+  }
+
+  if (action === "scan") {
+    const settings = runtimeBody?.settings || {};
+    const inputState = Object.keys(settings).length
+      ? applyRuntimeSettings(loaded.state, settings)
+      : loaded.state;
+    const result = await runPlaygroundScan(inputState, {
+      manual: true,
+      modules: Array.isArray(runtimeBody?.modules) ? runtimeBody.modules : undefined,
+      baseUrl,
+    });
+    const saved = await upsertRuntimeState("playground_ops", result.state);
+    buildJsonResponse(res, 200, {
+      ok: true,
+      backgroundAvailable: true,
+      state: sanitizePlaygroundRuntimeState(saved.state || result.state),
+      updatedAt: saved.updatedAt,
+      summary: result.summary,
+    });
+    return true;
+  }
+
+  if (action === "test") {
+    const moduleKey = String(runtimeBody?.module || "").trim().toLowerCase() === "dlmm" ? "dlmm" : "perps";
+    const nextState = await sendTestAlert(loaded.state, moduleKey, { baseUrl });
+    const saved = await upsertRuntimeState("playground_ops", nextState);
+    buildJsonResponse(res, 200, {
+      ok: true,
+      backgroundAvailable: true,
+      state: sanitizePlaygroundRuntimeState(saved.state || nextState),
+      updatedAt: saved.updatedAt,
+    });
+    return true;
+  }
+
+  const nextState = applyRuntimeSettings(loaded.state, runtimeBody?.settings || {});
+  const saved = await upsertRuntimeState("playground_ops", nextState);
+  buildJsonResponse(res, 200, {
+    ok: true,
+    backgroundAvailable: true,
+    state: sanitizePlaygroundRuntimeState(saved.state || nextState),
+    updatedAt: saved.updatedAt,
+  });
+  return true;
 }
 
 function formatBannerPair(value) {
@@ -451,6 +569,14 @@ function resolveAlertBannerFile(event, meta = {}) {
 }
 
 async function loadAlertBanner(event, meta = {}) {
+  const eventType = String(meta?.eventType || event?.deliveryType || "").toLowerCase();
+  const type = String(event?.type || "").toLowerCase();
+  const nativeSignalType =
+    type === "house" || type === "tradez" || type === "perps" || type === "dlmm";
+  if (nativeSignalType && (eventType === "entry_opened" || eventType === "test_signal" || eventType === "scanner_signal")) {
+    return generateNativeEntryBanner(event);
+  }
+
   const filename = resolveAlertBannerFile(event, meta);
   if (!filename) return null;
 
@@ -631,6 +757,10 @@ module.exports = async function handler(req, res) {
 
   try {
     const body = await readJsonBody(req);
+    if (String(body?.action || "").trim().toLowerCase() === "playground_runtime") {
+      await handlePlaygroundRuntimeAction(req, res, body);
+      return;
+    }
     const inputTitle = String(body?.title || "Soloris Alert").slice(0, 140);
     const event = body?.event || {};
     const meta = body?.meta || {};

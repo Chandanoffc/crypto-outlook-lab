@@ -494,7 +494,17 @@ function mergePlaygroundRuntimeState(payload) {
 
 async function fetchPlaygroundRuntimeState() {
   try {
-    const payload = await fetchJson("/api/playground-runtime");
+    let payload;
+    try {
+      payload = await fetchJson("/api/playground-runtime");
+    } catch (_error) {
+      payload = await postJson("/api/notify", {
+        action: "playground_runtime",
+        runtime: {
+          action: "get",
+        },
+      });
+    }
     mergePlaygroundRuntimeState(payload);
     return payload;
   } catch (_error) {
@@ -520,14 +530,36 @@ async function syncPlaygroundRuntimeSettings(moduleKey = null) {
         webhook: state.dlmm.webhook,
       };
     }
-    const payload = await postJson("/api/playground-runtime", {
-      action: "settings",
-      settings,
-    });
+    let payload;
+    try {
+      payload = await postJson("/api/playground-runtime", {
+        action: "settings",
+        settings,
+      });
+    } catch (_error) {
+      payload = await postJson("/api/notify", {
+        action: "playground_runtime",
+        runtime: {
+          action: "settings",
+          settings,
+        },
+      });
+    }
     mergePlaygroundRuntimeState(payload);
     return payload;
   } catch (_error) {
     return null;
+  }
+}
+
+async function postPlaygroundRuntime(runtime = {}) {
+  try {
+    return await postJson("/api/playground-runtime", runtime);
+  } catch (_error) {
+    return postJson("/api/notify", {
+      action: "playground_runtime",
+      runtime,
+    });
   }
 }
 
@@ -966,7 +998,7 @@ async function testWebhook(moduleKey) {
   try {
     await syncPlaygroundRuntimeSettings(moduleKey);
     if (state.backgroundAvailable) {
-      const response = await postJson("/api/playground-runtime", {
+      const response = await postPlaygroundRuntime({
         action: "test",
         module: moduleKey,
       });
@@ -1051,7 +1083,7 @@ async function refreshPerpsData({ fullScan = false, source = "manual" } = {}) {
         postJson("/api/tradez-runtime", { action: "scan" }),
       ]);
       if (state.backgroundAvailable) {
-        await postJson("/api/playground-runtime", {
+        await postPlaygroundRuntime({
           action: "scan",
           modules: [PERPS_MODULE],
           settings: {
@@ -1304,7 +1336,7 @@ async function refreshDlmmData({ source = "manual" } = {}) {
   try {
     await fetchPlaygroundRuntimeState();
     if (state.backgroundAvailable && source === "manual") {
-      await postJson("/api/playground-runtime", {
+      await postPlaygroundRuntime({
         action: "scan",
         modules: [DLMM_MODULE],
         settings: {
