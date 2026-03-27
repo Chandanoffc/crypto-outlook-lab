@@ -1,76 +1,170 @@
-const TABS = ["Funding Rates", "EMA / RSI Filter", "DLMM Alerts", "Combined Strategy"];
-const ASSETS = ["BTC", "ETH", "SOL"];
+const PLAYGROUND_STORAGE_KEY = "soloris-playground-ops-v2";
+const PERPS_SCAN_INTERVAL_OPTIONS = [
+  { label: "1 minute", value: 60_000 },
+  { label: "5 minutes", value: 5 * 60_000 },
+  { label: "15 minutes", value: 15 * 60_000 },
+];
+const DLMM_SCAN_INTERVAL_OPTIONS = [
+  { label: "2 minutes", value: 2 * 60_000 },
+  { label: "5 minutes", value: 5 * 60_000 },
+  { label: "15 minutes", value: 15 * 60_000 },
+];
+const REPORT_LOOKBACK_MS = 24 * 60 * 60 * 1000;
+const MAX_SUGGESTIONS = 10;
+const MAX_LOG_ENTRIES = 80;
+const MAX_ALERT_IDS = 200;
+const PERPS_MODULE = "perps";
+const DLMM_MODULE = "dlmm";
 
-const MOCK_FUNDING = {
-  BTC: { rate: 0.0082, history: [0.0075, 0.0091, 0.0068, 0.0077, 0.0083, 0.0079, 0.0088, 0.0072] },
-  ETH: { rate: 0.0061, history: [0.0058, 0.0049, 0.0063, 0.0071, 0.0055, 0.0062, 0.0047, 0.0058] },
-  SOL: { rate: 0.0124, history: [0.0098, 0.0115, 0.0131, 0.0108, 0.0119, 0.0127, 0.0103, 0.0121] },
-};
+const state = loadState();
+let perpsTimer = null;
+let dlmmTimer = null;
+let perpsInFlight = false;
+let dlmmInFlight = false;
 
-const PRICE_DATA = {
-  BTC: [84000,84200,83800,84500,85000,84700,85200,85800,86000,85500,85200,84800,84500,84200,84000,83800,83500,83200,83000,82800,83200,83800,84200,84800,85200,85600,86000,86400,86800,87000,86800,86500,86200,86000,85800,85500,85200,85000,84800,84500,84200,84000,83800,84200,84800,85200,85800,86200,86800,87200,87600,88000,88400,88800,89000,88800,88500,88200,88000,87800,87500,87200,87000,86800,86500,86200,86000,85800,85500,85200,85000,84800,84500,84200,84000,84200,84500,84800,85200,85600,86000,86400,86800,87000,87200,87500,87800,88000,88200,88500,88800,89000,89200,89500,89800,90000,90200,90500,90800,91000,90800,90500,90200,90000,89800,89500,89200,89000,88800,88500,88200,88000,87800,87500,87200,87000,86800,86500,86200,86000,85800,85500,85200,85000,84800,84500,84200,84000,84200,84500,84800,85200,85600,86000,86400,86800,87000,87200,87500,87800,88000,88200,88500,88800,89000,89200,89500,89800,90000,90200,90500,90800,91000,91200,91500,91800,92000,92200,92500,92800,93000,93200,93500,93800,94000,93800,93500,93200,93000,92800,92500,92200,92000,91800,91500,91200,91000,90800,90500,90200,90000,89800,89500,89200,89000,88800,88500,88200,88000,87800,87500,87200,87000,86800,86500,86200,86000,85800,85500,85200,85000,84800,84500,84200,84000,83800,83500,83200,83000],
-  ETH: [1950,1960,1940,1970,1990,1980,2000,2020,2030,2010,2000,1990,1980,1970,1960,1950,1940,1930,1920,1910,1920,1940,1960,1980,2000,2020,2040,2060,2080,2090,2080,2070,2060,2050,2040,2030,2020,2010,2000,1990,1980,1970,1960,1980,2000,2020,2040,2060,2080,2100,2120,2140,2160,2180,2190,2180,2170,2160,2150,2140,2130,2120,2110,2100,2090,2080,2070,2060,2050,2040,2030,2020,2010,2000,1990,2000,2010,2020,2040,2060,2080,2100,2120,2140,2160,2180,2200,2220,2240,2260,2280,2300,2320,2340,2360,2380,2400,2420,2440,2460,2440,2420,2400,2380,2360,2340,2320,2300,2280,2260,2240,2220,2200,2180,2160,2140,2120,2100,2080,2060,2040,2020,2000,1990,1980,1970,1960,1950,2000,2020,2040,2060,2080,2100,2120,2140,2160,2180,2200,2220,2240,2260,2280,2300,2320,2340,2360,2380,2400,2420,2440,2460,2480,2500,2520,2540,2560,2580,2600,2620,2640,2660,2680,2700,2720,2700,2680,2660,2640,2620,2600,2580,2560,2540,2520,2500,2480,2460,2440,2420,2400,2380,2360,2340,2320,2300,2280,2260,2240,2220,2200,2180,2160,2140,2120,2100,2080,2060,2040,2020,2000,1980,1960,1940,1920,1900,1880,1860,1840],
-  SOL: [128,129,127,130,132,131,133,135,136,134,133,132,131,130,129,128,127,126,125,124,125,127,129,131,133,135,137,139,141,142,141,140,139,138,137,136,135,134,133,132,131,130,129,131,133,135,137,139,141,143,145,147,149,151,152,151,150,149,148,147,146,145,144,143,142,141,140,139,138,137,136,135,134,133,132,133,134,136,138,140,142,144,146,148,150,152,154,156,158,160,162,164,166,168,170,172,174,176,178,180,178,176,174,172,170,168,166,164,162,160,158,156,154,152,150,148,146,144,142,140,138,136,134,132,130,128,126,124,126,128,130,132,134,136,138,140,142,144,146,148,150,152,154,156,158,160,162,164,166,168,170,172,174,176,178,180,182,184,186,188,190,192,194,196,198,200,198,196,194,192,190,188,186,184,182,180,178,176,174,172,170,168,166,164,162,160,158,156,154,152,150,148,146,144,142,140,138,136,134,132,130,128,126,124,122,120,118,116,114],
-};
-
-const state = {
-  activeTab: 0,
-  alertThreshold: 0.06,
-  alertsEnabled: false,
-  selectedAsset: "SOL",
-  dlmmPositions: [
-    { id: 1, pair: "SOL/USDC", entryPrice: 148, currentPrice: 164, rangePct: 15, shape: "Curve" },
-    { id: 2, pair: "BTC/USDC", entryPrice: 87000, currentPrice: 85000, rangePct: 12, shape: "Spot" },
-  ],
-  newPos: { pair: "", entryPrice: "", currentPrice: "", rangePct: 15, shape: "Curve" },
-  priceInputs: {},
-};
-
-function calcEMA(prices, period) {
-  if (!prices || prices.length < period) return null;
-  const k = 2 / (period + 1);
-  let ema = prices.slice(0, period).reduce((a, b) => a + b, 0) / period;
-  for (let i = period; i < prices.length; i += 1) {
-    ema = prices[i] * k + ema * (1 - k);
-  }
-  return ema;
+function defaultModuleWebhookHealth() {
+  return {
+    status: "idle",
+    message: "Not tested yet",
+    lastResultAt: 0,
+  };
 }
 
-function calcRSI(prices, period = 14) {
-  if (!prices || prices.length < period + 1) return null;
-  let gains = 0;
-  let losses = 0;
-  for (let i = 1; i <= period; i += 1) {
-    const d = prices[i] - prices[i - 1];
-    if (d > 0) gains += d;
-    else losses -= d;
+function loadState() {
+  const fallback = {
+    activeModule: PERPS_MODULE,
+    perps: {
+      scannerEnabled: true,
+      scanIntervalMs: 5 * 60_000,
+      selectorQuery: "",
+      selectedSymbol: "",
+      webhook: "",
+      webhookHealth: defaultModuleWebhookHealth(),
+      runtime: {
+        house: null,
+        tradez: null,
+        universe: [],
+        universeSource: "",
+        universeWarning: "",
+        backgroundAvailable: false,
+      },
+      manualScan: null,
+      scanLog: [],
+      alertLog: [],
+      sentIds: [],
+      lastSyncAt: 0,
+      lastError: "",
+      loading: false,
+    },
+    dlmm: {
+      scannerEnabled: true,
+      scanIntervalMs: 5 * 60_000,
+      selectorQuery: "",
+      selectedPoolAddress: "",
+      webhook: "",
+      webhookHealth: defaultModuleWebhookHealth(),
+      pools: [],
+      protocolMetrics: null,
+      manualScan: null,
+      recentCalls: [],
+      scanLog: [],
+      alertLog: [],
+      sentIds: [],
+      lastSyncAt: 0,
+      lastError: "",
+      loading: false,
+    },
+  };
+
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(PLAYGROUND_STORAGE_KEY) || "{}");
+    return {
+      activeModule: stored.activeModule === DLMM_MODULE ? DLMM_MODULE : PERPS_MODULE,
+      perps: {
+        ...fallback.perps,
+        ...stored.perps,
+        webhookHealth: {
+          ...defaultModuleWebhookHealth(),
+          ...(stored.perps?.webhookHealth || {}),
+        },
+        runtime: {
+          ...fallback.perps.runtime,
+          ...(stored.perps?.runtime || {}),
+          house: null,
+          tradez: null,
+          universe: Array.isArray(stored.perps?.runtime?.universe) ? stored.perps.runtime.universe : [],
+        },
+        scanLog: Array.isArray(stored.perps?.scanLog) ? stored.perps.scanLog.slice(0, MAX_LOG_ENTRIES) : [],
+        alertLog: Array.isArray(stored.perps?.alertLog) ? stored.perps.alertLog.slice(0, MAX_LOG_ENTRIES) : [],
+        sentIds: Array.isArray(stored.perps?.sentIds) ? stored.perps.sentIds.slice(0, MAX_ALERT_IDS) : [],
+        manualScan: null,
+        lastError: "",
+        loading: false,
+      },
+      dlmm: {
+        ...fallback.dlmm,
+        ...stored.dlmm,
+        webhookHealth: {
+          ...defaultModuleWebhookHealth(),
+          ...(stored.dlmm?.webhookHealth || {}),
+        },
+        pools: Array.isArray(stored.dlmm?.pools) ? stored.dlmm.pools : [],
+        recentCalls: Array.isArray(stored.dlmm?.recentCalls) ? stored.dlmm.recentCalls.slice(0, 160) : [],
+        scanLog: Array.isArray(stored.dlmm?.scanLog) ? stored.dlmm.scanLog.slice(0, MAX_LOG_ENTRIES) : [],
+        alertLog: Array.isArray(stored.dlmm?.alertLog) ? stored.dlmm.alertLog.slice(0, MAX_LOG_ENTRIES) : [],
+        sentIds: Array.isArray(stored.dlmm?.sentIds) ? stored.dlmm.sentIds.slice(0, MAX_ALERT_IDS) : [],
+        manualScan: null,
+        lastError: "",
+        loading: false,
+      },
+    };
+  } catch (_error) {
+    return fallback;
   }
-  let ag = gains / period;
-  let al = losses / period;
-  for (let i = period + 1; i < prices.length; i += 1) {
-    const d = prices[i] - prices[i - 1];
-    ag = (ag * (period - 1) + Math.max(d, 0)) / period;
-    al = (al * (period - 1) + Math.max(-d, 0)) / period;
-  }
-  return al === 0 ? 100 : 100 - 100 / (1 + ag / al);
 }
 
-function calcVolatility(prices) {
-  if (!prices || prices.length < 20) return 0;
-  const recent = prices.slice(-20);
-  const returns = recent.slice(1).map((price, i) => Math.log(price / recent[i]));
-  const mean = returns.reduce((a, b) => a + b, 0) / returns.length;
-  const variance = returns.reduce((a, b) => a + (b - mean) ** 2, 0) / returns.length;
-  return Math.sqrt(variance) * Math.sqrt(6) * 100;
-}
-
-function number(value, maximumFractionDigits = 2) {
-  if (value === null || value === undefined || Number.isNaN(value)) return "-";
-  return value.toLocaleString(undefined, { maximumFractionDigits });
+function persistState() {
+  const payload = {
+    activeModule: state.activeModule,
+    perps: {
+      scannerEnabled: state.perps.scannerEnabled,
+      scanIntervalMs: state.perps.scanIntervalMs,
+      selectorQuery: state.perps.selectorQuery,
+      selectedSymbol: state.perps.selectedSymbol,
+      webhook: state.perps.webhook,
+      webhookHealth: state.perps.webhookHealth,
+      runtime: {
+        universe: state.perps.runtime.universe,
+        universeSource: state.perps.runtime.universeSource,
+        universeWarning: state.perps.runtime.universeWarning,
+        backgroundAvailable: state.perps.runtime.backgroundAvailable,
+      },
+      scanLog: state.perps.scanLog.slice(0, MAX_LOG_ENTRIES),
+      alertLog: state.perps.alertLog.slice(0, MAX_LOG_ENTRIES),
+      sentIds: state.perps.sentIds.slice(0, MAX_ALERT_IDS),
+      lastSyncAt: state.perps.lastSyncAt,
+    },
+    dlmm: {
+      scannerEnabled: state.dlmm.scannerEnabled,
+      scanIntervalMs: state.dlmm.scanIntervalMs,
+      selectorQuery: state.dlmm.selectorQuery,
+      selectedPoolAddress: state.dlmm.selectedPoolAddress,
+      webhook: state.dlmm.webhook,
+      webhookHealth: state.dlmm.webhookHealth,
+      pools: state.dlmm.pools.slice(0, 180),
+      protocolMetrics: state.dlmm.protocolMetrics,
+      recentCalls: state.dlmm.recentCalls.slice(0, 160),
+      scanLog: state.dlmm.scanLog.slice(0, MAX_LOG_ENTRIES),
+      alertLog: state.dlmm.alertLog.slice(0, MAX_LOG_ENTRIES),
+      sentIds: state.dlmm.sentIds.slice(0, MAX_ALERT_IDS),
+      lastSyncAt: state.dlmm.lastSyncAt,
+    },
+  };
+  window.localStorage.setItem(PLAYGROUND_STORAGE_KEY, JSON.stringify(payload));
 }
 
 function escapeHtml(value) {
-  return String(value)
+  return String(value ?? "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
@@ -78,646 +172,1561 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
-function getToneClass(signal) {
-  if (["LONG", "LONG BIAS", "bullish", "strong-arb", "oversold"].includes(signal)) return "is-green";
-  if (["SHORT", "SHORT BIAS", "bearish", "short-arb", "overbought"].includes(signal)) return "is-red";
-  if (["arb", "warning", "rising"].includes(signal)) return "is-amber";
-  return "is-muted";
-}
-
-function getStatusLabel(status) {
-  return {
-    safe: "SAFE",
-    warning: "REBALANCE SOON",
-    danger: "DANGER",
-    out: "OUT OF RANGE",
-  }[status];
-}
-
-function getStatusClass(status) {
-  return {
-    safe: "is-safe",
-    warning: "is-warning",
-    danger: "is-danger",
-    out: "is-danger",
-  }[status] || "";
-}
-
-function getDerivedState() {
-  const fundingSignals = Object.entries(MOCK_FUNDING).map(([asset, data]) => {
-    const { rate, history } = data;
-    const annualized = rate * 3 * 365 * 100;
-    const avgRate = history.reduce((a, b) => a + b, 0) / history.length;
-    const trend = rate > avgRate ? "rising" : "falling";
-    const threshold = state.alertThreshold / 100;
-    let signal = "neutral";
-    if (rate < 0) signal = "short-arb";
-    else if (rate > threshold * 1.5) signal = "strong-arb";
-    else if (rate > threshold) signal = "arb";
-    return { asset, rate, annualized, avgRate, trend, signal, history };
+function formatDateTime(timestamp) {
+  if (!Number.isFinite(Number(timestamp)) || Number(timestamp) <= 0) return "—";
+  return new Date(Number(timestamp)).toLocaleString([], {
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
   });
+}
 
-  const prices = PRICE_DATA[state.selectedAsset];
-  const ema50 = calcEMA(prices, 50);
-  const ema200 = calcEMA(prices, 200);
-  const rsi = calcRSI(prices);
-  const currentPrice = prices[prices.length - 1];
-  const volatility = calcVolatility(prices);
+function formatPercent(value, digits = 2) {
+  if (!Number.isFinite(Number(value))) return "—";
+  const numeric = Number(value);
+  return `${numeric >= 0 ? "+" : ""}${numeric.toFixed(digits)}%`;
+}
 
-  const emaSignal = ema50 && ema200 ? (ema50 > ema200 ? "bullish" : "bearish") : "neutral";
-  const rsiZone = !rsi ? "neutral" : rsi < 40 ? "oversold" : rsi > 70 ? "overbought" : "neutral";
-  let trendSignal = "NEUTRAL";
-  if (emaSignal === "bullish" && rsiZone !== "overbought") trendSignal = "LONG";
-  if (emaSignal === "bearish" && rsiZone !== "oversold") trendSignal = "SHORT";
-
-  const dlmmAlerts = state.dlmmPositions.map((position) => {
-    const high = position.entryPrice * (1 + position.rangePct / 100);
-    const low = position.entryPrice * (1 - position.rangePct / 100);
-    const span = high - low;
-    const rawPct = ((position.currentPrice - low) / span) * 100;
-    const distToEdge = Math.min(
-      (Math.abs(position.currentPrice - high) / span) * 100,
-      (Math.abs(position.currentPrice - low) / span) * 100
-    );
-    let status = "safe";
-    if (rawPct < 0 || rawPct > 100) status = "out";
-    else if (distToEdge < 10) status = "danger";
-    else if (distToEdge < 20) status = "warning";
-    return {
-      ...position,
-      high,
-      low,
-      pct: Math.max(0, Math.min(100, rawPct)),
-      distToEdge,
-      status,
-    };
+function formatNumber(value, digits = 2) {
+  if (!Number.isFinite(Number(value))) return "—";
+  return Number(value).toLocaleString(undefined, {
+    maximumFractionDigits: digits,
   });
+}
 
-  const fundSelected = MOCK_FUNDING[state.selectedAsset]?.rate ?? 0;
-  const perpsCombined = (() => {
-    let longScore = 0;
-    let shortScore = 0;
-    if (emaSignal === "bullish") longScore += 2;
-    if (emaSignal === "bearish") shortScore += 2;
-    if (rsi && rsi < 40) longScore += 1;
-    if (rsi && rsi > 72) shortScore += 1;
-    if (fundSelected > 0.01) shortScore += 1;
+function formatCompactUsd(value, digits = 2) {
+  if (!Number.isFinite(Number(value))) return "—";
+  return new Intl.NumberFormat(undefined, {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: digits,
+    notation: Math.abs(Number(value)) >= 1000 ? "compact" : "standard",
+  }).format(Number(value));
+}
 
-    if (longScore > shortScore) {
+function formatUsd(value, digits = 2) {
+  if (!Number.isFinite(Number(value))) return "—";
+  return new Intl.NumberFormat(undefined, {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: digits,
+  }).format(Number(value));
+}
+
+function formatDuration(ms) {
+  if (!Number.isFinite(Number(ms)) || Number(ms) <= 0) return "—";
+  const totalMinutes = Math.round(Number(ms) / 60_000);
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+  const parts = [];
+  if (days) parts.push(`${days}d`);
+  if (hours) parts.push(`${hours}h`);
+  if (minutes && parts.length < 2) parts.push(`${minutes}m`);
+  return parts.join(" ") || "0m";
+}
+
+function isDiscordWebhook(url) {
+  return /^https:\/\/(discord(?:app)?\.com)\/api\/webhooks\/\d+\/[\w-]+/i.test(String(url || "").trim());
+}
+
+function withinLookback(timestamp, now = Date.now()) {
+  const value = Number(timestamp);
+  return Number.isFinite(value) && now >= value && now - value <= REPORT_LOOKBACK_MS;
+}
+
+function updateWebhookHealth(moduleKey, status, message) {
+  state[moduleKey].webhookHealth = {
+    status,
+    message,
+    lastResultAt: Date.now(),
+  };
+  persistState();
+  render();
+}
+
+function pushModuleLog(moduleKey, bucket, entry, maxEntries = MAX_LOG_ENTRIES) {
+  state[moduleKey][bucket].unshift({
+    time: Date.now(),
+    ...entry,
+  });
+  state[moduleKey][bucket] = state[moduleKey][bucket].slice(0, maxEntries);
+}
+
+function pushSentId(moduleKey, id) {
+  if (!id) return;
+  if (!state[moduleKey].sentIds.includes(id)) {
+    state[moduleKey].sentIds.unshift(id);
+    state[moduleKey].sentIds = state[moduleKey].sentIds.slice(0, MAX_ALERT_IDS);
+  }
+}
+
+async function fetchJson(url, options = {}) {
+  const response = await fetch(url, options);
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || `${options.method || "GET"} ${url} failed (${response.status})`);
+  }
+  return payload;
+}
+
+async function postJson(url, body) {
+  return fetchJson(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+    },
+    body: JSON.stringify(body || {}),
+  });
+}
+
+function downloadJsonFile(payload, filename) {
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const objectUrl = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = objectUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 0);
+}
+
+function schedulePerpsScanner() {
+  if (perpsTimer) window.clearInterval(perpsTimer);
+  if (!state.perps.scannerEnabled) return;
+  perpsTimer = window.setInterval(() => {
+    refreshPerpsData({ fullScan: true, source: "scheduled" });
+  }, state.perps.scanIntervalMs);
+}
+
+function scheduleDlmmScanner() {
+  if (dlmmTimer) window.clearInterval(dlmmTimer);
+  if (!state.dlmm.scannerEnabled) return;
+  dlmmTimer = window.setInterval(() => {
+    refreshDlmmData({ source: "scheduled" });
+  }, state.dlmm.scanIntervalMs);
+}
+
+function mergePerpsCalls() {
+  const runtimePairs = [
+    { key: "house", label: "House Auto Trade", state: state.perps.runtime.house?.state || null },
+    { key: "tradez", label: "Tradez Auto Trade 2", state: state.perps.runtime.tradez?.state || null },
+  ];
+
+  return runtimePairs.flatMap((runtimeEntry) => {
+    const runtimeState = runtimeEntry.state;
+    if (!runtimeState) return [];
+    const openTrades = Array.isArray(runtimeState.openTrades) ? runtimeState.openTrades : [];
+    const closedTrades = Array.isArray(runtimeState.closedTrades) ? runtimeState.closedTrades : [];
+    return [...openTrades, ...closedTrades].map((trade) => ({
+      id: trade.id || `${runtimeEntry.key}:${trade.symbol}:${trade.openedAt || trade.detectedAt || 0}`,
+      engine: runtimeEntry.key,
+      engineLabel: runtimeEntry.label,
+      status: trade.closedAt ? "Closed" : "Open",
+      symbol: trade.symbol,
+      token: trade.token || "",
+      side: trade.side,
+      strategy:
+        trade.strategyLabel ||
+        (runtimeEntry.key === "tradez"
+          ? "EMA 20/50 Pullback"
+          : trade.entryReason?.toLowerCase().includes("breakout")
+            ? "House Breakout"
+            : "House Trend"),
+      qualityScore: Number(trade.qualityScore) || 0,
+      entryPrice: Number(trade.entryPrice) || 0,
+      stopLoss: Number(trade.stopLoss) || 0,
+      takeProfit: Number(trade.tp1 ?? trade.takeProfit) || 0,
+      takeProfit2: Number(trade.tp2) || 0,
+      rr: Number(trade.rr) || 0,
+      timeframe: runtimeEntry.key === "tradez" ? "1H" : String(trade.interval || "15m").toUpperCase(),
+      openedAt: Number(trade.openedAt || trade.detectedAt || 0),
+      detectedAt: Number(trade.detectedAt || trade.openedAt || 0),
+      closedAt: Number(trade.closedAt || 0),
+      returnPct: Number.isFinite(Number(trade.returnPct ?? trade.pnlPct)) ? Number(trade.returnPct ?? trade.pnlPct) : null,
+      pnlUsd: Number.isFinite(Number(trade.pnlUsd)) ? Number(trade.pnlUsd) : null,
+      lastPrice: Number(trade.lastPrice) || 0,
+      holdMs: trade.closedAt ? Math.max(0, Number(trade.closedAt) - Number(trade.openedAt || trade.detectedAt || 0)) : Date.now() - Number(trade.openedAt || trade.detectedAt || Date.now()),
+      qualificationReason:
+        trade.entryReason ||
+        trade.signalNote ||
+        trade.keyDetails ||
+        trade.reason ||
+        "Qualified by runtime scanner.",
+      raw: trade,
+    }));
+  });
+}
+
+function mergePerpsCandidates() {
+  const runtimePairs = [
+    { key: "house", label: "House Auto Trade", state: state.perps.runtime.house?.state || null },
+    { key: "tradez", label: "Tradez Auto Trade 2", state: state.perps.runtime.tradez?.state || null },
+  ];
+  return runtimePairs.flatMap((runtimeEntry) => {
+    const candidates = Array.isArray(runtimeEntry.state?.lastCandidates) ? runtimeEntry.state.lastCandidates : [];
+    return candidates.map((candidate) => {
+      const activeSignal = candidate.activeSignal || null;
+      const strategy =
+        runtimeEntry.key === "tradez"
+          ? "EMA 20/50 Pullback"
+          : candidate.trade?.mode === "breakout"
+            ? "House Breakout"
+            : "House Trend";
       return {
-        signal: "LONG BIAS",
-        strength: longScore,
-        reason: `EMA cross bullish. RSI at ${rsi?.toFixed(1)} is not overbought${fundSelected < 0.01 ? " and funding remains healthy." : ", but funding is elevated so size down."}`,
+        id:
+          activeSignal?.id ||
+          `${runtimeEntry.key}:${candidate.symbol}:${activeSignal?.detectedAt || candidate.analyzedAt || candidate.identifiedAt || 0}`,
+        engine: runtimeEntry.key,
+        engineLabel: runtimeEntry.label,
+        symbol: candidate.symbol,
+        side:
+          activeSignal?.side ||
+          (candidate.trade?.stance === "Short" || candidate.bias?.tone === "down" ? "Short" : "Long"),
+        timeframe: runtimeEntry.key === "tradez" ? "1H" : "15M",
+        qualityScore:
+          Number(candidate.refinedQualityScore ?? candidate.qualityScore ?? activeSignal?.qualityScore) || 0,
+        entryPrice:
+          Number(activeSignal?.entryLow ?? candidate.trade?.entry ?? candidate.currentPrice) || 0,
+        stopLoss: Number(activeSignal?.stopLoss ?? candidate.trade?.stopLoss) || 0,
+        takeProfit: Number(activeSignal?.tp1 ?? candidate.trade?.takeProfit) || 0,
+        takeProfit2: Number(activeSignal?.tp2) || 0,
+        rr: Number(activeSignal?.rr ?? candidate.trade?.rr ?? candidate.rr) || 0,
+        timestamp: Number(activeSignal?.detectedAt || candidate.analyzedAt || candidate.identifiedAt || 0),
+        qualificationReason:
+          (Array.isArray(activeSignal?.reasonParts) ? activeSignal.reasonParts.join(" • ") : "") ||
+          activeSignal?.note ||
+          candidate.summary ||
+          candidate.setupBias?.summary ||
+          "Qualified by scanner conditions.",
+        activeSignal,
+        raw: candidate,
+        strategy,
       };
-    }
-    if (shortScore > longScore) {
-      return {
-        signal: "SHORT BIAS",
-        strength: shortScore,
-        reason: `EMA cross bearish. RSI at ${rsi?.toFixed(1)} is not oversold${fundSelected > 0.01 ? ", and positive funding improves the short carry." : "."}`,
-      };
-    }
-    return {
-      signal: "NEUTRAL",
-      strength: 0,
-      reason: "Signals conflict here. No high-conviction directional setup, so a delta-neutral funding approach may be cleaner.",
-    };
-  })();
+    });
+  });
+}
 
-  const dlmmRec = (() => {
-    if (volatility < 2) return { shape: "Curve", range: "±8%", action: "Tight bell curve. Low volatility keeps liquidity active most of the time." };
-    if (volatility < 4) return { shape: "Spot", range: "±15%", action: "Uniform spread. Moderate volatility argues for a wider range and fewer rebalances." };
-    return { shape: "Bid-Ask", range: "±25%", action: "Edge-weighted. High volatility means more active management, but fee spikes are better at the edges." };
-  })();
+function computePerpsMetrics(calls) {
+  const now = Date.now();
+  const closed = calls.filter((call) => call.status === "Closed");
+  const open = calls.filter((call) => call.status === "Open");
+  const wins = closed.filter((call) => Number(call.returnPct) > 0);
+  const losses = closed.filter((call) => Number(call.returnPct) <= 0);
+  const averageRr = calls.length
+    ? calls.reduce((sum, call) => sum + (Number(call.rr) || 0), 0) / calls.length
+    : 0;
+  const averageHold = closed.length
+    ? closed.reduce((sum, call) => sum + (Number(call.holdMs) || 0), 0) / closed.length
+    : 0;
+  const pairPerformance = new Map();
+  closed.forEach((call) => {
+    const current = pairPerformance.get(call.symbol) || { sum: 0, count: 0 };
+    current.sum += Number(call.returnPct) || 0;
+    current.count += 1;
+    pairPerformance.set(call.symbol, current);
+  });
+  const sortedPairs = Array.from(pairPerformance.entries())
+    .map(([symbol, record]) => ({
+      symbol,
+      avgReturnPct: record.count ? record.sum / record.count : 0,
+      count: record.count,
+    }))
+    .sort((left, right) => right.avgReturnPct - left.avgReturnPct);
 
   return {
-    fundingSignals,
-    prices,
-    ema50,
-    ema200,
-    rsi,
-    currentPrice,
-    volatility,
-    emaSignal,
-    rsiZone,
-    trendSignal,
-    dlmmAlerts,
-    perpsCombined,
-    dlmmRec,
-    fundSelected,
+    totalCallsOverall: calls.length,
+    totalCallsToday: calls.filter((call) => withinLookback(call.openedAt || call.detectedAt, now)).length,
+    wins: wins.length,
+    losses: losses.length,
+    openCalls: open.length,
+    profitPercentage: closed.length ? (wins.length / closed.length) * 100 : 0,
+    lossPercentage: closed.length ? (losses.length / closed.length) * 100 : 0,
+    averageRr,
+    averageHold,
+    bestPairs: sortedPairs.slice(0, 3),
+    worstPairs: sortedPairs.slice(-3).reverse(),
   };
 }
 
-function renderFundingTab(derived) {
-  return `
-    <div class="playground-panel-stack">
-      <div class="playground-control-row">
-        <span class="playground-label">Alert threshold</span>
-        <input id="playground-alert-threshold" class="playground-input playground-input--compact" type="number" min="0.01" step="0.01" value="${state.alertThreshold}" />
-        <span class="playground-inline-note">% / 8h</span>
-        <span class="playground-dim-note">= ${(state.alertThreshold * 3 * 365).toFixed(0)}% annualized</span>
-      </div>
-
-      <div class="playground-card-grid">
-        ${derived.fundingSignals
-          .map((item) => {
-            const badge =
-              item.signal === "strong-arb"
-                ? "STRONG ARB"
-                : item.signal === "arb"
-                  ? "ARB OPP"
-                  : item.signal === "short-arb"
-                    ? "SHORT ARB"
-                    : "NEUTRAL";
-            const histBars = item.history
-              .map((rate, index) => {
-                const height = Math.min(100, (rate / 0.02) * 100);
-                const tone = rate > state.alertThreshold / 100 ? "var(--playground-green)" : "rgba(148, 163, 184, 0.34)";
-                const opacity = 0.6 + (index / item.history.length) * 0.4;
-                return `<div class="playground-hist-bar" style="height:${height}%;background:${tone};opacity:${opacity};" title="${(rate * 100).toFixed(4)}%"></div>`;
-              })
-              .join("");
-
-            return `
-              <article class="playground-card${item.signal === "strong-arb" ? " is-hot" : ""}">
-                <div class="playground-card-top">
-                  <span class="playground-asset-title">${item.asset} <small>PERP</small></span>
-                  <span class="playground-pill ${getToneClass(item.signal)}">${badge}</span>
-                </div>
-                <div class="playground-rate-line">
-                  <strong class="${getToneClass(item.signal)}">${item.rate < 0 ? "" : "+"}${(item.rate * 100).toFixed(4)}%</strong>
-                  <span>per 8h</span>
-                </div>
-                <div class="playground-meta-row">
-                  <span>${item.annualized.toFixed(1)}% ann.</span>
-                  <span class="${item.trend === "rising" ? "is-green" : "is-red"}">${item.trend === "rising" ? "↑" : "↓"} ${item.trend}</span>
-                </div>
-                <div class="playground-hist-wrap">${histBars}</div>
-                ${
-                  item.signal === "strong-arb" || item.signal === "arb"
-                    ? `<div class="playground-note-card">Short ${item.asset} perp and long ${item.asset} spot to collect ${(item.rate * 100).toFixed(4)}% every 8h while staying delta-neutral.</div>`
-                    : item.signal === "short-arb"
-                      ? `<div class="playground-note-card">Long ${item.asset} perp and short ${item.asset} spot to collect negative funding.</div>`
-                      : ""
-                }
-              </article>
-            `;
-          })
-          .join("")}
-      </div>
-
-      <div class="playground-api-note">
-        <span>Data</span>
-        Replace the mock funding dataset with Coinglass or Binance funding endpoints when you want to move this lab from sandbox to live feed.
-      </div>
-    </div>
-  `;
+function bestWorstLabel(entries) {
+  if (!entries.length) return "—";
+  return entries
+    .map((entry) => `${entry.symbol} (${formatPercent(entry.avgReturnPct, 1)})`)
+    .join(" · ");
 }
 
-function renderEmaTab(derived) {
-  const metrics = [
-    { label: "Price (4H close)", value: `$${number(derived.currentPrice, 2)}`, cls: "" },
-    { label: "EMA 50 (4H)", value: `$${number(derived.ema50, 2)}`, cls: "" },
-    { label: "EMA 200 (4H)", value: `$${number(derived.ema200, 2)}`, cls: "" },
-    { label: "EMA cross", value: derived.emaSignal.toUpperCase(), cls: getToneClass(derived.emaSignal) },
-    { label: "RSI (14, 4H)", value: derived.rsi ? derived.rsi.toFixed(1) : "-", cls: getToneClass(derived.rsiZone) },
-    { label: "RSI zone", value: derived.rsiZone.toUpperCase(), cls: getToneClass(derived.rsiZone) },
+function perpsScannerHealthLabel() {
+  const house = state.perps.runtime.house;
+  const tradez = state.perps.runtime.tradez;
+  if (state.perps.loading) return { label: "Scanning", note: "Refreshing House and Tradez runtimes" };
+  if (state.perps.lastError) return { label: "Degraded", note: state.perps.lastError };
+  const available = Boolean(house?.backgroundAvailable && tradez?.backgroundAvailable);
+  if (!available) return { label: "Partial", note: "Runtime background storage is unavailable or not synced." };
+  const lastScanAt = Math.max(Number(house?.state?.lastScanAt || 0), Number(tradez?.state?.lastScanAt || 0));
+  return {
+    label: state.perps.scannerEnabled ? "Active" : "Paused",
+    note: lastScanAt ? `Last runtime scan ${formatDateTime(lastScanAt)}` : "Waiting for runtime activity",
+  };
+}
+
+function selectedPerpsSymbol() {
+  if (state.perps.selectedSymbol) return state.perps.selectedSymbol;
+  const universe = state.perps.runtime.universe || [];
+  return universe[0]?.symbol || "";
+}
+
+function filteredPerpsUniverse() {
+  const query = String(state.perps.selectorQuery || "").trim().toLowerCase();
+  const universe = Array.isArray(state.perps.runtime.universe) ? state.perps.runtime.universe : [];
+  if (!query) return universe.slice(0, MAX_SUGGESTIONS);
+  return universe
+    .filter((entry) => {
+      const haystack = `${entry.symbol} ${entry.baseAsset || ""}`.toLowerCase();
+      return haystack.includes(query);
+    })
+    .slice(0, MAX_SUGGESTIONS);
+}
+
+function filteredDlmmPools() {
+  const query = String(state.dlmm.selectorQuery || "").trim().toLowerCase();
+  const pools = Array.isArray(state.dlmm.pools) ? state.dlmm.pools : [];
+  if (!query) return pools.slice(0, MAX_SUGGESTIONS);
+  return pools
+    .filter((pool) =>
+      `${pool.address} ${pool.pairLabel} ${pool.baseSymbol} ${pool.quoteSymbol}`.toLowerCase().includes(query)
+    )
+    .slice(0, MAX_SUGGESTIONS);
+}
+
+function selectedPool() {
+  return (state.dlmm.pools || []).find((pool) => pool.address === state.dlmm.selectedPoolAddress) || null;
+}
+
+function createPerpsAlertPayload(item) {
+  return {
+    pair: item.symbol,
+    direction: item.side,
+    strategy: item.strategy,
+    confidence: item.qualityScore,
+    entry: item.entryPrice,
+    stop: item.stopLoss,
+    takeProfit: item.takeProfit,
+    rr: item.rr,
+    timeframe: item.timeframe,
+    timestamp: item.timestamp || item.openedAt || item.detectedAt || Date.now(),
+    qualificationReason: item.qualificationReason,
+  };
+}
+
+function createDlmmAlertPayload(opportunity) {
+  return {
+    pair: opportunity.pairLabel,
+    pool: opportunity.address,
+    strategy: opportunity.analysis.recommendedStrategy,
+    binStep: opportunity.binStep,
+    suggestedRange: opportunity.analysis.suggestedRange,
+    estimatedHoldTime: opportunity.analysis.estimatedHoldTime,
+    riskNotes: opportunity.analysis.riskNotes,
+    importantParametersToMonitor: opportunity.analysis.monitors,
+    confidence: opportunity.analysis.qualityScore,
+    qualificationReason: opportunity.analysis.qualificationReasons,
+  };
+}
+
+async function sendWebhookAlert(moduleKey, title, payload, meta) {
+  const webhook = String(state[moduleKey].webhook || "").trim();
+  if (!isDiscordWebhook(webhook)) {
+    throw new Error("Invalid Discord webhook.");
+  }
+
+  const event = {
+    title,
+    message: Object.entries(payload)
+      .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(", ") : value}`)
+      .join("\n"),
+    symbol: payload.pair,
+    side: payload.direction || payload.strategy,
+    qualityScore: Number(payload.confidence) || 0,
+    entryPrice: Number(payload.entry) || 0,
+    stopLoss: Number(payload.stop) || 0,
+    tp1: Number(payload.takeProfit) || 0,
+    time: Number(payload.timestamp) || Date.now(),
+    formattedMessage: `${title}\n${Object.entries(payload)
+      .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(", ") : value}`)
+      .join("\n")}`,
+  };
+
+  const response = await postJson("/api/notify", {
+    title,
+    event,
+    meta,
+    destinations: {
+      discordWebhook: webhook,
+    },
+  });
+  return response;
+}
+
+async function testWebhook(moduleKey) {
+  try {
+    const response = await sendWebhookAlert(
+      moduleKey,
+      moduleKey === PERPS_MODULE ? "Soloris Perps Alert Test" : "Soloris DLMM Alert Test",
+      moduleKey === PERPS_MODULE
+        ? {
+            pair: selectedPerpsSymbol() || "BTCUSDT",
+            direction: "Long",
+            strategy: "Test Signal",
+            confidence: 88,
+            entry: 100,
+            stop: 96,
+            takeProfit: 108,
+            rr: 2,
+            timeframe: "1H",
+            timestamp: Date.now(),
+            qualificationReason: "Webhook validation test from Playground",
+          }
+        : {
+            pair: selectedPool()?.pairLabel || "SOL/USDC",
+            pool: selectedPool()?.address || "manual-test",
+            strategy: "Curve",
+            binStep: 20,
+            suggestedRange: "±10%",
+            estimatedHoldTime: "1-3 days",
+            riskNotes: ["Webhook validation test"],
+            importantParametersToMonitor: ["TVL", "24H volume", "Fee/TVL ratio"],
+            confidence: 82,
+            qualificationReason: ["Webhook validation test from Playground"],
+          },
+      {
+        source: `playground_${moduleKey}`,
+        strategy: moduleKey === PERPS_MODULE ? "perps_alerts" : "dlmm_alerts",
+        eventType: "test_signal",
+      }
+    );
+    updateWebhookHealth(moduleKey, "ok", response.ok ? "Webhook test sent." : "Webhook test completed.");
+    pushModuleLog(moduleKey, "alertLog", {
+      tone: "up",
+      message: "Webhook test sent successfully.",
+    });
+  } catch (error) {
+    updateWebhookHealth(moduleKey, "down", error.message || "Webhook test failed.");
+    pushModuleLog(moduleKey, "alertLog", {
+      tone: "down",
+      message: error.message || "Webhook test failed.",
+    });
+  }
+  persistState();
+  render();
+}
+
+async function syncPerpsScannerState(enabled) {
+  try {
+    await Promise.allSettled([
+      postJson("/api/house-runtime", { action: "settings", settings: { autoEnabled: enabled } }),
+      postJson("/api/tradez-runtime", { action: "settings", settings: { autoEnabled: enabled } }),
+    ]);
+  } catch (_error) {
+    // The UI still tracks local scanner state even if a runtime update fails.
+  }
+}
+
+async function refreshPerpsData({ fullScan = false, source = "manual" } = {}) {
+  if (perpsInFlight) return;
+  perpsInFlight = true;
+  state.perps.loading = true;
+  state.perps.lastError = "";
+  render();
+
+  try {
+    if (fullScan) {
+      await Promise.allSettled([
+        postJson("/api/house-runtime", { action: "scan" }),
+        postJson("/api/tradez-runtime", { action: "scan" }),
+      ]);
+    }
+
+    const [house, tradez, universe] = await Promise.all([
+      fetchJson("/api/house-runtime"),
+      fetchJson("/api/tradez-runtime"),
+      fetchJson("/api/arena-universe"),
+    ]);
+
+    state.perps.runtime.house = house;
+    state.perps.runtime.tradez = tradez;
+    state.perps.runtime.universe = Array.isArray(universe.tickers) ? universe.tickers : [];
+    state.perps.runtime.universeSource = universe.source || "";
+    state.perps.runtime.universeWarning = universe.warning || "";
+    state.perps.runtime.backgroundAvailable = Boolean(house.backgroundAvailable || tradez.backgroundAvailable);
+    state.perps.lastSyncAt = Date.now();
+
+    if (!state.perps.selectedSymbol && state.perps.runtime.universe.length) {
+      state.perps.selectedSymbol = state.perps.runtime.universe[0].symbol;
+    }
+
+    pushModuleLog(PERPS_MODULE, "scanLog", {
+      tone: "neutral",
+      message:
+        source === "scheduled"
+          ? "Scheduled perps refresh completed."
+          : fullScan
+            ? "Manual perps runtime scan completed."
+            : "Perps runtime state refreshed.",
+    });
+
+    await maybeSendPerpsAlerts();
+    updateHeroHealth();
+  } catch (error) {
+    state.perps.lastError = error.message || "Unable to refresh perps data.";
+    pushModuleLog(PERPS_MODULE, "scanLog", {
+      tone: "down",
+      message: state.perps.lastError,
+    });
+  } finally {
+    state.perps.loading = false;
+    perpsInFlight = false;
+    persistState();
+    render();
+  }
+}
+
+async function maybeSendPerpsAlerts() {
+  if (!state.perps.scannerEnabled || !isDiscordWebhook(state.perps.webhook)) return;
+
+  const calls = mergePerpsCalls()
+    .filter((call) => call.status === "Open" && withinLookback(call.openedAt || call.detectedAt))
+    .sort((left, right) => (right.openedAt || right.detectedAt) - (left.openedAt || left.detectedAt));
+  const candidates = mergePerpsCandidates()
+    .filter((candidate) => candidate.qualityScore >= 70 && withinLookback(candidate.timestamp || Date.now()))
+    .sort((left, right) => right.qualityScore - left.qualityScore);
+
+  const outbound = [
+    ...calls.map((call) => ({ id: `call:${call.id}`, title: `${call.engineLabel} opened ${call.symbol}`, payload: createPerpsAlertPayload(call) })),
+    ...candidates.map((candidate) => ({
+      id: `candidate:${candidate.id}`,
+      title: `${candidate.engineLabel} qualified ${candidate.symbol}`,
+      payload: createPerpsAlertPayload(candidate),
+    })),
   ];
 
-  let ruleItems = [];
-  if (derived.trendSignal === "LONG") {
-    ruleItems = [
-      "Wait for a 1H candle to pull back into the 20 EMA.",
-      "Confirm 1H RSI is bouncing from the 40 to 50 zone.",
-      "Enter long on the close of that reclaim candle.",
-      "Place the stop just below the latest 1H swing low.",
-      "Take 50% at 1.5R and trail the rest toward 3R.",
-      `Use 3x to 5x max leverage${derived.fundSelected > 0.01 ? ", but cut to 2x if funding remains elevated." : "."}`,
-    ];
-  } else if (derived.trendSignal === "SHORT") {
-    ruleItems = [
-      "Wait for price to retest broken support as new resistance on 1H.",
-      "Confirm a rejection candle with RSI failing near 50 to 60.",
-      "Enter short on the close of that rejection candle.",
-      "Place the stop above the retest wick high.",
-      "Take 50% at 1.5R and trail the remainder toward 3R.",
-      "Positive funding helps the short carry, but still keep leverage disciplined.",
-    ];
-  } else {
-    ruleItems = [
-      "No directional trade here. Stay flat or cut size aggressively.",
-      `Run a delta-neutral funding approach instead: short ${state.selectedAsset} perp and long spot.`,
-      `Collect ${(derived.fundSelected * 100).toFixed(4)}% every 8h while directional conviction is unclear.`,
-      "Re-check after the next 4H close for cleaner structure.",
-    ];
+  for (const item of outbound) {
+    if (state.perps.sentIds.includes(item.id)) continue;
+    try {
+      await sendWebhookAlert(PERPS_MODULE, item.title, item.payload, {
+        source: "playground_perps",
+        strategy: "perps_alerts",
+        eventType: "scanner_signal",
+      });
+      pushSentId(PERPS_MODULE, item.id);
+      updateWebhookHealth(PERPS_MODULE, "ok", `Last delivery succeeded at ${formatDateTime(Date.now())}`);
+      pushModuleLog(PERPS_MODULE, "alertLog", {
+        tone: "up",
+        message: `${item.title} sent to Discord.`,
+      });
+    } catch (error) {
+      updateWebhookHealth(PERPS_MODULE, "down", error.message || "Discord delivery failed.");
+      pushModuleLog(PERPS_MODULE, "alertLog", {
+        tone: "down",
+        message: error.message || "Discord delivery failed.",
+      });
+      break;
+    }
   }
-
-  return `
-    <div class="playground-panel-stack">
-      <section class="playground-signal-hero">
-        <div class="playground-signal-value ${getToneClass(derived.trendSignal)}">${derived.trendSignal}</div>
-        <p class="playground-signal-copy">
-          ${
-            derived.trendSignal === "LONG"
-              ? `EMA50 is above EMA200 for ${state.selectedAsset}, with RSI at ${derived.rsi?.toFixed(1)} and not yet overbought. Favor pullback continuation entries.`
-              : derived.trendSignal === "SHORT"
-                ? `EMA50 is below EMA200 for ${state.selectedAsset}, with RSI at ${derived.rsi?.toFixed(1)} and not yet oversold. Favor rejection-based short continuations.`
-                : `EMA and RSI are conflicting on ${state.selectedAsset}. This is better treated as a watchlist or funding-arb environment.`
-          }
-        </p>
-      </section>
-
-      <div class="playground-metric-grid">
-        ${metrics
-          .map(
-            (metric) => `
-              <article class="playground-metric-card">
-                <span class="playground-metric-label">${metric.label}</span>
-                <strong class="${metric.cls}">${metric.value}</strong>
-              </article>
-            `
-          )
-          .join("")}
-      </div>
-
-      <section class="playground-rsi-card">
-        <div class="playground-rsi-title">RSI (14) on 4H candles</div>
-        <div class="playground-rsi-track">
-          <div class="playground-rsi-zone is-low"></div>
-          <div class="playground-rsi-zone is-high"></div>
-          <div class="playground-rsi-dot" style="left:${Math.min(99, Math.max(1, derived.rsi ?? 50))}%"></div>
-        </div>
-        <div class="playground-rsi-ticks">
-          <span>0</span>
-          <span>30 oversold</span>
-          <span>50</span>
-          <span>70 overbought</span>
-          <span>100</span>
-        </div>
-      </section>
-
-      <section class="playground-rule-card">
-        <div class="playground-rule-title">${derived.trendSignal} execution rules for ${state.selectedAsset}</div>
-        <ol class="playground-rule-list">
-          ${ruleItems.map((item) => `<li>${item}</li>`).join("")}
-        </ol>
-      </section>
-
-      <div class="playground-api-note">
-        <span>Data</span>
-        Replace the seeded price array with your live 4H kline feed when you want the trend model to update from market data instead of static sandbox prices.
-      </div>
-    </div>
-  `;
 }
 
-function renderDlmmTab(derived) {
-  const cards =
-    derived.dlmmAlerts.length === 0
-      ? `<div class="playground-empty-state">No positions yet. Add one below.</div>`
-      : derived.dlmmAlerts
-          .map(
-            (position) => `
-              <article class="playground-position-card ${getStatusClass(position.status)}">
-                <div class="playground-position-head">
-                  <div>
-                    <div class="playground-position-pair">${escapeHtml(position.pair)}</div>
-                    <div class="playground-position-shape">${escapeHtml(position.shape)} · ±${position.rangePct}%</div>
-                  </div>
-                  <div class="playground-position-actions">
-                    <span class="playground-pill ${getStatusClass(position.status)}">${getStatusLabel(position.status)}</span>
-                    <button class="playground-icon-button" type="button" data-remove-position="${position.id}">×</button>
-                  </div>
-                </div>
-
-                <div class="playground-range-wrap">
-                  <div class="playground-range-track">
-                    <div class="playground-range-danger is-left"></div>
-                    <div class="playground-range-danger is-right"></div>
-                    <div class="playground-range-thumb ${getStatusClass(position.status)}" style="left:${position.pct}%"></div>
-                  </div>
-                  <div class="playground-range-labels">
-                    <span>Low $${number(position.low, 0)}</span>
-                    <span>Entry $${number(position.entryPrice, 0)}</span>
-                    <span>High $${number(position.high, 0)}</span>
-                  </div>
-                </div>
-
-                <div class="playground-position-meta">
-                  <div>
-                    <span>Current price</span>
-                    <strong>$${number(position.currentPrice, 2)}</strong>
-                  </div>
-                  <div>
-                    <span>Position in range</span>
-                    <strong>${position.pct.toFixed(1)}%</strong>
-                  </div>
-                  <div>
-                    <span>Distance to edge</span>
-                    <strong class="${position.distToEdge < 15 ? "is-red" : ""}">${position.distToEdge.toFixed(1)}%</strong>
-                  </div>
-                </div>
-
-                ${
-                  position.status !== "safe"
-                    ? `<div class="playground-alert-copy">${
-                        position.status === "out"
-                          ? "Position is out of range. Liquidity is inactive and fees are no longer compounding."
-                          : position.status === "danger"
-                            ? `Only ${position.distToEdge.toFixed(1)}% from the range edge. Rebalance quickly to stay active.`
-                            : `Price is ${position.distToEdge.toFixed(1)}% from the range edge. Prepare a rebalance soon.`
-                      }</div>`
-                    : ""
-                }
-
-                <div class="playground-control-row">
-                  <span class="playground-label">Update price</span>
-                  <input class="playground-input playground-input--compact" type="number" data-price-input="${position.id}" value="${state.priceInputs[position.id] ?? ""}" placeholder="${position.currentPrice}" />
-                  <button class="playground-secondary-button" type="button" data-apply-price="${position.id}">Apply</button>
-                </div>
-              </article>
-            `
-          )
-          .join("");
-
-  return `
-    <div class="playground-panel-stack">
-      ${cards}
-
-      <section class="playground-add-card">
-        <div class="playground-add-title">Add position</div>
-        <div class="playground-form-grid">
-          <input id="playground-new-pair" class="playground-input" type="text" placeholder="Pair e.g. SOL/USDC" value="${escapeHtml(state.newPos.pair)}" />
-          <input id="playground-new-entry" class="playground-input" type="number" placeholder="Entry price" value="${escapeHtml(state.newPos.entryPrice)}" />
-          <input id="playground-new-current" class="playground-input" type="number" placeholder="Current price" value="${escapeHtml(state.newPos.currentPrice)}" />
-          <select id="playground-new-shape" class="playground-input">
-            <option${state.newPos.shape === "Curve" ? " selected" : ""}>Curve</option>
-            <option${state.newPos.shape === "Spot" ? " selected" : ""}>Spot</option>
-            <option${state.newPos.shape === "Bid-Ask" ? " selected" : ""}>Bid-Ask</option>
-          </select>
-          <div class="playground-range-field">
-            <input id="playground-new-range" class="playground-input playground-input--compact" type="number" value="${escapeHtml(state.newPos.rangePct)}" />
-            <span class="playground-inline-note">% range</span>
-          </div>
-          <button id="playground-add-position" class="playground-primary-button" type="button">Add position</button>
-        </div>
-      </section>
-    </div>
-  `;
+async function runPerpsManualScan() {
+  const symbol = selectedPerpsSymbol() || state.perps.selectorQuery.trim().toUpperCase();
+  if (!symbol) return;
+  state.perps.loading = true;
+  render();
+  try {
+    const payload = await postJson("/api/playground-perps", {
+      action: "scan",
+      symbol,
+      qualityThresholds: {
+        house: Number(state.perps.runtime.house?.state?.qualityThreshold) || 64,
+        tradez: Number(state.perps.runtime.tradez?.state?.qualityThreshold) || 66,
+      },
+    });
+    state.perps.manualScan = payload;
+    state.perps.selectedSymbol = payload.symbol || symbol;
+    pushModuleLog(PERPS_MODULE, "scanLog", {
+      tone: "up",
+      message: `Manual pair scan completed for ${payload.symbol || symbol}.`,
+    });
+  } catch (error) {
+    state.perps.lastError = error.message || "Manual pair scan failed.";
+    pushModuleLog(PERPS_MODULE, "scanLog", {
+      tone: "down",
+      message: state.perps.lastError,
+    });
+  } finally {
+    state.perps.loading = false;
+    persistState();
+    render();
+  }
 }
 
-function renderCombinedTab(derived) {
-  const flowRange = Number(derived.dlmmRec.range.replace("±", "").replace("%", ""));
-  return `
-    <div class="playground-combined-grid">
-      <article class="playground-combined-card">
-        <div class="playground-combined-label">Perps signal — ${state.selectedAsset}</div>
-        <div class="playground-combined-signal ${getToneClass(derived.perpsCombined.signal)}">${derived.perpsCombined.signal}</div>
-        <p class="playground-combined-copy">${derived.perpsCombined.reason}</p>
+function updateDlmmCalls(opportunities) {
+  const now = Date.now();
+  const current = Array.isArray(state.dlmm.recentCalls) ? state.dlmm.recentCalls : [];
+  const openMap = new Map(current.filter((call) => call.status === "Open").map((call) => [call.address, call]));
+  const seen = new Set();
 
-        <div class="playground-checklist">
-          <div class="playground-check-row">
-            <span class="${derived.emaSignal === "bullish" ? "is-green" : "is-red"}">${derived.emaSignal === "bullish" ? "✓" : "✗"}</span>
-            <span>EMA 50/200: <strong>${derived.emaSignal}</strong></span>
-          </div>
-          <div class="playground-check-row">
-            <span class="${derived.rsiZone !== "overbought" ? "is-green" : "is-red"}">${derived.rsiZone !== "overbought" ? "✓" : "✗"}</span>
-            <span>RSI: <strong>${derived.rsiZone}</strong> (${derived.rsi?.toFixed(1) ?? "-"})</span>
-          </div>
-          <div class="playground-check-row">
-            <span class="${derived.fundSelected < 0.008 ? "is-green" : "is-amber"}">${derived.fundSelected < 0.008 ? "✓" : "!"}</span>
-            <span>Funding: <strong>${(derived.fundSelected * 100).toFixed(4)}%</strong>${derived.fundSelected > 0.01 ? " — longs are crowded." : ""}</span>
-          </div>
-        </div>
+  opportunities
+    .filter((pool) => pool.analysis?.qualifies)
+    .forEach((pool) => {
+      seen.add(pool.address);
+      const edgeScore = Number(pool.analysis.edgeScore) || 0;
+      const existing = openMap.get(pool.address);
+      if (existing) {
+        existing.currentEdgeScore = edgeScore;
+        existing.currentQualityScore = Number(pool.analysis.qualityScore) || 0;
+        existing.currentStrategy = pool.analysis.recommendedStrategy;
+        existing.currentRange = pool.analysis.suggestedRange;
+        existing.lastSeenAt = now;
+        existing.misses = 0;
+        existing.performancePct = existing.initialEdgeScore
+          ? ((edgeScore - existing.initialEdgeScore) / Math.abs(existing.initialEdgeScore)) * 100
+          : 0;
+        existing.latestNotes = pool.analysis.qualificationReasons;
+      } else {
+        current.unshift({
+          id: `${pool.address}:${now}`,
+          address: pool.address,
+          pairLabel: pool.pairLabel,
+          strategy: pool.analysis.recommendedStrategy,
+          status: "Open",
+          detectedAt: now,
+          lastSeenAt: now,
+          initialEdgeScore: edgeScore,
+          currentEdgeScore: edgeScore,
+          currentQualityScore: Number(pool.analysis.qualityScore) || 0,
+          currentStrategy: pool.analysis.recommendedStrategy,
+          currentRange: pool.analysis.suggestedRange,
+          estimatedHoldTime: pool.analysis.estimatedHoldTime,
+          riskNotes: pool.analysis.riskNotes,
+          monitors: pool.analysis.monitors,
+          performancePct: 0,
+          latestNotes: pool.analysis.qualificationReasons,
+          misses: 0,
+        });
+      }
+    });
 
-        <div class="playground-note-card">
-          <strong>Execution plan</strong>
-          <ol class="playground-rule-list">
-            ${
-              derived.perpsCombined.signal === "LONG BIAS"
-                ? `
-                  <li>Set a limit entry about 0.3% below the 1H 20 EMA.</li>
-                  <li>Use the latest 1H swing low as invalidation.</li>
-                  <li>Scale out at 1.5R and 3R.</li>
-                  <li>Keep leverage at 3x unless funding stays elevated.</li>
-                `
-                : derived.perpsCombined.signal === "SHORT BIAS"
-                  ? `
-                    <li>Sell a 1H retest into failed support turned resistance.</li>
-                    <li>Use the rejection wick high as the stop anchor.</li>
-                    <li>Scale out at 1.5R and 3R.</li>
-                    <li>Positive funding improves the short carry profile.</li>
-                  `
-                  : `
-                    <li>No directional trade here. Stay flat on perps.</li>
-                    <li>Use spot plus perp carry instead of forcing a bias.</li>
-                    <li>Re-check the setup after the next 4H close.</li>
-                  `
-            }
-          </ol>
-        </div>
-      </article>
-
-      <article class="playground-combined-card">
-        <div class="playground-combined-label">DLMM recommendation — ${state.selectedAsset}/USDC</div>
-        <div class="playground-dlmm-head">
-          <div>
-            <div class="playground-dlmm-shape">${derived.dlmmRec.shape}</div>
-            <div class="playground-dlmm-range">distribution · ${derived.dlmmRec.range} range</div>
-          </div>
-          <div class="playground-vol-pill">${derived.volatility.toFixed(1)}% daily vol</div>
-        </div>
-        <p class="playground-combined-copy">${derived.dlmmRec.action}</p>
-
-        <div class="playground-checklist">
-          <div class="playground-check-row">
-            <span class="${derived.volatility < 4 ? "is-green" : "is-amber"}">${derived.volatility < 4 ? "✓" : "!"}</span>
-            <span>Volatility: <strong>${derived.volatility.toFixed(1)}%/day</strong></span>
-          </div>
-          <div class="playground-check-row">
-            <span class="${derived.emaSignal === "bullish" ? "is-green" : "is-amber"}">${derived.emaSignal === "bullish" ? "✓" : "!"}</span>
-            <span>Trend: <strong>${derived.emaSignal}</strong></span>
-          </div>
-          <div class="playground-check-row">
-            <span class="is-green">✓</span>
-            <span>Set a rebalance alert around ±${(flowRange * 0.65).toFixed(0)}% from entry.</span>
-          </div>
-        </div>
-
-        <div class="playground-note-card">
-          <strong>Setup plan</strong>
-          <ol class="playground-rule-list">
-            <li>Deploy in ${state.selectedAsset}/USDC on Meteora DLMM.</li>
-            <li>Use the <strong>${derived.dlmmRec.shape}</strong> shape across ${derived.dlmmRec.range} from current price.</li>
-            <li>Trigger a rebalance review after a move of roughly ±${(flowRange * 0.65).toFixed(0)}%.</li>
-            <li>Track fee yield plus incentive emissions together.</li>
-            <li>Add the position to the DLMM tab above for monitoring.</li>
-          </ol>
-        </div>
-      </article>
-    </div>
-  `;
-}
-
-function renderContent() {
-  const content = document.querySelector("#playground-content");
-  if (!content) return;
-
-  const derived = getDerivedState();
-  if (state.activeTab === 0) content.innerHTML = renderFundingTab(derived);
-  if (state.activeTab === 1) content.innerHTML = renderEmaTab(derived);
-  if (state.activeTab === 2) content.innerHTML = renderDlmmTab(derived);
-  if (state.activeTab === 3) content.innerHTML = renderCombinedTab(derived);
-
-  bindContentEvents();
-}
-
-function renderTabs() {
-  document.querySelectorAll(".playground-tab").forEach((button) => {
-    const isActive = Number(button.dataset.tabIndex) === state.activeTab;
-    button.classList.toggle("is-active", isActive);
-    button.setAttribute("aria-selected", isActive ? "true" : "false");
+  current.forEach((call) => {
+    if (call.status !== "Open") return;
+    if (seen.has(call.address)) return;
+    call.misses = Number(call.misses || 0) + 1;
+    if (call.misses >= 2) {
+      call.status = "Closed";
+      call.closedAt = now;
+    }
   });
+
+  state.dlmm.recentCalls = current.slice(0, 160);
 }
 
-function renderHeaderControls() {
-  const picker = document.querySelector("#playground-asset-picker");
-  if (picker && picker.value !== state.selectedAsset) picker.value = state.selectedAsset;
+async function maybeSendDlmmAlerts() {
+  if (!state.dlmm.scannerEnabled || !isDiscordWebhook(state.dlmm.webhook)) return;
+  const newCalls = state.dlmm.recentCalls.filter(
+    (call) =>
+      call.status === "Open" &&
+      withinLookback(call.detectedAt) &&
+      !state.dlmm.sentIds.includes(call.id)
+  );
 
-  const alertsButton = document.querySelector("#playground-alerts-toggle");
-  if (alertsButton) {
-    alertsButton.textContent = state.alertsEnabled ? "Alerts On" : "Enable Alerts";
-    alertsButton.classList.toggle("is-enabled", state.alertsEnabled);
+  for (const call of newCalls) {
+    const payload = createDlmmAlertPayload({
+      address: call.address,
+      pairLabel: call.pairLabel,
+      analysis: {
+        recommendedStrategy: call.strategy,
+        suggestedRange: call.currentRange,
+        estimatedHoldTime: call.estimatedHoldTime,
+        riskNotes: call.riskNotes,
+        monitors: call.monitors,
+        qualityScore: call.currentQualityScore,
+        qualificationReasons: call.latestNotes,
+      },
+      binStep: selectedPool()?.binStep || null,
+    });
+
+    try {
+      await sendWebhookAlert(DLMM_MODULE, `DLMM opportunity qualified ${call.pairLabel}`, payload, {
+        source: "playground_dlmm",
+        strategy: "dlmm_alerts",
+        eventType: "scanner_signal",
+      });
+      pushSentId(DLMM_MODULE, call.id);
+      updateWebhookHealth(DLMM_MODULE, "ok", `Last delivery succeeded at ${formatDateTime(Date.now())}`);
+      pushModuleLog(DLMM_MODULE, "alertLog", {
+        tone: "up",
+        message: `${call.pairLabel} DLMM alert sent to Discord.`,
+      });
+    } catch (error) {
+      updateWebhookHealth(DLMM_MODULE, "down", error.message || "DLMM Discord delivery failed.");
+      pushModuleLog(DLMM_MODULE, "alertLog", {
+        tone: "down",
+        message: error.message || "DLMM Discord delivery failed.",
+      });
+      break;
+    }
   }
+}
+
+async function refreshDlmmData({ source = "manual" } = {}) {
+  if (dlmmInFlight) return;
+  dlmmInFlight = true;
+  state.dlmm.loading = true;
+  state.dlmm.lastError = "";
+  render();
+
+  try {
+    const query = state.dlmm.selectorQuery ? `&query=${encodeURIComponent(state.dlmm.selectorQuery)}` : "";
+    const payload = await fetchJson(`/api/playground-dlmm?mode=list&pageSize=150${query}`);
+    state.dlmm.pools = Array.isArray(payload.pools) ? payload.pools : [];
+    state.dlmm.protocolMetrics = payload.protocolMetrics || null;
+    state.dlmm.lastSyncAt = Date.now();
+
+    if ((!state.dlmm.selectedPoolAddress || !state.dlmm.pools.some((pool) => pool.address === state.dlmm.selectedPoolAddress)) && state.dlmm.pools.length) {
+      state.dlmm.selectedPoolAddress = state.dlmm.pools[0].address;
+    }
+
+    updateDlmmCalls(state.dlmm.pools);
+    pushModuleLog(DLMM_MODULE, "scanLog", {
+      tone: "neutral",
+      message:
+        source === "scheduled"
+          ? "Scheduled DLMM scanner refresh completed."
+          : "DLMM pool state refreshed.",
+    });
+
+    await maybeSendDlmmAlerts();
+    updateHeroHealth();
+  } catch (error) {
+    state.dlmm.lastError = error.message || "Unable to refresh DLMM pools.";
+    pushModuleLog(DLMM_MODULE, "scanLog", {
+      tone: "down",
+      message: state.dlmm.lastError,
+    });
+  } finally {
+    state.dlmm.loading = false;
+    dlmmInFlight = false;
+    persistState();
+    render();
+  }
+}
+
+async function runDlmmManualScan() {
+  const poolAddress = state.dlmm.selectedPoolAddress;
+  const query = state.dlmm.selectorQuery;
+  if (!poolAddress && !query) return;
+  state.dlmm.loading = true;
+  render();
+  try {
+    const payload = await postJson("/api/playground-dlmm", {
+      action: "scan",
+      poolAddress,
+      query,
+    });
+    state.dlmm.manualScan = payload;
+    if (payload.pool?.address) state.dlmm.selectedPoolAddress = payload.pool.address;
+    pushModuleLog(DLMM_MODULE, "scanLog", {
+      tone: "up",
+      message: `Detailed DLMM scan completed for ${payload.pool?.pairLabel || payload.pool?.address || query}.`,
+    });
+  } catch (error) {
+    state.dlmm.lastError = error.message || "DLMM manual scan failed.";
+    pushModuleLog(DLMM_MODULE, "scanLog", {
+      tone: "down",
+      message: state.dlmm.lastError,
+    });
+  } finally {
+    state.dlmm.loading = false;
+    persistState();
+    render();
+  }
+}
+
+function computeDlmmMetrics() {
+  const calls = state.dlmm.recentCalls || [];
+  const profitable = calls.filter((call) => Number(call.performancePct) > 0);
+  const losing = calls.filter((call) => Number(call.performancePct) < 0);
+  const aggregatePerformance =
+    calls.length > 0 ? calls.reduce((sum, call) => sum + (Number(call.performancePct) || 0), 0) / calls.length : 0;
+  return {
+    totalCallsOverall: calls.length,
+    totalCallsToday: calls.filter((call) => withinLookback(call.detectedAt)).length,
+    profitableCalls: profitable.length,
+    losingCalls: losing.length,
+    aggregatePerformance,
+    activeCalls: calls.filter((call) => call.status === "Open").length,
+  };
+}
+
+function updateHeroHealth() {
+  const perpsHealth = perpsScannerHealthLabel();
+  const dlmmHealth = state.dlmm.loading
+    ? { label: "Scanning", note: "Refreshing official Meteora pools" }
+    : state.dlmm.lastError
+      ? { label: "Degraded", note: state.dlmm.lastError }
+      : {
+          label: state.dlmm.scannerEnabled ? "Active" : "Paused",
+          note: state.dlmm.lastSyncAt ? `Last DLMM sync ${formatDateTime(state.dlmm.lastSyncAt)}` : "Waiting for first sync",
+        };
+
+  const perpsEl = document.getElementById("playground-hero-perps-health");
+  const perpsNoteEl = document.getElementById("playground-hero-perps-note");
+  const dlmmEl = document.getElementById("playground-hero-dlmm-health");
+  const dlmmNoteEl = document.getElementById("playground-hero-dlmm-note");
+
+  if (perpsEl) perpsEl.textContent = perpsHealth.label;
+  if (perpsNoteEl) perpsNoteEl.textContent = perpsHealth.note;
+  if (dlmmEl) dlmmEl.textContent = dlmmHealth.label;
+  if (dlmmNoteEl) dlmmNoteEl.textContent = dlmmHealth.note;
+}
+
+function buildPerpsPreview() {
+  if (state.perps.manualScan) {
+    const payload = state.perps.manualScan;
+    const preferred = payload.preferred;
+    if (preferred) {
+      return `
+        <article class="playground-preview-card">
+          <div class="playground-preview-head">
+            <div>
+              <p class="panel-label">Alert Preview</p>
+              <h3>${escapeHtml(payload.symbol)}</h3>
+            </div>
+            <span class="playground-pill">${escapeHtml(preferred.strategy)}</span>
+          </div>
+          <div class="playground-preview-grid">
+            <div><span>Direction</span><strong>${escapeHtml(preferred.direction)}</strong></div>
+            <div><span>Quality</span><strong>Q${formatNumber(preferred.confidence, 0)}</strong></div>
+            <div><span>Entry</span><strong>${formatUsd(preferred.entry)}</strong></div>
+            <div><span>Stop</span><strong>${formatUsd(preferred.stop)}</strong></div>
+            <div><span>Take Profit</span><strong>${formatUsd(preferred.takeProfit)}</strong></div>
+            <div><span>RR</span><strong>${formatNumber(preferred.rr, 2)}</strong></div>
+          </div>
+          <p class="playground-preview-copy">${escapeHtml(preferred.qualificationReason)}</p>
+          <pre class="playground-payload-preview">${escapeHtml(JSON.stringify(preferred, null, 2))}</pre>
+        </article>
+      `;
+    }
+  }
+
+  const current = mergePerpsCandidates().find((candidate) => candidate.symbol === selectedPerpsSymbol());
+  if (!current) {
+    return `<article class="playground-preview-card playground-empty-card"><strong>No current alert preview.</strong><span>Run a manual pair scan to inspect the selected symbol with the latest House and Tradez logic.</span></article>`;
+  }
+
+  const payload = createPerpsAlertPayload(current);
+  return `
+    <article class="playground-preview-card">
+      <div class="playground-preview-head">
+        <div>
+          <p class="panel-label">Alert Preview</p>
+          <h3>${escapeHtml(current.symbol)}</h3>
+        </div>
+        <span class="playground-pill">${escapeHtml(current.strategy)}</span>
+      </div>
+      <div class="playground-preview-grid">
+        <div><span>Direction</span><strong>${escapeHtml(current.side)}</strong></div>
+        <div><span>Quality</span><strong>Q${formatNumber(current.qualityScore, 0)}</strong></div>
+        <div><span>Entry</span><strong>${formatUsd(current.entryPrice)}</strong></div>
+        <div><span>Stop</span><strong>${formatUsd(current.stopLoss)}</strong></div>
+        <div><span>Take Profit</span><strong>${formatUsd(current.takeProfit)}</strong></div>
+        <div><span>RR</span><strong>${formatNumber(current.rr, 2)}</strong></div>
+      </div>
+      <p class="playground-preview-copy">${escapeHtml(current.qualificationReason)}</p>
+      <pre class="playground-payload-preview">${escapeHtml(JSON.stringify(payload, null, 2))}</pre>
+    </article>
+  `;
+}
+
+function buildDlmmPreview() {
+  const payload = state.dlmm.manualScan;
+  if (!payload?.pool || !payload.analysis) {
+    return `<article class="playground-preview-card playground-empty-card"><strong>No detailed pool analysis loaded.</strong><span>Select a DLMM pool and run a manual pool scan to inspect strategy, range, quality, and risk notes.</span></article>`;
+  }
+
+  return `
+    <article class="playground-preview-card">
+      <div class="playground-preview-head">
+        <div>
+          <p class="panel-label">Detailed Opportunity Analysis</p>
+          <h3>${escapeHtml(payload.pool.pairLabel)}</h3>
+        </div>
+        <span class="playground-pill">${escapeHtml(payload.analysis.recommendedStrategy)}</span>
+      </div>
+      <div class="playground-preview-grid">
+        <div><span>Quality</span><strong>${formatNumber(payload.analysis.qualityScore, 0)}</strong></div>
+        <div><span>Bin Step</span><strong>${formatNumber(payload.pool.binStep, 0)}</strong></div>
+        <div><span>Range</span><strong>${escapeHtml(payload.analysis.suggestedRange)}</strong></div>
+        <div><span>Hold Time</span><strong>${escapeHtml(payload.analysis.estimatedHoldTime)}</strong></div>
+        <div><span>TVL</span><strong>${formatCompactUsd(payload.pool.tvl)}</strong></div>
+        <div><span>24H Volume</span><strong>${formatCompactUsd(payload.pool.volume24h)}</strong></div>
+      </div>
+      <p class="playground-preview-copy">${escapeHtml(payload.analysis.summary)}</p>
+      <div class="playground-chip-row">
+        ${(payload.analysis.qualificationReasons || []).map((item) => `<span class="playground-chip">${escapeHtml(item)}</span>`).join("")}
+      </div>
+      <div class="playground-detail-block">
+        <h4>Risk Notes</h4>
+        <ul>${(payload.analysis.riskNotes || []).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+      </div>
+      <div class="playground-detail-block">
+        <h4>Monitor</h4>
+        <ul>${(payload.analysis.monitors || []).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+      </div>
+    </article>
+  `;
+}
+
+function renderMetricCards(metrics, mode) {
+  const cards =
+    mode === PERPS_MODULE
+      ? [
+          ["Total Calls Overall", metrics.totalCallsOverall, "Opened + closed calls from House and Tradez"],
+          ["Total Calls Today", metrics.totalCallsToday, "Calls opened in the last 24 hours"],
+          ["Wins", metrics.wins, "Closed calls with positive return"],
+          ["Losses", metrics.losses, "Closed calls with zero or negative return"],
+          ["Open Calls", metrics.openCalls, "Currently active runtime positions"],
+          ["Profit %", formatPercent(metrics.profitPercentage, 1), "Win rate across closed calls"],
+          ["Loss %", formatPercent(metrics.lossPercentage, 1), "Loss rate across closed calls"],
+          ["Average RR", formatNumber(metrics.averageRr, 2), "Across all tracked perps calls"],
+          ["Average Hold", formatDuration(metrics.averageHold), "Closed call average hold time"],
+          ["Best Pairs", bestWorstLabel(metrics.bestPairs), "Highest average return by pair"],
+          ["Worst Pairs", bestWorstLabel(metrics.worstPairs), "Lowest average return by pair"],
+        ]
+      : [
+          ["Total Calls Overall", metrics.totalCallsOverall, "Tracked DLMM opportunities surfaced by the scanner"],
+          ["Total Calls Today", metrics.totalCallsToday, "Opportunities created in the last 24 hours"],
+          ["Profitable Calls", metrics.profitableCalls, "Calls with positive current edge performance"],
+          ["Losing Calls", metrics.losingCalls, "Calls with negative current edge performance"],
+          ["Aggregate Performance", formatPercent(metrics.aggregatePerformance, 1), "Average edge performance across tracked calls"],
+          ["Open / Active Calls", metrics.activeCalls, "Currently qualifying pool opportunities"],
+        ];
+
+  return `
+    <section class="playground-metric-grid playground-metric-grid--wide">
+      ${cards
+        .map(
+          ([label, value, note]) => `
+            <article class="metric-card playground-op-metric">
+              <span class="metric-label">${escapeHtml(label)}</span>
+              <strong>${escapeHtml(value)}</strong>
+              <small>${escapeHtml(note)}</small>
+            </article>
+          `
+        )
+        .join("")}
+    </section>
+  `;
+}
+
+function renderSelectorResults(items, type) {
+  if (!items.length) {
+    return `<div class="playground-selector-empty">No matching ${type === "perps" ? "perps pairs" : "DLMM pools"}.</div>`;
+  }
+  return `
+    <div class="playground-selector-results">
+      ${items
+        .map((item) =>
+          type === "perps"
+            ? `<button class="playground-selector-option" type="button" data-select-symbol="${escapeHtml(item.symbol)}">
+                <strong>${escapeHtml(item.symbol)}</strong>
+                <span>${formatCompactUsd(item.quoteVolume || 0)}</span>
+              </button>`
+            : `<button class="playground-selector-option" type="button" data-select-pool="${escapeHtml(item.address)}">
+                <strong>${escapeHtml(item.pairLabel)}</strong>
+                <span>${formatCompactUsd(item.volume24h || 0)}</span>
+              </button>`
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function renderHealthCards(moduleKey) {
+  const moduleState = state[moduleKey];
+  const scannerStatus =
+    moduleState.loading
+      ? "Running"
+      : moduleState.lastError
+        ? "Degraded"
+        : moduleState.scannerEnabled
+          ? "Enabled"
+          : "Paused";
+  const webhook = moduleState.webhookHealth || defaultModuleWebhookHealth();
+  const scannerNote =
+    moduleKey === PERPS_MODULE
+      ? perpsScannerHealthLabel().note
+      : moduleState.lastSyncAt
+        ? `Last sync ${formatDateTime(moduleState.lastSyncAt)}`
+        : "Waiting for first scanner pass";
+  const sourceNote =
+    moduleKey === PERPS_MODULE
+      ? state.perps.runtime.universeSource || "Binance universe"
+      : state.dlmm.protocolMetrics
+        ? `Meteora TVL ${formatCompactUsd(state.dlmm.protocolMetrics.tvl || 0)}`
+        : "Official Meteora pool API";
+  const selectedNote =
+    moduleKey === PERPS_MODULE
+      ? selectedPerpsSymbol() || "No pair selected"
+      : selectedPool()?.pairLabel || "No pool selected";
+  return `
+    <section class="playground-health-grid">
+      <article class="playground-health-card">
+        <span>Scanner Health</span>
+        <strong>${escapeHtml(scannerStatus)}</strong>
+        <small>${escapeHtml(scannerNote)}</small>
+      </article>
+      <article class="playground-health-card">
+        <span>Webhook Health</span>
+        <strong>${escapeHtml(webhook.status === "ok" ? "Healthy" : webhook.status === "down" ? "Error" : "Idle")}</strong>
+        <small>${escapeHtml(webhook.message || "Not tested yet")}</small>
+      </article>
+      <article class="playground-health-card">
+        <span>Data Source</span>
+        <strong>${moduleKey === PERPS_MODULE ? "Binance + Runtime" : "Meteora DLMM"}</strong>
+        <small>${escapeHtml(sourceNote)}</small>
+      </article>
+      <article class="playground-health-card">
+        <span>Selected</span>
+        <strong>${escapeHtml(selectedNote)}</strong>
+        <small>${moduleKey === PERPS_MODULE ? "Manual pair analysis target" : "Detailed pool analysis target"}</small>
+      </article>
+    </section>
+  `;
+}
+
+function renderPerpsTable(calls) {
+  if (!calls.length) {
+    return `<div class="playground-empty-card"><strong>No perps calls recorded yet.</strong><span>Runtime calls will appear here as House and Tradez open or close positions.</span></div>`;
+  }
+  const rows = calls
+    .sort((left, right) => (right.openedAt || right.detectedAt || 0) - (left.openedAt || left.detectedAt || 0))
+    .slice(0, 20)
+    .map(
+      (call) => `
+        <tr>
+          <td>${escapeHtml(call.symbol)}</td>
+          <td>${escapeHtml(call.engineLabel)}</td>
+          <td>${escapeHtml(call.side)}</td>
+          <td>${escapeHtml(call.status)}</td>
+          <td>Q${formatNumber(call.qualityScore, 0)}</td>
+          <td>${formatNumber(call.rr, 2)}</td>
+          <td>${formatPercent(call.returnPct ?? 0, 1)}</td>
+          <td>${formatDateTime(call.openedAt || call.detectedAt)}</td>
+          <td>
+            <details class="playground-row-detail">
+              <summary>Details</summary>
+              <div class="playground-row-detail-body">
+                <p><strong>Strategy:</strong> ${escapeHtml(call.strategy)}</p>
+                <p><strong>Entry:</strong> ${formatUsd(call.entryPrice)} · <strong>Stop:</strong> ${formatUsd(call.stopLoss)} · <strong>TP:</strong> ${formatUsd(call.takeProfit)}</p>
+                <p><strong>Timeframe:</strong> ${escapeHtml(call.timeframe)} · <strong>Hold:</strong> ${formatDuration(call.holdMs)}</p>
+                <p>${escapeHtml(call.qualificationReason)}</p>
+              </div>
+            </details>
+          </td>
+        </tr>
+      `
+    )
+    .join("");
+  return `
+    <div class="playground-table-wrap">
+      <table class="playground-table">
+        <thead>
+          <tr>
+            <th>Pair</th>
+            <th>Engine</th>
+            <th>Side</th>
+            <th>Status</th>
+            <th>Quality</th>
+            <th>RR</th>
+            <th>Return</th>
+            <th>Opened</th>
+            <th>Analysis</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderDlmmTable(calls) {
+  if (!calls.length) {
+    return `<div class="playground-empty-card"><strong>No DLMM calls recorded yet.</strong><span>Scanner-qualified Meteora opportunities will appear here as the pool monitor cycles.</span></div>`;
+  }
+  const rows = calls
+    .slice(0, 20)
+    .map(
+      (call) => `
+        <tr>
+          <td>${escapeHtml(call.pairLabel)}</td>
+          <td>${escapeHtml(call.currentStrategy || call.strategy)}</td>
+          <td>${escapeHtml(call.status)}</td>
+          <td>${formatNumber(call.currentQualityScore, 0)}</td>
+          <td>${formatPercent(call.performancePct, 1)}</td>
+          <td>${formatDateTime(call.detectedAt)}</td>
+          <td>
+            <details class="playground-row-detail">
+              <summary>Details</summary>
+              <div class="playground-row-detail-body">
+                <p><strong>Range:</strong> ${escapeHtml(call.currentRange || "—")} · <strong>Hold:</strong> ${escapeHtml(call.estimatedHoldTime || "—")}</p>
+                <p><strong>Risk:</strong> ${escapeHtml((call.riskNotes || []).join(" • ") || "No risk notes")}</p>
+                <p><strong>Monitor:</strong> ${escapeHtml((call.monitors || []).join(" • ") || "No monitor list")}</p>
+                <p><strong>Qualification:</strong> ${escapeHtml((call.latestNotes || []).join(" • ") || "Current pool scan qualifies")}</p>
+              </div>
+            </details>
+          </td>
+        </tr>
+      `
+    )
+    .join("");
+  return `
+    <div class="playground-table-wrap">
+      <table class="playground-table">
+        <thead>
+          <tr>
+            <th>Pool</th>
+            <th>Strategy</th>
+            <th>Status</th>
+            <th>Quality</th>
+            <th>Performance</th>
+            <th>Detected</th>
+            <th>Analysis</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderLogList(entries, emptyText) {
+  if (!entries.length) {
+    return `<div class="playground-empty-card"><strong>${escapeHtml(emptyText)}</strong></div>`;
+  }
+  return `
+    <div class="playground-log-list">
+      ${entries
+        .slice(0, 12)
+        .map(
+          (entry) => `
+            <article class="playground-log-item ${entry.tone === "down" ? "is-down" : entry.tone === "up" ? "is-up" : ""}">
+              <span>${formatDateTime(entry.time)}</span>
+              <p>${escapeHtml(entry.message)}</p>
+            </article>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function buildPerpsReport() {
+  const calls = mergePerpsCalls();
+  const metrics = computePerpsMetrics(calls);
+  return {
+    exportedAt: new Date().toISOString(),
+    module: "perps_alerts",
+    metrics,
+    recentCalls: calls.filter((call) => withinLookback(call.openedAt || call.detectedAt)).slice(0, 80),
+    scanLog: state.perps.scanLog.filter((entry) => withinLookback(entry.time)),
+    alertLog: state.perps.alertLog.filter((entry) => withinLookback(entry.time)),
+    manualScan: state.perps.manualScan,
+  };
+}
+
+function buildDlmmReport() {
+  const metrics = computeDlmmMetrics();
+  return {
+    exportedAt: new Date().toISOString(),
+    module: "dlmm_alerts",
+    metrics,
+    recentCalls: state.dlmm.recentCalls.filter((call) => withinLookback(call.detectedAt || call.lastSeenAt)).slice(0, 80),
+    scanLog: state.dlmm.scanLog.filter((entry) => withinLookback(entry.time)),
+    alertLog: state.dlmm.alertLog.filter((entry) => withinLookback(entry.time)),
+    manualScan: state.dlmm.manualScan,
+    protocolMetrics: state.dlmm.protocolMetrics,
+  };
+}
+
+function renderPerpsModule() {
+  const metrics = computePerpsMetrics(mergePerpsCalls());
+  const candidates = mergePerpsCandidates();
+  const selected = selectedPerpsSymbol();
+  const currentSelection = state.perps.runtime.universe.find((entry) => entry.symbol === selected) || null;
+  return `
+    <div class="playground-module-stack">
+      <section class="playground-ops-controls">
+        <div class="playground-field-group">
+          <label class="playground-control-label" for="playground-perps-query">Perps Selector</label>
+          <input id="playground-perps-query" class="playground-input" type="search" placeholder="Search Binance USDT perps" value="${escapeHtml(state.perps.selectorQuery)}" />
+          ${renderSelectorResults(filteredPerpsUniverse(), "perps")}
+        </div>
+        <div class="playground-field-group playground-field-group--compact">
+          <label class="playground-control-label" for="playground-perps-interval">Scan Interval</label>
+          <select id="playground-perps-interval" class="playground-input">
+            ${PERPS_SCAN_INTERVAL_OPTIONS.map((item) => `<option value="${item.value}"${Number(item.value) === Number(state.perps.scanIntervalMs) ? " selected" : ""}>${item.label}</option>`).join("")}
+          </select>
+        </div>
+        <div class="playground-field-group playground-field-group--compact">
+          <label class="playground-control-label" for="playground-perps-webhook">Discord Webhook</label>
+          <input id="playground-perps-webhook" class="playground-input" type="url" placeholder="https://discord.com/api/webhooks/..." value="${escapeHtml(state.perps.webhook)}" />
+        </div>
+        <div class="playground-button-row">
+          <button class="playground-primary-button" type="button" data-playground-action="toggle-perps-scanner">${state.perps.scannerEnabled ? "Disable Scanner" : "Enable Scanner"}</button>
+          <button class="playground-secondary-button" type="button" data-playground-action="scan-perps-pair">Manual Pair Scan</button>
+          <button class="playground-secondary-button" type="button" data-playground-action="run-perps-full-scan">Run Full Scan</button>
+          <button class="playground-secondary-button" type="button" data-playground-action="test-perps-webhook">Webhook Test</button>
+          <button class="playground-secondary-button" type="button" data-playground-action="export-perps-report">Download 24H Report</button>
+        </div>
+        <div class="playground-control-note">
+          Selected pair: <strong>${escapeHtml(selected || "—")}</strong>${currentSelection ? ` · 24H quote volume ${formatCompactUsd(currentSelection.quoteVolume || 0)}` : ""}
+        </div>
+      </section>
+
+      ${renderHealthCards(PERPS_MODULE)}
+      ${renderMetricCards(metrics, PERPS_MODULE)}
+
+      <section class="playground-module-grid">
+        <div class="playground-column-stack">
+          ${buildPerpsPreview()}
+          <article class="playground-section-card">
+            <div class="playground-section-head">
+              <div>
+                <p class="panel-label">Recent Calls</p>
+                <h3>Recent perps calls table</h3>
+              </div>
+            </div>
+            ${renderPerpsTable(mergePerpsCalls())}
+          </article>
+        </div>
+        <div class="playground-column-stack">
+          <article class="playground-section-card">
+            <div class="playground-section-head">
+              <div>
+                <p class="panel-label">Recent Scan Log</p>
+                <h3>Scanner activity</h3>
+              </div>
+            </div>
+            ${renderLogList(state.perps.scanLog, "No perps scan events yet.")}
+          </article>
+          <article class="playground-section-card">
+            <div class="playground-section-head">
+              <div>
+                <p class="panel-label">Recent Alert Log</p>
+                <h3>Discord and workstation alerts</h3>
+              </div>
+            </div>
+            ${renderLogList(state.perps.alertLog, "No perps alerts have been sent yet.")}
+          </article>
+          <article class="playground-section-card">
+            <div class="playground-section-head">
+              <div>
+                <p class="panel-label">Qualified Right Now</p>
+                <h3>Current scanner candidates</h3>
+              </div>
+            </div>
+            ${
+              candidates.length
+                ? `<div class="playground-chip-row">${candidates.slice(0, 12).map((candidate) => `<span class="playground-chip">${escapeHtml(candidate.symbol)} · ${escapeHtml(candidate.strategy)} · Q${formatNumber(candidate.qualityScore, 0)}</span>`).join("")}</div>`
+                : `<div class="playground-empty-card"><strong>No live perps candidates right now.</strong></div>`
+            }
+          </article>
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function renderDlmmModule() {
+  const metrics = computeDlmmMetrics();
+  const selected = selectedPool();
+  return `
+    <div class="playground-module-stack">
+      <section class="playground-ops-controls">
+        <div class="playground-field-group">
+          <label class="playground-control-label" for="playground-dlmm-query">DLMM Selector</label>
+          <input id="playground-dlmm-query" class="playground-input" type="search" placeholder="Search Meteora DLMM pools" value="${escapeHtml(state.dlmm.selectorQuery)}" />
+          ${renderSelectorResults(filteredDlmmPools(), "dlmm")}
+        </div>
+        <div class="playground-field-group playground-field-group--compact">
+          <label class="playground-control-label" for="playground-dlmm-interval">Scan Interval</label>
+          <select id="playground-dlmm-interval" class="playground-input">
+            ${DLMM_SCAN_INTERVAL_OPTIONS.map((item) => `<option value="${item.value}"${Number(item.value) === Number(state.dlmm.scanIntervalMs) ? " selected" : ""}>${item.label}</option>`).join("")}
+          </select>
+        </div>
+        <div class="playground-field-group playground-field-group--compact">
+          <label class="playground-control-label" for="playground-dlmm-webhook">Discord Webhook</label>
+          <input id="playground-dlmm-webhook" class="playground-input" type="url" placeholder="https://discord.com/api/webhooks/..." value="${escapeHtml(state.dlmm.webhook)}" />
+        </div>
+        <div class="playground-button-row">
+          <button class="playground-primary-button" type="button" data-playground-action="toggle-dlmm-scanner">${state.dlmm.scannerEnabled ? "Disable Scanner" : "Enable Scanner"}</button>
+          <button class="playground-secondary-button" type="button" data-playground-action="scan-dlmm-pool">Manual Pool Scan</button>
+          <button class="playground-secondary-button" type="button" data-playground-action="refresh-dlmm">Refresh Pools</button>
+          <button class="playground-secondary-button" type="button" data-playground-action="test-dlmm-webhook">Webhook Test</button>
+          <button class="playground-secondary-button" type="button" data-playground-action="export-dlmm-report">Download 24H Report</button>
+        </div>
+        <div class="playground-control-note">
+          Selected pool: <strong>${escapeHtml(selected?.pairLabel || selected?.address || "—")}</strong>
+        </div>
+      </section>
+
+      ${renderHealthCards(DLMM_MODULE)}
+      ${renderMetricCards(metrics, DLMM_MODULE)}
+
+      <section class="playground-module-grid">
+        <div class="playground-column-stack">
+          ${buildDlmmPreview()}
+          <article class="playground-section-card">
+            <div class="playground-section-head">
+              <div>
+                <p class="panel-label">Recent Calls</p>
+                <h3>Tracked DLMM opportunities</h3>
+              </div>
+            </div>
+            ${renderDlmmTable(state.dlmm.recentCalls)}
+          </article>
+        </div>
+        <div class="playground-column-stack">
+          <article class="playground-section-card">
+            <div class="playground-section-head">
+              <div>
+                <p class="panel-label">Recent Scan Log</p>
+                <h3>Scanner activity</h3>
+              </div>
+            </div>
+            ${renderLogList(state.dlmm.scanLog, "No DLMM scan events yet.")}
+          </article>
+          <article class="playground-section-card">
+            <div class="playground-section-head">
+              <div>
+                <p class="panel-label">Recent Alert Log</p>
+                <h3>Discord and workstation alerts</h3>
+              </div>
+            </div>
+            ${renderLogList(state.dlmm.alertLog, "No DLMM alerts have been sent yet.")}
+          </article>
+          <article class="playground-section-card">
+            <div class="playground-section-head">
+              <div>
+                <p class="panel-label">Live Opportunity Feed</p>
+                <h3>Top qualifying pools</h3>
+              </div>
+            </div>
+            ${
+              state.dlmm.pools.filter((pool) => pool.analysis?.qualifies).length
+                ? `<div class="playground-chip-row">${state.dlmm.pools.filter((pool) => pool.analysis?.qualifies).slice(0, 12).map((pool) => `<span class="playground-chip">${escapeHtml(pool.pairLabel)} · ${escapeHtml(pool.analysis.recommendedStrategy)} · ${formatNumber(pool.analysis.qualityScore, 0)}</span>`).join("")}</div>`
+                : `<div class="playground-empty-card"><strong>No qualifying DLMM opportunities right now.</strong></div>`
+            }
+          </article>
+        </div>
+      </section>
+    </div>
+  `;
 }
 
 function render() {
-  renderHeaderControls();
-  renderTabs();
-  renderContent();
-}
-
-async function enableAlerts() {
-  if (!("Notification" in window)) return;
-  const permission = await Notification.requestPermission();
-  state.alertsEnabled = permission === "granted";
-  renderHeaderControls();
-}
-
-function maybeFireFundingAlerts() {
-  if (!state.alertsEnabled || !("Notification" in window) || Notification.permission !== "granted") return;
-  const derived = getDerivedState();
-  derived.fundingSignals.forEach((item) => {
-    if (item.signal === "strong-arb" || item.signal === "arb") {
-      new Notification(`${item.asset} Funding Alert`, {
-        body: `Rate: ${(item.rate * 100).toFixed(4)}% per 8h — arb threshold crossed.`,
-      });
-    }
+  updateHeroHealth();
+  document.querySelectorAll("[data-module-tab]").forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.moduleTab === state.activeModule);
   });
+
+  const content = document.getElementById("playground-content");
+  if (!content) return;
+  content.innerHTML = state.activeModule === PERPS_MODULE ? renderPerpsModule() : renderDlmmModule();
 }
 
-function addPosition() {
-  if (!state.newPos.pair || !state.newPos.entryPrice || !state.newPos.currentPrice) return;
-  state.dlmmPositions.push({
-    id: Date.now(),
-    pair: state.newPos.pair,
-    entryPrice: Number(state.newPos.entryPrice),
-    currentPrice: Number(state.newPos.currentPrice),
-    rangePct: Number(state.newPos.rangePct),
-    shape: state.newPos.shape,
-  });
-  state.newPos = { pair: "", entryPrice: "", currentPrice: "", rangePct: 15, shape: "Curve" };
-  renderContent();
+function handleTopTabClick(target) {
+  const tab = target.closest("[data-module-tab]");
+  if (!tab) return false;
+  state.activeModule = tab.dataset.moduleTab === DLMM_MODULE ? DLMM_MODULE : PERPS_MODULE;
+  persistState();
+  render();
+  return true;
 }
 
-function applyPriceUpdate(id) {
-  const value = state.priceInputs[id];
-  if (!value || Number.isNaN(Number(value))) return;
-  state.dlmmPositions = state.dlmmPositions.map((position) =>
-    position.id === id ? { ...position, currentPrice: Number(value) } : position
-  );
-  state.priceInputs[id] = "";
-  renderContent();
+function handleSelectorChoice(target) {
+  const symbolButton = target.closest("[data-select-symbol]");
+  if (symbolButton) {
+    state.perps.selectedSymbol = symbolButton.dataset.selectSymbol || "";
+    state.perps.selectorQuery = state.perps.selectedSymbol;
+    persistState();
+    render();
+    return true;
+  }
+  const poolButton = target.closest("[data-select-pool]");
+  if (poolButton) {
+    state.dlmm.selectedPoolAddress = poolButton.dataset.selectPool || "";
+    const pool = selectedPool();
+    state.dlmm.selectorQuery = pool?.pairLabel || state.dlmm.selectedPoolAddress;
+    persistState();
+    render();
+    return true;
+  }
+  return false;
 }
 
-function bindContentEvents() {
-  const thresholdInput = document.querySelector("#playground-alert-threshold");
-  if (thresholdInput) {
-    thresholdInput.addEventListener("input", (event) => {
-      state.alertThreshold = Number(event.target.value) || 0.06;
-      renderContent();
+async function handleActionClick(target) {
+  const actionButton = target.closest("[data-playground-action]");
+  if (!actionButton) return false;
+  const action = actionButton.dataset.playgroundAction;
+
+  if (action === "toggle-perps-scanner") {
+    state.perps.scannerEnabled = !state.perps.scannerEnabled;
+    await syncPerpsScannerState(state.perps.scannerEnabled);
+    schedulePerpsScanner();
+    pushModuleLog(PERPS_MODULE, "scanLog", {
+      tone: state.perps.scannerEnabled ? "up" : "neutral",
+      message: state.perps.scannerEnabled ? "Perps scanner enabled." : "Perps scanner disabled.",
     });
+    persistState();
+    render();
+    return true;
   }
 
-  document.querySelectorAll("[data-remove-position]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const id = Number(button.dataset.removePosition);
-      state.dlmmPositions = state.dlmmPositions.filter((position) => position.id !== id);
-      renderContent();
-    });
-  });
+  if (action === "scan-perps-pair") {
+    await runPerpsManualScan();
+    return true;
+  }
 
-  document.querySelectorAll("[data-price-input]").forEach((input) => {
-    input.addEventListener("input", (event) => {
-      state.priceInputs[Number(input.dataset.priceInput)] = event.target.value;
-    });
-    input.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") {
-        event.preventDefault();
-        applyPriceUpdate(Number(input.dataset.priceInput));
-      }
-    });
-  });
+  if (action === "run-perps-full-scan") {
+    await refreshPerpsData({ fullScan: true, source: "manual" });
+    return true;
+  }
 
-  document.querySelectorAll("[data-apply-price]").forEach((button) => {
-    button.addEventListener("click", () => {
-      applyPriceUpdate(Number(button.dataset.applyPrice));
+  if (action === "test-perps-webhook") {
+    await testWebhook(PERPS_MODULE);
+    return true;
+  }
+
+  if (action === "export-perps-report") {
+    downloadJsonFile(
+      buildPerpsReport(),
+      `soloris-perps-alerts-24h-${new Date().toISOString().replace(/[:.]/g, "-")}.json`
+    );
+    return true;
+  }
+
+  if (action === "toggle-dlmm-scanner") {
+    state.dlmm.scannerEnabled = !state.dlmm.scannerEnabled;
+    scheduleDlmmScanner();
+    pushModuleLog(DLMM_MODULE, "scanLog", {
+      tone: state.dlmm.scannerEnabled ? "up" : "neutral",
+      message: state.dlmm.scannerEnabled ? "DLMM scanner enabled." : "DLMM scanner disabled.",
     });
-  });
+    persistState();
+    render();
+    return true;
+  }
 
-  const pair = document.querySelector("#playground-new-pair");
-  const entry = document.querySelector("#playground-new-entry");
-  const current = document.querySelector("#playground-new-current");
-  const shape = document.querySelector("#playground-new-shape");
-  const range = document.querySelector("#playground-new-range");
-  const addButton = document.querySelector("#playground-add-position");
+  if (action === "scan-dlmm-pool") {
+    await runDlmmManualScan();
+    return true;
+  }
 
-  if (pair) pair.addEventListener("input", (event) => { state.newPos.pair = event.target.value; });
-  if (entry) entry.addEventListener("input", (event) => { state.newPos.entryPrice = event.target.value; });
-  if (current) current.addEventListener("input", (event) => { state.newPos.currentPrice = event.target.value; });
-  if (shape) shape.addEventListener("change", (event) => { state.newPos.shape = event.target.value; });
-  if (range) range.addEventListener("input", (event) => { state.newPos.rangePct = event.target.value; });
-  if (addButton) addButton.addEventListener("click", addPosition);
+  if (action === "refresh-dlmm") {
+    await refreshDlmmData({ source: "manual" });
+    return true;
+  }
+
+  if (action === "test-dlmm-webhook") {
+    await testWebhook(DLMM_MODULE);
+    return true;
+  }
+
+  if (action === "export-dlmm-report") {
+    downloadJsonFile(
+      buildDlmmReport(),
+      `soloris-dlmm-alerts-24h-${new Date().toISOString().replace(/[:.]/g, "-")}.json`
+    );
+    return true;
+  }
+
+  return false;
 }
 
-function bindStaticEvents() {
-  document.querySelectorAll(".playground-tab").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.activeTab = Number(button.dataset.tabIndex);
-      render();
-    });
+function handleInputChange(target) {
+  if (target.id === "playground-perps-query") {
+    state.perps.selectorQuery = target.value;
+    persistState();
+    render();
+    return true;
+  }
+  if (target.id === "playground-perps-webhook") {
+    state.perps.webhook = target.value.trim();
+    persistState();
+    return true;
+  }
+  if (target.id === "playground-dlmm-query") {
+    state.dlmm.selectorQuery = target.value;
+    persistState();
+    render();
+    return true;
+  }
+  if (target.id === "playground-dlmm-webhook") {
+    state.dlmm.webhook = target.value.trim();
+    persistState();
+    return true;
+  }
+  return false;
+}
+
+function handleSelectChange(target) {
+  if (target.id === "playground-perps-interval") {
+    state.perps.scanIntervalMs = Number(target.value) || PERPS_SCAN_INTERVAL_OPTIONS[1].value;
+    persistState();
+    schedulePerpsScanner();
+    render();
+    return true;
+  }
+  if (target.id === "playground-dlmm-interval") {
+    state.dlmm.scanIntervalMs = Number(target.value) || DLMM_SCAN_INTERVAL_OPTIONS[1].value;
+    persistState();
+    scheduleDlmmScanner();
+    render();
+    return true;
+  }
+  return false;
+}
+
+function bindEvents() {
+  document.addEventListener("click", async (event) => {
+    const target = event.target;
+    if (handleTopTabClick(target)) return;
+    if (handleSelectorChoice(target)) return;
+    await handleActionClick(target);
   });
 
-  const picker = document.querySelector("#playground-asset-picker");
-  if (picker) {
-    picker.addEventListener("change", (event) => {
-      if (ASSETS.includes(event.target.value)) {
-        state.selectedAsset = event.target.value;
-        render();
-      }
-    });
-  }
+  document.addEventListener("input", (event) => {
+    handleInputChange(event.target);
+  });
 
-  const alertsButton = document.querySelector("#playground-alerts-toggle");
-  if (alertsButton) {
-    alertsButton.addEventListener("click", async () => {
-      await enableAlerts();
-      maybeFireFundingAlerts();
-    });
-  }
+  document.addEventListener("change", (event) => {
+    handleSelectChange(event.target);
+  });
+}
+
+async function init() {
+  bindEvents();
+  render();
+  await Promise.allSettled([
+    refreshPerpsData({ source: "init" }),
+    refreshDlmmData({ source: "init" }),
+  ]);
+  schedulePerpsScanner();
+  scheduleDlmmScanner();
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-  bindStaticEvents();
-  render();
+  init();
 });

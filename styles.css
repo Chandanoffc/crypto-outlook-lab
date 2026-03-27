@@ -7261,3 +7261,362 @@ body.playground-page .playground-range-thumb.is-danger {
     justify-content: space-between;
   }
 }
+
+body.playground-page .playground-hero-health {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+body.playground-page .playground-mini-health-card {
+  display: grid;
+  gap: 6px;
+  padding: 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  background:
+    linear-gradient(180deg, rgba(13, 23, 36, 0.96), rgba(8, 14, 24, 0.92));
+}
+
+body.playground-page .playground-mini-health-card span,
+body.playground-page .playground-health-card span,
+body.playground-page .playground-control-label,
+body.playground-page .playground-control-note,
+body.playground-page .playground-preview-grid span,
+body.playground-page .playground-row-detail-body p strong,
+body.playground-page .playground-preview-copy,
+body.playground-page .playground-empty-card span {
+  color: rgba(148, 163, 184, 0.82);
+}
+
+body.playground-page .playground-mini-health-card strong,
+body.playground-page .playground-health-card strong {
+  color: #f8fafc;
+  font-size: 1.15rem;
+}
+
+body.playground-page .playground-mini-health-card small,
+body.playground-page .playground-health-card small {
+  color: rgba(148, 163, 184, 0.76);
+  line-height: 1.5;
+}
+
+body.playground-page .playground-module-stack {
+  display: grid;
+  gap: 18px;
+}
+
+body.playground-page .playground-ops-controls,
+body.playground-page .playground-section-card,
+body.playground-page .playground-preview-card,
+body.playground-page .playground-health-card,
+body.playground-page .playground-log-item,
+body.playground-page .playground-selector-results,
+body.playground-page .playground-empty-card,
+body.playground-page .playground-table-wrap {
+  border-radius: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.08);
+  background:
+    linear-gradient(180deg, rgba(15, 23, 36, 0.98), rgba(8, 14, 24, 0.96));
+  box-shadow: 0 14px 30px rgba(2, 8, 23, 0.16);
+}
+
+body.playground-page .playground-ops-controls,
+body.playground-page .playground-section-card,
+body.playground-page .playground-preview-card,
+body.playground-page .playground-empty-card {
+  padding: 18px;
+}
+
+body.playground-page .playground-ops-controls {
+  display: grid;
+  gap: 14px;
+}
+
+body.playground-page .playground-field-group {
+  display: grid;
+  gap: 8px;
+}
+
+body.playground-page .playground-field-group--compact {
+  max-width: 420px;
+}
+
+body.playground-page .playground-control-label {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+body.playground-page .playground-selector-results {
+  display: grid;
+  gap: 8px;
+  max-height: 280px;
+  overflow: auto;
+  padding: 10px;
+}
+
+body.playground-page .playground-selector-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  border-radius: 14px;
+  background: rgba(7, 13, 24, 0.88);
+  color: #e2e8f0;
+  cursor: pointer;
+  text-align: left;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background-color 160ms ease;
+}
+
+body.playground-page .playground-selector-option:hover {
+  transform: translateY(-1px);
+  border-color: rgba(34, 211, 238, 0.18);
+  background: rgba(11, 22, 35, 0.94);
+}
+
+body.playground-page .playground-selector-option span,
+body.playground-page .playground-selector-empty,
+body.playground-page .playground-control-note {
+  font-size: 0.88rem;
+}
+
+body.playground-page .playground-button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+body.playground-page .playground-health-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+body.playground-page .playground-health-card {
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+}
+
+body.playground-page .playground-metric-grid--wide {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+body.playground-page .playground-op-metric strong {
+  font-family: "IBM Plex Mono", monospace;
+}
+
+body.playground-page .playground-module-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(340px, 0.85fr);
+  gap: 18px;
+}
+
+body.playground-page .playground-column-stack {
+  display: grid;
+  gap: 18px;
+}
+
+body.playground-page .playground-preview-card {
+  display: grid;
+  gap: 14px;
+}
+
+body.playground-page .playground-preview-head,
+body.playground-page .playground-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+body.playground-page .playground-preview-head h3,
+body.playground-page .playground-section-head h3 {
+  margin: 0;
+  color: #f8fafc;
+}
+
+body.playground-page .playground-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+body.playground-page .playground-preview-grid div {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(7, 13, 24, 0.82);
+  border: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+body.playground-page .playground-preview-grid strong,
+body.playground-page .playground-chip,
+body.playground-page .playground-pill {
+  font-family: "IBM Plex Mono", monospace;
+}
+
+body.playground-page .playground-payload-preview {
+  margin: 0;
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(7, 13, 24, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.08);
+  color: #d9e4f2;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  overflow: auto;
+}
+
+body.playground-page .playground-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+body.playground-page .playground-chip {
+  display: inline-flex;
+  min-height: 30px;
+  padding: 0 12px;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid rgba(34, 211, 238, 0.14);
+  background: rgba(10, 22, 34, 0.82);
+  color: #d8fbff;
+  font-size: 0.76rem;
+}
+
+body.playground-page .playground-detail-block {
+  display: grid;
+  gap: 8px;
+}
+
+body.playground-page .playground-detail-block h4 {
+  margin: 0;
+  color: #f8fafc;
+  font-size: 0.92rem;
+}
+
+body.playground-page .playground-detail-block ul {
+  margin: 0;
+  padding-left: 18px;
+  color: #d7e2f0;
+  line-height: 1.6;
+}
+
+body.playground-page .playground-table-wrap {
+  overflow: auto;
+}
+
+body.playground-page .playground-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 760px;
+}
+
+body.playground-page .playground-table th,
+body.playground-page .playground-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+  text-align: left;
+  vertical-align: top;
+}
+
+body.playground-page .playground-table th {
+  color: rgba(148, 163, 184, 0.84);
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+body.playground-page .playground-table td {
+  color: #d7e2f0;
+}
+
+body.playground-page .playground-row-detail summary {
+  cursor: pointer;
+  color: #7dd3fc;
+}
+
+body.playground-page .playground-row-detail-body {
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+  color: #d7e2f0;
+}
+
+body.playground-page .playground-row-detail-body p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+body.playground-page .playground-log-list {
+  display: grid;
+  gap: 10px;
+}
+
+body.playground-page .playground-log-item {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+}
+
+body.playground-page .playground-log-item span {
+  color: rgba(148, 163, 184, 0.84);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.78rem;
+}
+
+body.playground-page .playground-log-item p {
+  margin: 0;
+  color: #d7e2f0;
+  line-height: 1.6;
+}
+
+body.playground-page .playground-log-item.is-up {
+  border-color: rgba(74, 222, 128, 0.18);
+}
+
+body.playground-page .playground-log-item.is-down {
+  border-color: rgba(248, 113, 113, 0.18);
+}
+
+body.playground-page .playground-empty-card {
+  display: grid;
+  gap: 8px;
+  text-align: center;
+}
+
+@media (max-width: 1180px) {
+  body.playground-page .playground-module-grid {
+    grid-template-columns: 1fr;
+  }
+
+  body.playground-page .playground-health-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 860px) {
+  body.playground-page .playground-hero-health,
+  body.playground-page .playground-health-grid {
+    grid-template-columns: 1fr;
+  }
+
+  body.playground-page .playground-button-row {
+    flex-direction: column;
+  }
+
+  body.playground-page .playground-button-row > * {
+    width: 100%;
+  }
+}

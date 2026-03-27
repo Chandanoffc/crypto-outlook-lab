@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Soloris Playground brings funding, EMA and RSI filters, DLMM tracking, and combined strategy views into one experimental strategy lab."
+      content="Soloris Playground is a production-grade operations workstation for perpetual alerts, DLMM opportunity scans, webhook delivery, and exportable reports."
     />
     <link rel="canonical" href="https://soloris-signals.vercel.app/playground.html" />
     <meta property="og:url" content="https://soloris-signals.vercel.app/playground.html" />
@@ -46,7 +46,7 @@
               <span class="header-feed-dot" aria-hidden="true"></span>
               Live Feeds
             </span>
-            <span class="app-pill">Strategy Lab</span>
+            <span class="app-pill">Ops Lab</span>
             <a class="header-icon-button" href="./playground.html" aria-label="Refresh Playground">
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path
@@ -68,26 +68,24 @@
           <section class="panel hero-shell playground-hero-shell">
             <div class="hero-copy">
               <p class="eyebrow">Playground</p>
-              <h1>Strategy Command Center</h1>
+              <h1>Perps Alerts and DLMM Alerts workstation</h1>
               <p class="subtitle">
-                Funding arb, EMA and RSI trend filters, DLMM position health, and combined strategy
-                ideas in one experimental Soloris workspace.
+                Operations dashboard for live perpetual scanners, DLMM pool opportunity analysis,
+                Discord delivery, scan health, alert logs, and exportable 24-hour reporting.
               </p>
             </div>
 
-            <div class="playground-hero-actions">
-              <label class="playground-inline-field">
-                Asset
-                <select id="playground-asset-picker">
-                  <option value="BTC">BTC</option>
-                  <option value="ETH">ETH</option>
-                  <option value="SOL" selected>SOL</option>
-                </select>
-              </label>
-
-              <button id="playground-alerts-toggle" class="playground-primary-button" type="button">
-                Enable Alerts
-              </button>
+            <div class="playground-hero-health">
+              <article class="playground-mini-health-card">
+                <span>Perps Runtime</span>
+                <strong id="playground-hero-perps-health">Syncing</strong>
+                <small id="playground-hero-perps-note">Loading runtime state</small>
+              </article>
+              <article class="playground-mini-health-card">
+                <span>DLMM Scanner</span>
+                <strong id="playground-hero-dlmm-health">Syncing</strong>
+                <small id="playground-hero-dlmm-note">Loading Meteora pools</small>
+              </article>
             </div>
           </section>
         </header>
@@ -96,30 +94,21 @@
           <section class="panel playground-panel">
             <div class="playground-panel-head">
               <div>
-                <p class="panel-label">Strategy Desk</p>
-                <h2>Funding, trend, and DLMM workflows</h2>
+                <p class="panel-label">Workstation</p>
+                <h2>Scanner control, alert delivery, and 24H exports</h2>
                 <p class="subtitle-inline">
-                  Imported from your attached strategy files and adapted to the Soloris shell.
+                  Perps uses the platform's existing House and Tradez engines. DLMM uses Meteora's
+                  official pool APIs and current pool state.
                 </p>
               </div>
             </div>
 
-            <nav
-              id="playground-tablist"
-              class="playground-tabbar"
-              aria-label="Playground strategy modules"
-            >
-              <button class="playground-tab is-active" type="button" data-tab-index="0">
-                Funding Rates
+            <nav id="playground-top-tabs" class="playground-tabbar" aria-label="Playground modules">
+              <button class="playground-tab is-active" type="button" data-module-tab="perps">
+                Perps Alerts
               </button>
-              <button class="playground-tab" type="button" data-tab-index="1">
-                EMA / RSI Filter
-              </button>
-              <button class="playground-tab" type="button" data-tab-index="2">
+              <button class="playground-tab" type="button" data-module-tab="dlmm">
                 DLMM Alerts
-              </button>
-              <button class="playground-tab" type="button" data-tab-index="3">
-                Combined Strategy
               </button>
             </nav>
 
