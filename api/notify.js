@@ -1,6 +1,7 @@
 const crypto = require("crypto");
 const fs = require("fs/promises");
 const path = require("path");
+const zlib = require("zlib");
 const { hasDatabase, getRuntimeState, insertAlertDelivery, upsertRuntimeState } = require("../lib/neon-db");
 const {
   applyRuntimeSettings,
@@ -31,6 +32,160 @@ function formatAlertMessage(title, event) {
   }
   const when = event?.time ? new Date(event.time).toLocaleString() : new Date().toLocaleString();
   return `${title}\n${event?.message || ""}\n${event?.pair || event?.symbol || "Signal"} • ${when}`;
+}
+
+function truncateText(value, maxLength = 280, fallback = "—") {
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  if (!text) return fallback;
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, Math.max(0, maxLength - 1)).trim()}…`;
+}
+
+function normalizeList(value) {
+  if (Array.isArray(value)) {
+    return value
+      .flatMap((item) => normalizeList(item))
+      .filter(Boolean);
+  }
+  const text = String(value ?? "").trim();
+  if (!text) return [];
+  if (text.includes("\n")) {
+    return text
+      .split("\n")
+      .map((item) => item.replace(/^[•\-]\s*/, "").trim())
+      .filter(Boolean);
+  }
+  if (text.includes("•")) {
+    return text
+      .split("•")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  if (text.includes(",") && text.length > 80) {
+    return text
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  return [text];
+}
+
+function compactJoinedList(value, maxLength = 900, fallback = "—") {
+  const items = normalizeList(value);
+  if (!items.length) return fallback;
+  const parts = [];
+  let length = 0;
+  for (const item of items) {
+    const safe = truncateText(item, 220, "");
+    if (!safe) continue;
+    const addition = parts.length ? ` • ${safe}` : safe;
+    if (length + addition.length > maxLength) break;
+    parts.push(safe);
+    length += addition.length;
+  }
+  return parts.length ? parts.join(" • ") : fallback;
+}
+
+function splitFieldChunks(value, maxLength = 1024) {
+  const items = normalizeList(value);
+  if (!items.length) return ["—"];
+  const chunks = [];
+  let current = "";
+  for (const item of items) {
+    const safe = truncateText(item, 260, "");
+    if (!safe) continue;
+    const candidate = current ? `${current} • ${safe}` : safe;
+    if (candidate.length > maxLength) {
+      if (current) chunks.push(current);
+      current = safe;
+    } else {
+      current = candidate;
+    }
+  }
+  if (current) chunks.push(current);
+  return chunks.length ? chunks : ["—"];
+}
+
+function formatNumberValue(value, digits = 2) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "—";
+  return numeric.toLocaleString(undefined, {
+    maximumFractionDigits: digits,
+  });
+}
+
+function formatPriceValue(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "—";
+  const digits = Math.abs(numeric) >= 1000 ? 2 : Math.abs(numeric) >= 1 ? 4 : 6;
+  return numeric.toLocaleString(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: digits,
+  });
+}
+
+function formatScore(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? `${Math.round(numeric)}` : "—";
+}
+
+function formatRrValue(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? `${numeric.toFixed(2)}R` : "—";
+}
+
+function safeDiscordTitle(value, fallback) {
+  return truncateText(value, 256, fallback);
+}
+
+function parseStructuredEventLines(event = {}) {
+  const sources = [event.formattedMessage, event.message].filter(Boolean);
+  const parsed = {};
+  for (const source of sources) {
+    String(source)
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .forEach((line) => {
+        const match = line.match(/^([A-Za-z0-9 /()%+\-]+):\s*(.+)$/);
+        if (!match) return;
+        const key = match[1].toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+        if (!key || parsed[key]) return;
+        parsed[key] = match[2].trim();
+      });
+  }
+  return parsed;
+}
+
+function resolveSignalContext(event = {}) {
+  const parsed = parseStructuredEventLines(event);
+  return {
+    parsed,
+    pair: formatBannerPair(event.pair || event.symbol || parsed.pair || parsed.symbol || ""),
+    direction: truncateText(event.direction || event.side || parsed.side || parsed.direction, 48, "—").toUpperCase(),
+    strategy: truncateText(event.strategy || parsed.strategy || "", 80, "—"),
+    pool: truncateText(parsed.pool || event.pool, 120, "—"),
+    timeframe: truncateText(parsed.timeframe || parsed.interval || parsed.mode, 40, "—"),
+    suggestedRange: truncateText(parsed.suggested_range || parsed.entry_zone || event.suggestedRange, 80, "—"),
+    estimatedHoldTime: truncateText(parsed.estimated_hold_time || parsed.estimatedholdtime || event.estimatedHoldTime, 80, "—"),
+    confidence:
+      Number.isFinite(Number(event.qualityScore)) ? Number(event.qualityScore) : Number(parsed.confidence),
+    entryPrice:
+      Number.isFinite(Number(event.entryPrice)) ? Number(event.entryPrice) : Number(parsed.entry),
+    stopLoss:
+      Number.isFinite(Number(event.stopLoss)) ? Number(event.stopLoss) : Number(parsed.sl || parsed.stop || parsed.stop_loss),
+    tp1:
+      Number.isFinite(Number(event.tp1)) ? Number(event.tp1) : Number(parsed.tp1 || parsed.take_profit),
+    tp2:
+      Number.isFinite(Number(event.tp2)) ? Number(event.tp2) : Number(parsed.tp2),
+    rr:
+      Number.isFinite(Number(event.rr)) ? Number(event.rr) : Number(parsed.rr),
+    leverage: truncateText(parsed.leverage || event.leverage, 32, "—"),
+    riskNotes: event.riskNotes || parsed.risk_notes,
+    keyMetrics: event.importantParametersToMonitor || parsed.important_parameters_to_monitor || parsed.key_metrics,
+    qualificationReason: event.qualificationReason || parsed.qualification_reason || parsed.reason || parsed.notes,
+    detectedAt: Number(event.time) || Date.now(),
+  };
 }
 
 function inferBaseUrl(req) {
@@ -502,19 +657,81 @@ function createNativeBannerFrame(event, flashText) {
   const rightWidth = measureTextWidth(topLine.right, 2);
   drawText(frame, topLine.right, Math.max(150, BANNER_WIDTH - 92 - rightWidth), 52, 2, 6);
   drawCenteredText(frame, flashText, 142, 6, 6);
-  drawCenteredText(frame, "SOLORIS SIGNALS", 222, 2, 7);
+  const secondary = sanitizeBannerText(
+    String(event?.type || "").toLowerCase() === "dlmm"
+      ? event?.strategy || "DLMM ALERT"
+      : event?.direction || event?.strategy || "SOLORIS SIGNALS",
+    "SOLORIS SIGNALS"
+  );
+  drawCenteredText(frame, secondary, 222, 2, 7);
   drawText(frame, "SOLARIS-SIGNALS.VERCEL.APP", 96, BANNER_HEIGHT - 51, 1, 7);
   drawText(frame, resolveNativeBannerLabel(event), BANNER_WIDTH - 212, BANNER_HEIGHT - 51, 1, 6);
   return frame;
 }
 
+function crc32(buffer) {
+  let crc = 0xffffffff;
+  for (let index = 0; index < buffer.length; index += 1) {
+    crc ^= buffer[index];
+    for (let bit = 0; bit < 8; bit += 1) {
+      const mask = -(crc & 1);
+      crc = (crc >>> 1) ^ (0xedb88320 & mask);
+    }
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function createPngChunk(type, data) {
+  const typeBuffer = Buffer.from(type, "ascii");
+  const length = Buffer.alloc(4);
+  length.writeUInt32BE(data.length, 0);
+  const crcBuffer = Buffer.alloc(4);
+  const crcValue = crc32(Buffer.concat([typeBuffer, data]));
+  crcBuffer.writeUInt32BE(crcValue >>> 0, 0);
+  return Buffer.concat([length, typeBuffer, data, crcBuffer]);
+}
+
+function encodePng(frame) {
+  const raw = Buffer.alloc((BANNER_WIDTH * 4 + 1) * BANNER_HEIGHT);
+  for (let y = 0; y < BANNER_HEIGHT; y += 1) {
+    const rowStart = y * (BANNER_WIDTH * 4 + 1);
+    raw[rowStart] = 0;
+    for (let x = 0; x < BANNER_WIDTH; x += 1) {
+      const colorIndex = frame[y * BANNER_WIDTH + x] || 0;
+      const [red, green, blue] = BANNER_PALETTE[colorIndex] || BANNER_PALETTE[0];
+      const pixelStart = rowStart + 1 + x * 4;
+      raw[pixelStart] = red;
+      raw[pixelStart + 1] = green;
+      raw[pixelStart + 2] = blue;
+      raw[pixelStart + 3] = 255;
+    }
+  }
+
+  const signature = Buffer.from("89504e470d0a1a0a", "hex");
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(BANNER_WIDTH, 0);
+  ihdr.writeUInt32BE(BANNER_HEIGHT, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 6;
+  ihdr[10] = 0;
+  ihdr[11] = 0;
+  ihdr[12] = 0;
+  const idat = zlib.deflateSync(raw, { level: 9 });
+  return Buffer.concat([
+    signature,
+    createPngChunk("IHDR", ihdr),
+    createPngChunk("IDAT", idat),
+    createPngChunk("IEND", Buffer.alloc(0)),
+  ]);
+}
+
 function generateNativeEntryBanner(event = {}) {
-  const flashFrames = buildBannerFlashFrames(event);
-  const frames = flashFrames.map((text) => createNativeBannerFrame(event, text));
+  const pair = formatBannerPair(event?.pair || event?.symbol) || resolveNativeBannerLabel(event);
+  const frame = createNativeBannerFrame(event, sanitizeBannerText(pair, "SIGNAL"));
   return {
-    filename: `soloris-${String(event?.type || "signal").toLowerCase() || "signal"}-banner.gif`,
-    buffer: encodeGif(frames, BANNER_DELAY_CS),
-    mimeType: "image/gif",
+    filename: `soloris-${String(event?.type || "signal").toLowerCase() || "signal"}-banner.png`,
+    buffer: encodePng(frame),
+    mimeType: "image/png",
   };
 }
 
@@ -574,7 +791,16 @@ async function loadAlertBanner(event, meta = {}) {
   const nativeSignalType =
     type === "house" || type === "tradez" || type === "perps" || type === "dlmm";
   if (nativeSignalType && (eventType === "entry_opened" || eventType === "test_signal" || eventType === "scanner_signal")) {
-    return generateNativeEntryBanner(event);
+    try {
+      return generateNativeEntryBanner(event);
+    } catch (error) {
+      console.error("native banner generation failed", {
+        signalType: type || "unknown",
+        eventType,
+        error: error.message || String(error),
+      });
+      return null;
+    }
   }
 
   const filename = resolveAlertBannerFile(event, meta);
@@ -589,33 +815,137 @@ async function loadAlertBanner(event, meta = {}) {
       mimeType: ext === ".gif" ? "image/gif" : "image/png",
     };
   } catch (error) {
+    console.error("alert banner file load failed", {
+      filename,
+      error: error.message || String(error),
+    });
     return null;
   }
 }
 
-function buildDiscordPayload(title, event, bannerAttachment) {
-  const message = formatAlertMessage(title, event);
-  if (!bannerAttachment) {
-    return {
-      content: message,
+function resolveDiscordColor(event = {}, context = {}) {
+  const type = String(event?.type || "").toLowerCase();
+  const strategy = String(context.strategy || event?.strategy || "").toLowerCase();
+  if (type === "dlmm") {
+    if (strategy.includes("curve")) return 0x22d3ee;
+    if (strategy.includes("bidask")) return 0xf59e0b;
+    if (strategy.includes("spot")) return 0x84cc16;
+    return Number(context.confidence) >= 80 ? 0x22d3ee : 0x38bdf8;
+  }
+  const direction = String(context.direction || event?.direction || event?.side || "").toLowerCase();
+  if (direction === "short") return 0xef4444;
+  if (direction === "long") return 0x22d3ee;
+  return Number(context.confidence) >= 80 ? 0xd4af37 : 0x38bdf8;
+}
+
+function pushEmbedField(fields, name, value, inline = false) {
+  const safeName = truncateText(name, 256, "Field");
+  const safeValue = truncateText(value, 1024, "—");
+  if (!safeValue || safeValue === "—") return;
+  fields.push({
+    name: safeName,
+    value: safeValue,
+    inline,
+  });
+}
+
+function pushChunkedEmbedField(fields, name, value, inline = false) {
+  const chunks = splitFieldChunks(value);
+  chunks.forEach((chunk, index) => {
+    pushEmbedField(fields, index === 0 ? name : `${name} (${index + 1})`, chunk, inline);
+  });
+}
+
+function buildDlmmDiscordEmbed(event = {}, bannerAttachment) {
+  const context = resolveSignalContext(event);
+  const fields = [];
+  pushEmbedField(fields, "Strategy", `**${context.strategy}**`, true);
+  pushEmbedField(fields, "Pair", context.pair, true);
+  pushEmbedField(fields, "Pool", context.pool);
+  pushEmbedField(fields, "Suggested Range", context.suggestedRange, true);
+  pushEmbedField(fields, "Estimated Hold Time", context.estimatedHoldTime, true);
+  pushEmbedField(fields, "Confidence", formatScore(context.confidence), true);
+  pushChunkedEmbedField(fields, "Risk Notes", context.riskNotes);
+  pushChunkedEmbedField(fields, "Key Metrics", context.keyMetrics);
+  pushChunkedEmbedField(fields, "Qualification Reason", context.qualificationReason);
+
+  const embed = {
+    title: safeDiscordTitle("NEW DLMM ALERT", "NEW DLMM ALERT"),
+    description: truncateText(context.pair || "DLMM Opportunity", 4096, "DLMM Opportunity"),
+    color: resolveDiscordColor(event, context),
+    fields,
+    footer: {
+      text: "Soloris Signals",
+    },
+    timestamp: new Date(context.detectedAt || Date.now()).toISOString(),
+  };
+
+  if (bannerAttachment) {
+    embed.image = {
+      url: `attachment://${bannerAttachment.filename}`,
     };
   }
 
+  return embed;
+}
+
+function buildNativeSignalDiscordEmbed(event = {}, bannerAttachment) {
+  const context = resolveSignalContext(event);
+  const fields = [];
+  pushEmbedField(fields, "Direction", context.direction, true);
+  pushEmbedField(fields, "Strategy", `**${context.strategy}**`, true);
+  pushEmbedField(fields, "Timeframe", context.timeframe, true);
+  pushEmbedField(fields, "Confidence", formatScore(context.confidence), true);
+  pushEmbedField(fields, "Entry", formatPriceValue(context.entryPrice), true);
+  pushEmbedField(fields, "Stop", formatPriceValue(context.stopLoss), true);
+  pushEmbedField(fields, "TP1", formatPriceValue(context.tp1), true);
+  if (Number.isFinite(context.tp2)) pushEmbedField(fields, "TP2", formatPriceValue(context.tp2), true);
+  if (Number.isFinite(context.rr)) pushEmbedField(fields, "RR", formatRrValue(context.rr), true);
+  if (context.leverage && context.leverage !== "—") pushEmbedField(fields, "Leverage", context.leverage, true);
+  pushChunkedEmbedField(fields, "Qualification Reason", context.qualificationReason);
+  if (context.keyMetrics !== "—") pushChunkedEmbedField(fields, "Key Metrics", context.keyMetrics);
+
+  const type = String(event?.type || "").toLowerCase();
+  const baseLabel = type === "dlmm" ? "NEW DLMM ALERT" : "NEW SIGNAL";
+  const embed = {
+    title: safeDiscordTitle([baseLabel, context.pair].filter(Boolean).join(" • "), baseLabel),
+    description: truncateText(
+      [context.pair, context.direction !== "—" ? context.direction : "", context.strategy !== "—" ? context.strategy : ""]
+        .filter(Boolean)
+        .join(" • "),
+      4096,
+      context.pair || "Signal"
+    ),
+    color: resolveDiscordColor(event, context),
+    fields,
+    footer: {
+      text: "Soloris Signals",
+    },
+    timestamp: new Date(context.detectedAt || Date.now()).toISOString(),
+  };
+
+  if (bannerAttachment) {
+    embed.image = {
+      url: `attachment://${bannerAttachment.filename}`,
+    };
+  }
+
+  return embed;
+}
+
+function buildDiscordPayload(title, event, bannerAttachment) {
+  const type = String(event?.type || "").toLowerCase();
+  const embed =
+    type === "dlmm"
+      ? buildDlmmDiscordEmbed(event, bannerAttachment)
+      : buildNativeSignalDiscordEmbed(event, bannerAttachment);
+
   return {
-    content: message,
-    embeds: [
-      {
-        color:
-          event?.side === "Short"
-            ? 0xef4444
-            : Number(event?.qualityScore) > 140
-              ? 0xd4af37
-              : 0x22d3ee,
-        image: {
-          url: `attachment://${bannerAttachment.filename}`,
-        },
-      },
-    ],
+    username: "Soloris Signals",
+    allowed_mentions: {
+      parse: [],
+    },
+    embeds: [embed],
   };
 }
 
@@ -637,32 +967,53 @@ function buildTelegramCaption(title, event) {
 }
 
 async function sendDiscord(webhookUrl, title, event, bannerAttachment) {
-  let response;
+  const postPayload = async (attachment) => {
+    let response;
+    if (attachment) {
+      const form = new FormData();
+      form.append("payload_json", JSON.stringify(buildDiscordPayload(title, event, attachment)));
+      form.append(
+        "files[0]",
+        new Blob([attachment.buffer], { type: attachment.mimeType }),
+        attachment.filename
+      );
+      response = await fetch(webhookUrl, {
+        method: "POST",
+        body: form,
+      });
+    } else {
+      response = await fetch(webhookUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+        },
+        body: JSON.stringify(buildDiscordPayload(title, event, null)),
+      });
+    }
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      throw new Error(
+        `Discord webhook failed (${response.status})${detail ? `: ${truncateText(detail, 240, "")}` : ""}`
+      );
+    }
+  };
+
   if (bannerAttachment) {
-    const form = new FormData();
-    form.append("payload_json", JSON.stringify(buildDiscordPayload(title, event, bannerAttachment)));
-    form.append(
-      "files[0]",
-      new Blob([bannerAttachment.buffer], { type: bannerAttachment.mimeType }),
-      bannerAttachment.filename
-    );
-    response = await fetch(webhookUrl, {
-      method: "POST",
-      body: form,
-    });
-  } else {
-    response = await fetch(webhookUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json; charset=utf-8",
-      },
-      body: JSON.stringify(buildDiscordPayload(title, event, null)),
-    });
+    try {
+      await postPayload(bannerAttachment);
+      return;
+    } catch (error) {
+      console.error("discord banner upload failed, retrying without banner", {
+        filename: bannerAttachment.filename,
+        mimeType: bannerAttachment.mimeType,
+        size: bannerAttachment.buffer?.length || 0,
+        error: error.message || String(error),
+      });
+    }
   }
 
-  if (!response.ok) {
-    throw new Error(`Discord webhook failed (${response.status})`);
-  }
+  await postPayload(null);
 }
 
 async function sendTelegram(botToken, chatId, title, event, bannerAttachment) {
