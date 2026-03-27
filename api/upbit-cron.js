@@ -6,6 +6,11 @@ const {
   runTradezScan,
   sanitizeRuntimeState: sanitizeTradezRuntimeState,
 } = require("../lib/tradez-runtime");
+const {
+  defaultRuntimeState: defaultPlaygroundRuntimeState,
+  runPlaygroundScan,
+  sanitizeRuntimeState: sanitizePlaygroundRuntimeState,
+} = require("../lib/playground-runtime");
 
 const ALERT_WINDOW_MS = 5 * 60 * 1000;
 
@@ -133,6 +138,33 @@ async function runTradezBackgroundScan() {
   };
 }
 
+async function runPlaygroundBackgroundScan(req) {
+  if (!hasDatabase()) {
+    return {
+      ok: true,
+      skipped: true,
+      reason: "DATABASE_URL not configured.",
+    };
+  }
+
+  const stored = await getRuntimeState("playground_ops");
+  const currentState =
+    stored.found && stored.state ? sanitizePlaygroundRuntimeState(stored.state) : defaultPlaygroundRuntimeState();
+  const forwardedProto = req.headers["x-forwarded-proto"];
+  const forwardedHost = req.headers["x-forwarded-host"];
+  const proto = forwardedProto ? String(forwardedProto).split(",")[0].trim() : "https";
+  const host = forwardedHost || req.headers.host || "soloris-signals.vercel.app";
+  const baseUrl = `${proto}://${host}`;
+  const result = await runPlaygroundScan(currentState, { manual: false, baseUrl });
+  const saved = await upsertRuntimeState("playground_ops", result.state);
+
+  return {
+    ok: true,
+    updatedAt: saved.updatedAt,
+    summary: result.summary,
+  };
+}
+
 module.exports = async function handler(req, res) {
   if (req.method !== "GET" && req.method !== "POST") {
     buildJsonResponse(res, 405, {
@@ -155,12 +187,17 @@ module.exports = async function handler(req, res) {
     if (!destinations.discordWebhook && !(destinations.telegramToken && destinations.telegramChatId)) {
       const houseAutoTrade = await houseScanPromise;
       const tradezAutoTrade = await tradezScanPromise;
+      const playgroundOps = await runPlaygroundBackgroundScan(req).catch((error) => ({
+        ok: false,
+        error: error.message || "Playground background scan failed.",
+      }));
       buildJsonResponse(res, 200, {
         ok: true,
         skipped: true,
         reason: "No Upbit delivery destinations configured.",
         houseAutoTrade,
         tradezAutoTrade,
+        playgroundOps,
       });
       return;
     }
@@ -201,6 +238,10 @@ module.exports = async function handler(req, res) {
 
     const houseAutoTrade = await houseScanPromise;
     const tradezAutoTrade = await tradezScanPromise;
+    const playgroundOps = await runPlaygroundBackgroundScan(req).catch((error) => ({
+      ok: false,
+      error: error.message || "Playground background scan failed.",
+    }));
 
     buildJsonResponse(res, 200, {
       ok: true,
@@ -210,6 +251,7 @@ module.exports = async function handler(req, res) {
       results,
       houseAutoTrade,
       tradezAutoTrade,
+      playgroundOps,
     });
   } catch (error) {
     buildJsonResponse(res, error.statusCode || 500, {

@@ -33,6 +33,7 @@ function defaultModuleWebhookHealth() {
 
 function loadState() {
   const fallback = {
+    backgroundAvailable: false,
     activeModule: PERPS_MODULE,
     perps: {
       scannerEnabled: true,
@@ -80,6 +81,7 @@ function loadState() {
   try {
     const stored = JSON.parse(window.localStorage.getItem(PLAYGROUND_STORAGE_KEY) || "{}");
     return {
+      backgroundAvailable: Boolean(stored.backgroundAvailable),
       activeModule: stored.activeModule === DLMM_MODULE ? DLMM_MODULE : PERPS_MODULE,
       perps: {
         ...fallback.perps,
@@ -126,6 +128,7 @@ function loadState() {
 
 function persistState() {
   const payload = {
+    backgroundAvailable: Boolean(state.backgroundAvailable),
     activeModule: state.activeModule,
     perps: {
       scannerEnabled: state.perps.scannerEnabled,
@@ -451,6 +454,83 @@ function pushSentId(moduleKey, id) {
   }
 }
 
+function mergePlaygroundRuntimeState(payload) {
+  const remoteState = payload?.state;
+  if (!remoteState) return;
+  state.backgroundAvailable = Boolean(payload.backgroundAvailable);
+
+  if (remoteState.perps) {
+    state.perps.scannerEnabled = remoteState.perps.scannerEnabled !== false;
+    state.perps.scanIntervalMs = Number(remoteState.perps.scanIntervalMs) || state.perps.scanIntervalMs;
+    state.perps.webhook = String(remoteState.perps.webhook || state.perps.webhook || "").trim();
+    state.perps.webhookHealth = remoteState.perps.webhookHealth || state.perps.webhookHealth;
+    state.perps.scanLog = Array.isArray(remoteState.perps.scanLog) ? remoteState.perps.scanLog.slice(0, MAX_LOG_ENTRIES) : state.perps.scanLog;
+    state.perps.alertLog = Array.isArray(remoteState.perps.alertLog) ? remoteState.perps.alertLog.slice(0, MAX_LOG_ENTRIES) : state.perps.alertLog;
+    state.perps.sentIds = Array.isArray(remoteState.perps.sentIds) ? remoteState.perps.sentIds.slice(0, MAX_ALERT_IDS) : state.perps.sentIds;
+    state.perps.lastSyncAt = Number(remoteState.perps.lastSyncAt) || state.perps.lastSyncAt;
+    state.perps.lastError = remoteState.perps.lastError || "";
+  }
+
+  if (remoteState.dlmm) {
+    state.dlmm.scannerEnabled = remoteState.dlmm.scannerEnabled !== false;
+    state.dlmm.scanIntervalMs = Number(remoteState.dlmm.scanIntervalMs) || state.dlmm.scanIntervalMs;
+    state.dlmm.webhook = String(remoteState.dlmm.webhook || state.dlmm.webhook || "").trim();
+    state.dlmm.webhookHealth = remoteState.dlmm.webhookHealth || state.dlmm.webhookHealth;
+    state.dlmm.recentCalls = Array.isArray(remoteState.dlmm.recentCalls) ? remoteState.dlmm.recentCalls.slice(0, 160) : state.dlmm.recentCalls;
+    state.dlmm.scanLog = Array.isArray(remoteState.dlmm.scanLog) ? remoteState.dlmm.scanLog.slice(0, MAX_LOG_ENTRIES) : state.dlmm.scanLog;
+    state.dlmm.alertLog = Array.isArray(remoteState.dlmm.alertLog) ? remoteState.dlmm.alertLog.slice(0, MAX_LOG_ENTRIES) : state.dlmm.alertLog;
+    state.dlmm.sentIds = Array.isArray(remoteState.dlmm.sentIds) ? remoteState.dlmm.sentIds.slice(0, MAX_ALERT_IDS) : state.dlmm.sentIds;
+    state.dlmm.lastSyncAt = Number(remoteState.dlmm.lastSyncAt) || state.dlmm.lastSyncAt;
+    state.dlmm.lastError = remoteState.dlmm.lastError || "";
+    state.dlmm.protocolMetrics = remoteState.dlmm.protocolMetrics || state.dlmm.protocolMetrics;
+    state.dlmm.pools = Array.isArray(remoteState.dlmm.pools) && remoteState.dlmm.pools.length
+      ? remoteState.dlmm.pools
+      : state.dlmm.pools;
+    if (!state.dlmm.selectedPoolAddress && remoteState.dlmm.selectedPoolAddress) {
+      state.dlmm.selectedPoolAddress = remoteState.dlmm.selectedPoolAddress;
+    }
+  }
+}
+
+async function fetchPlaygroundRuntimeState() {
+  try {
+    const payload = await fetchJson("/api/playground-runtime");
+    mergePlaygroundRuntimeState(payload);
+    return payload;
+  } catch (_error) {
+    state.backgroundAvailable = false;
+    return null;
+  }
+}
+
+async function syncPlaygroundRuntimeSettings(moduleKey = null) {
+  try {
+    const settings = {};
+    if (!moduleKey || moduleKey === PERPS_MODULE) {
+      settings.perps = {
+        scannerEnabled: state.perps.scannerEnabled,
+        scanIntervalMs: state.perps.scanIntervalMs,
+        webhook: state.perps.webhook,
+      };
+    }
+    if (!moduleKey || moduleKey === DLMM_MODULE) {
+      settings.dlmm = {
+        scannerEnabled: state.dlmm.scannerEnabled,
+        scanIntervalMs: state.dlmm.scanIntervalMs,
+        webhook: state.dlmm.webhook,
+      };
+    }
+    const payload = await postJson("/api/playground-runtime", {
+      action: "settings",
+      settings,
+    });
+    mergePlaygroundRuntimeState(payload);
+    return payload;
+  } catch (_error) {
+    return null;
+  }
+}
+
 async function fetchJson(url, options = {}) {
   const response = await fetch(url, options);
   const payload = await response.json().catch(() => ({}));
@@ -532,7 +612,7 @@ function schedulePerpsScanner() {
   if (perpsTimer) window.clearInterval(perpsTimer);
   if (!state.perps.scannerEnabled) return;
   perpsTimer = window.setInterval(() => {
-    refreshPerpsData({ fullScan: true, source: "scheduled" });
+    refreshPerpsData({ fullScan: !state.backgroundAvailable, source: "scheduled" });
   }, state.perps.scanIntervalMs);
 }
 
@@ -884,46 +964,56 @@ async function sendWebhookAlert(moduleKey, title, payload, meta) {
 
 async function testWebhook(moduleKey) {
   try {
-    const response = await sendWebhookAlert(
-      moduleKey,
-      moduleKey === PERPS_MODULE ? "Soloris Perps Alert Test" : "Soloris DLMM Alert Test",
-      moduleKey === PERPS_MODULE
-        ? {
-            pair: selectedPerpsSymbol() || "BTCUSDT",
-            direction: "Long",
-            strategy: "Test Signal",
-            confidence: 88,
-            entry: 100,
-            stop: 96,
-            takeProfit: 108,
-            rr: 2,
-            timeframe: "1H",
-            timestamp: Date.now(),
-            qualificationReason: "Webhook validation test from Playground",
-          }
-        : {
-            pair: selectedPool()?.pairLabel || "SOL/USDC",
-            pool: selectedPool()?.address || "manual-test",
-            strategy: "Curve",
-            binStep: 20,
-            suggestedRange: "±10%",
-            estimatedHoldTime: "1-3 days",
-            riskNotes: ["Webhook validation test"],
-            importantParametersToMonitor: ["TVL", "24H volume", "Fee/TVL ratio"],
-            confidence: 82,
-            qualificationReason: ["Webhook validation test from Playground"],
-          },
-      {
-        source: `playground_${moduleKey}`,
-        strategy: moduleKey === PERPS_MODULE ? "perps_alerts" : "dlmm_alerts",
-        eventType: "test_signal",
-      }
-    );
-    updateWebhookHealth(moduleKey, "ok", response.ok ? "Webhook test sent." : "Webhook test completed.");
-    pushModuleLog(moduleKey, "alertLog", {
-      tone: "up",
-      message: "Webhook test sent successfully.",
-    });
+    await syncPlaygroundRuntimeSettings(moduleKey);
+    if (state.backgroundAvailable) {
+      const response = await postJson("/api/playground-runtime", {
+        action: "test",
+        module: moduleKey,
+      });
+      mergePlaygroundRuntimeState(response);
+      updateWebhookHealth(moduleKey, "ok", "Webhook test sent.");
+    } else {
+      const response = await sendWebhookAlert(
+        moduleKey,
+        moduleKey === PERPS_MODULE ? "Soloris Perps Alert Test" : "Soloris DLMM Alert Test",
+        moduleKey === PERPS_MODULE
+          ? {
+              pair: selectedPerpsSymbol() || "BTCUSDT",
+              direction: "Long",
+              strategy: "Test Signal",
+              confidence: 88,
+              entry: 100,
+              stop: 96,
+              takeProfit: 108,
+              rr: 2,
+              timeframe: "1H",
+              timestamp: Date.now(),
+              qualificationReason: "Webhook validation test from Playground",
+            }
+          : {
+              pair: selectedPool()?.pairLabel || "SOL/USDC",
+              pool: selectedPool()?.address || "manual-test",
+              strategy: "Curve",
+              binStep: 20,
+              suggestedRange: "±10%",
+              estimatedHoldTime: "1-3 days",
+              riskNotes: ["Webhook validation test"],
+              importantParametersToMonitor: ["TVL", "24H volume", "Fee/TVL ratio"],
+              confidence: 82,
+              qualificationReason: ["Webhook validation test from Playground"],
+            },
+        {
+          source: `playground_${moduleKey}`,
+          strategy: moduleKey === PERPS_MODULE ? "perps_alerts" : "dlmm_alerts",
+          eventType: "test_signal",
+        }
+      );
+      updateWebhookHealth(moduleKey, "ok", response.ok ? "Webhook test sent." : "Webhook test completed.");
+      pushModuleLog(moduleKey, "alertLog", {
+        tone: "up",
+        message: "Webhook test sent successfully.",
+      });
+    }
   } catch (error) {
     updateWebhookHealth(moduleKey, "down", error.message || "Webhook test failed.");
     pushModuleLog(moduleKey, "alertLog", {
@@ -954,17 +1044,32 @@ async function refreshPerpsData({ fullScan = false, source = "manual" } = {}) {
   render();
 
   try {
+    await fetchPlaygroundRuntimeState();
     if (fullScan) {
       await Promise.allSettled([
         postJson("/api/house-runtime", { action: "scan" }),
         postJson("/api/tradez-runtime", { action: "scan" }),
       ]);
+      if (state.backgroundAvailable) {
+        await postJson("/api/playground-runtime", {
+          action: "scan",
+          modules: [PERPS_MODULE],
+          settings: {
+            perps: {
+              scannerEnabled: state.perps.scannerEnabled,
+              scanIntervalMs: state.perps.scanIntervalMs,
+              webhook: state.perps.webhook,
+            },
+          },
+        }).catch(() => null);
+      }
     }
 
-    const [house, tradez, universe] = await Promise.all([
+    const [house, tradez, universe, playgroundRuntime] = await Promise.all([
       fetchJson("/api/house-runtime"),
       fetchJson("/api/tradez-runtime"),
       fetchJson("/api/arena-universe"),
+      fetchPlaygroundRuntimeState(),
     ]);
 
     state.perps.runtime.house = house;
@@ -979,17 +1084,18 @@ async function refreshPerpsData({ fullScan = false, source = "manual" } = {}) {
       state.perps.selectedSymbol = state.perps.runtime.universe[0].symbol;
     }
 
-    pushModuleLog(PERPS_MODULE, "scanLog", {
-      tone: "neutral",
-      message:
-        source === "scheduled"
-          ? "Scheduled perps refresh completed."
-          : fullScan
-            ? "Manual perps runtime scan completed."
-            : "Perps runtime state refreshed.",
-    });
-
-    await maybeSendPerpsAlerts();
+    if (!playgroundRuntime?.backgroundAvailable) {
+      pushModuleLog(PERPS_MODULE, "scanLog", {
+        tone: "neutral",
+        message:
+          source === "scheduled"
+            ? "Scheduled perps refresh completed."
+            : fullScan
+              ? "Manual perps runtime scan completed."
+              : "Perps runtime state refreshed.",
+      });
+      await maybeSendPerpsAlerts();
+    }
     updateHeroHealth();
   } catch (error) {
     state.perps.lastError = error.message || "Unable to refresh perps data.";
@@ -1006,6 +1112,7 @@ async function refreshPerpsData({ fullScan = false, source = "manual" } = {}) {
 }
 
 async function maybeSendPerpsAlerts() {
+  if (state.backgroundAvailable) return;
   if (!state.perps.scannerEnabled || !isDiscordWebhook(state.perps.webhook)) return;
 
   const calls = mergePerpsCalls()
@@ -1139,6 +1246,7 @@ function updateDlmmCalls(opportunities) {
 }
 
 async function maybeSendDlmmAlerts() {
+  if (state.backgroundAvailable) return;
   if (!state.dlmm.scannerEnabled || !isDiscordWebhook(state.dlmm.webhook)) return;
   const newCalls = state.dlmm.recentCalls.filter(
     (call) =>
@@ -1194,10 +1302,25 @@ async function refreshDlmmData({ source = "manual" } = {}) {
   render();
 
   try {
+    await fetchPlaygroundRuntimeState();
+    if (state.backgroundAvailable && source === "manual") {
+      await postJson("/api/playground-runtime", {
+        action: "scan",
+        modules: [DLMM_MODULE],
+        settings: {
+          dlmm: {
+            scannerEnabled: state.dlmm.scannerEnabled,
+            scanIntervalMs: state.dlmm.scanIntervalMs,
+            webhook: state.dlmm.webhook,
+          },
+        },
+      }).catch(() => null);
+    }
     const query = String(state.dlmm.selectorQuery || "").trim().toLowerCase();
-    const [rawPools, protocolMetrics] = await Promise.all([
+    const [rawPools, protocolMetrics, playgroundRuntime] = await Promise.all([
       fetchDlmmPools(150),
       fetchDlmmProtocolMetrics(),
+      fetchPlaygroundRuntimeState(),
     ]);
     state.dlmm.pools = rawPools
       .map((pool) => shapeDlmmPool(pool))
@@ -1219,16 +1342,17 @@ async function refreshDlmmData({ source = "manual" } = {}) {
       state.dlmm.selectedPoolAddress = state.dlmm.pools[0].address;
     }
 
-    updateDlmmCalls(state.dlmm.pools);
-    pushModuleLog(DLMM_MODULE, "scanLog", {
-      tone: "neutral",
-      message:
-        source === "scheduled"
-          ? "Scheduled DLMM scanner refresh completed."
-          : "DLMM pool state refreshed.",
-    });
-
-    await maybeSendDlmmAlerts();
+    if (!playgroundRuntime?.backgroundAvailable) {
+      updateDlmmCalls(state.dlmm.pools);
+      pushModuleLog(DLMM_MODULE, "scanLog", {
+        tone: "neutral",
+        message:
+          source === "scheduled"
+            ? "Scheduled DLMM scanner refresh completed."
+            : "DLMM pool state refreshed.",
+      });
+      await maybeSendDlmmAlerts();
+    }
     updateHeroHealth();
   } catch (error) {
     state.dlmm.lastError = error.message || "Unable to refresh DLMM pools.";
@@ -1926,6 +2050,7 @@ async function handleActionClick(target) {
   if (action === "toggle-perps-scanner") {
     state.perps.scannerEnabled = !state.perps.scannerEnabled;
     await syncPerpsScannerState(state.perps.scannerEnabled);
+    await syncPlaygroundRuntimeSettings(PERPS_MODULE);
     schedulePerpsScanner();
     pushModuleLog(PERPS_MODULE, "scanLog", {
       tone: state.perps.scannerEnabled ? "up" : "neutral",
@@ -1961,6 +2086,7 @@ async function handleActionClick(target) {
 
   if (action === "toggle-dlmm-scanner") {
     state.dlmm.scannerEnabled = !state.dlmm.scannerEnabled;
+    await syncPlaygroundRuntimeSettings(DLMM_MODULE);
     scheduleDlmmScanner();
     pushModuleLog(DLMM_MODULE, "scanLog", {
       tone: state.dlmm.scannerEnabled ? "up" : "neutral",
@@ -2053,14 +2179,31 @@ function bindEvents() {
     handleInputChange(event.target);
   });
 
-  document.addEventListener("change", (event) => {
-    handleSelectChange(event.target);
+  document.addEventListener("change", async (event) => {
+    const handled = handleSelectChange(event.target);
+    if (event.target.id === "playground-perps-webhook") {
+      await syncPlaygroundRuntimeSettings(PERPS_MODULE);
+      return;
+    }
+    if (event.target.id === "playground-dlmm-webhook") {
+      await syncPlaygroundRuntimeSettings(DLMM_MODULE);
+      return;
+    }
+    if (handled) {
+      if (event.target.id === "playground-perps-interval") {
+        await syncPlaygroundRuntimeSettings(PERPS_MODULE);
+      } else if (event.target.id === "playground-dlmm-interval") {
+        await syncPlaygroundRuntimeSettings(DLMM_MODULE);
+      }
+    }
   });
 }
 
 async function init() {
   bindEvents();
   render();
+  await fetchPlaygroundRuntimeState();
+  await syncPlaygroundRuntimeSettings();
   await Promise.allSettled([
     refreshPerpsData({ source: "init" }),
     refreshDlmmData({ source: "init" }),

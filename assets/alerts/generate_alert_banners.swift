@@ -46,6 +46,24 @@ let banners: [BannerConfig] = [
         motionStyle: .siren
     ),
     BannerConfig(
+        name: "new-perps-alert",
+        accentStart: NSColor(calibratedRed: 0.18, green: 0.83, blue: 0.98, alpha: 1),
+        accentEnd: NSColor(calibratedRed: 0.24, green: 0.96, blue: 0.88, alpha: 1),
+        edgeGlow: NSColor(calibratedRed: 0.18, green: 0.83, blue: 0.98, alpha: 0.88),
+        title: "NEW PERPS ALERT",
+        subtitle: "Soloris Signals",
+        motionStyle: .siren
+    ),
+    BannerConfig(
+        name: "new-dlmm-alert",
+        accentStart: NSColor(calibratedRed: 0.18, green: 0.83, blue: 0.98, alpha: 1),
+        accentEnd: NSColor(calibratedRed: 0.24, green: 0.96, blue: 0.88, alpha: 1),
+        edgeGlow: NSColor(calibratedRed: 0.18, green: 0.83, blue: 0.98, alpha: 0.88),
+        title: "NEW DLMM ALERT",
+        subtitle: "Soloris Signals",
+        motionStyle: .siren
+    ),
+    BannerConfig(
         name: "profits",
         accentStart: NSColor(calibratedRed: 0.08, green: 0.73, blue: 0.52, alpha: 1),
         accentEnd: NSColor(calibratedRed: 0.34, green: 0.95, blue: 0.64, alpha: 1),

@@ -427,6 +427,14 @@ function resolveAlertBannerFile(event, meta = {}) {
   if (!eventType && !isProtected) return "";
 
   if (eventType === "entry_opened" || eventType === "test_signal") {
+    if (signalType === "perps") return "new-perps-alert.gif";
+    if (signalType === "dlmm") return "new-dlmm-alert.gif";
+    const quality = Number(event?.qualityScore) || 0;
+    return quality > 140 ? "new-signal-gold.gif" : "new-signal-cyan.gif";
+  }
+  if (eventType === "scanner_signal") {
+    if (signalType === "perps") return "new-perps-alert.gif";
+    if (signalType === "dlmm") return "new-dlmm-alert.gif";
     const quality = Number(event?.qualityScore) || 0;
     return quality > 140 ? "new-signal-gold.gif" : "new-signal-cyan.gif";
   }
@@ -443,14 +451,6 @@ function resolveAlertBannerFile(event, meta = {}) {
 }
 
 async function loadAlertBanner(event, meta = {}) {
-  const eventType = String(meta?.eventType || event?.deliveryType || "").toLowerCase();
-  if (eventType === "entry_opened" || eventType === "test_signal" || eventType === "scanner_signal") {
-    const signalType = String(event?.type || "").toLowerCase();
-    if (["house", "tradez", "perps", "dlmm"].includes(signalType)) {
-      return generateNativeEntryBanner(event);
-    }
-  }
-
   const filename = resolveAlertBannerFile(event, meta);
   if (!filename) return null;
 
