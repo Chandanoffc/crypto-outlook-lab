@@ -444,7 +444,7 @@ function resolveAlertBannerFile(event, meta = {}) {
 
 async function loadAlertBanner(event, meta = {}) {
   const eventType = String(meta?.eventType || event?.deliveryType || "").toLowerCase();
-  if (eventType === "entry_opened" || eventType === "test_signal") {
+  if (eventType === "entry_opened" || eventType === "test_signal" || eventType === "scanner_signal") {
     const signalType = String(event?.type || "").toLowerCase();
     if (["house", "tradez", "perps", "dlmm"].includes(signalType)) {
       return generateNativeEntryBanner(event);
