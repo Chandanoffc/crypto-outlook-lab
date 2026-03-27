@@ -1,6 +1,4 @@
 const crypto = require("crypto");
-const fs = require("fs/promises");
-const path = require("path");
 const zlib = require("zlib");
 const { hasDatabase, getRuntimeState, insertAlertDelivery, upsertRuntimeState } = require("../lib/neon-db");
 const {
@@ -346,7 +344,6 @@ function buildNativeBannerTitle(fallbackTitle, event = {}) {
 
 const BANNER_WIDTH = 720;
 const BANNER_HEIGHT = 405;
-const BANNER_DELAY_CS = 90;
 const BANNER_PALETTE = [
   [4, 10, 22],
   [8, 18, 34],
@@ -522,126 +519,6 @@ function buildBannerFlashFrames(event = {}) {
   return [sanitizeBannerText(label, "NEW SIGNAL"), sanitizeBannerText(pair, "SIGNAL")];
 }
 
-function lzwEncode(minCodeSize, indices) {
-  const clearCode = 1 << minCodeSize;
-  const endCode = clearCode + 1;
-  let codeSize = minCodeSize + 1;
-  let nextCode = endCode + 1;
-  const output = [];
-  let currentByte = 0;
-  let bitCount = 0;
-
-  const writeCode = (code) => {
-    let value = code;
-    for (let bit = 0; bit < codeSize; bit += 1) {
-      currentByte |= (value & 1) << bitCount;
-      value >>= 1;
-      bitCount += 1;
-      if (bitCount === 8) {
-        output.push(currentByte);
-        currentByte = 0;
-        bitCount = 0;
-      }
-    }
-  };
-
-  const resetDictionary = () => {
-    const dictionary = new Map();
-    for (let index = 0; index < clearCode; index += 1) {
-      dictionary.set(String.fromCharCode(index), index);
-    }
-    codeSize = minCodeSize + 1;
-    nextCode = endCode + 1;
-    return dictionary;
-  };
-
-  let dictionary = resetDictionary();
-  writeCode(clearCode);
-  let sequence = String.fromCharCode(indices[0] || 0);
-
-  for (let index = 1; index < indices.length; index += 1) {
-    const symbol = String.fromCharCode(indices[index]);
-    const nextSequence = sequence + symbol;
-    if (dictionary.has(nextSequence)) {
-      sequence = nextSequence;
-      continue;
-    }
-
-    writeCode(dictionary.get(sequence));
-    if (nextCode < 4096) {
-      dictionary.set(nextSequence, nextCode);
-      nextCode += 1;
-      if (nextCode === 1 << codeSize && codeSize < 12) {
-        codeSize += 1;
-      }
-    } else {
-      writeCode(clearCode);
-      dictionary = resetDictionary();
-    }
-    sequence = symbol;
-  }
-
-  writeCode(dictionary.get(sequence));
-  writeCode(endCode);
-  if (bitCount > 0) output.push(currentByte);
-  return Buffer.from(output);
-}
-
-function packGifSubBlocks(buffer) {
-  const blocks = [];
-  for (let offset = 0; offset < buffer.length; offset += 255) {
-    const chunk = buffer.subarray(offset, Math.min(offset + 255, buffer.length));
-    blocks.push(Buffer.from([chunk.length]));
-    blocks.push(chunk);
-  }
-  blocks.push(Buffer.from([0]));
-  return Buffer.concat(blocks);
-}
-
-function encodeGif(frames, delayCs = BANNER_DELAY_CS) {
-  const header = Buffer.from("474946383961", "hex");
-  const logicalScreenDescriptor = Buffer.from([
-    BANNER_WIDTH & 0xff,
-    (BANNER_WIDTH >> 8) & 0xff,
-    BANNER_HEIGHT & 0xff,
-    (BANNER_HEIGHT >> 8) & 0xff,
-    0xf3,
-    0x00,
-    0x00,
-  ]);
-  const globalColorTable = Buffer.from(BANNER_PALETTE.flat());
-  const loopExtension = Buffer.from([
-    0x21, 0xff, 0x0b,
-    0x4e, 0x45, 0x54, 0x53, 0x43, 0x41, 0x50, 0x45, 0x32, 0x2e, 0x30,
-    0x03, 0x01, 0x00, 0x00, 0x00,
-  ]);
-  const chunks = [header, logicalScreenDescriptor, globalColorTable, loopExtension];
-
-  for (const frame of frames) {
-    const graphicsControl = Buffer.from([
-      0x21, 0xf9, 0x04, 0x00,
-      delayCs & 0xff,
-      (delayCs >> 8) & 0xff,
-      0x00, 0x00,
-    ]);
-    const imageDescriptor = Buffer.from([
-      0x2c,
-      0x00, 0x00, 0x00, 0x00,
-      BANNER_WIDTH & 0xff,
-      (BANNER_WIDTH >> 8) & 0xff,
-      BANNER_HEIGHT & 0xff,
-      (BANNER_HEIGHT >> 8) & 0xff,
-      0x00,
-    ]);
-    const minCodeSize = 4;
-    const imageData = lzwEncode(minCodeSize, frame);
-    chunks.push(graphicsControl, imageDescriptor, Buffer.from([minCodeSize]), packGifSubBlocks(imageData));
-  }
-
-  chunks.push(Buffer.from([0x3b]));
-  return Buffer.concat(chunks);
-}
-
 function createNativeBannerFrame(event, flashText) {
   const frame = createBannerFrameBuffer();
   const quality = Number(event?.qualityScore) || 0;
@@ -735,56 +612,6 @@ function generateNativeEntryBanner(event = {}) {
   };
 }
 
-function resolveAlertBannerFile(event, meta = {}) {
-  const strategy = String(meta?.strategy || "").toLowerCase();
-  const signalType = String(event?.type || "").toLowerCase();
-  const supportsNativeSignalBanner =
-    strategy === "ema_book" ||
-    strategy === "house_trend" ||
-    strategy === "perps_alerts" ||
-    strategy === "dlmm_alerts" ||
-    signalType === "house" ||
-    signalType === "tradez" ||
-    signalType === "perps" ||
-    signalType === "dlmm";
-  if (!supportsNativeSignalBanner) return "";
-  const eventType = String(meta?.eventType || event?.deliveryType || "").toLowerCase();
-  const titleText = String(event?.title || meta?.title || "").toLowerCase();
-  const messageText = String(event?.message || event?.formattedMessage || "").toLowerCase();
-  const isProtected =
-    eventType === "break_even_exit" ||
-    eventType === "safe_exit" ||
-    titleText.includes("protected at entry") ||
-    titleText.includes("breakeven") ||
-    messageText.includes("protected at entry") ||
-    messageText.includes("breakeven exit") ||
-    messageText.includes("sl moved to entry");
-  if (!eventType && !isProtected) return "";
-
-  if (eventType === "entry_opened" || eventType === "test_signal") {
-    if (signalType === "perps") return "new-perps-alert.gif";
-    if (signalType === "dlmm") return "new-dlmm-alert.gif";
-    const quality = Number(event?.qualityScore) || 0;
-    return quality > 140 ? "new-signal-gold.gif" : "new-signal-cyan.gif";
-  }
-  if (eventType === "scanner_signal") {
-    if (signalType === "perps") return "new-perps-alert.gif";
-    if (signalType === "dlmm") return "new-dlmm-alert.gif";
-    const quality = Number(event?.qualityScore) || 0;
-    return quality > 140 ? "new-signal-gold.gif" : "new-signal-cyan.gif";
-  }
-  if (eventType === "tp1_hit" || eventType === "tp_hit") {
-    return "profits.gif";
-  }
-  if (isProtected) {
-    return "safe.gif";
-  }
-  if (eventType === "sl_hit") {
-    return "loss.gif";
-  }
-  return "";
-}
-
 async function loadAlertBanner(event, meta = {}) {
   const eventType = String(meta?.eventType || event?.deliveryType || "").toLowerCase();
   const type = String(event?.type || "").toLowerCase();
@@ -802,25 +629,7 @@ async function loadAlertBanner(event, meta = {}) {
       return null;
     }
   }
-
-  const filename = resolveAlertBannerFile(event, meta);
-  if (!filename) return null;
-
-  try {
-    const buffer = await fs.readFile(path.join(__dirname, "..", "assets", "alerts", filename));
-    const ext = path.extname(filename).toLowerCase();
-    return {
-      filename,
-      buffer,
-      mimeType: ext === ".gif" ? "image/gif" : "image/png",
-    };
-  } catch (error) {
-    console.error("alert banner file load failed", {
-      filename,
-      error: error.message || String(error),
-    });
-    return null;
-  }
+  return null;
 }
 
 function resolveDiscordColor(event = {}, context = {}) {
@@ -905,8 +714,7 @@ function buildNativeSignalDiscordEmbed(event = {}, bannerAttachment) {
   pushChunkedEmbedField(fields, "Qualification Reason", context.qualificationReason);
   if (context.keyMetrics !== "—") pushChunkedEmbedField(fields, "Key Metrics", context.keyMetrics);
 
-  const type = String(event?.type || "").toLowerCase();
-  const baseLabel = type === "dlmm" ? "NEW DLMM ALERT" : "NEW SIGNAL";
+  const baseLabel = resolveNativeBannerLabel(event);
   const embed = {
     title: safeDiscordTitle([baseLabel, context.pair].filter(Boolean).join(" • "), baseLabel),
     description: truncateText(
@@ -1016,6 +824,51 @@ async function sendDiscord(webhookUrl, title, event, bannerAttachment) {
   await postPayload(null);
 }
 
+async function sendSignalAlert(destinations, title, event, meta, bannerAttachment) {
+  const results = {};
+
+  if (destinations.discordWebhook) {
+    try {
+      await sendDiscord(String(destinations.discordWebhook).trim(), title, event, bannerAttachment);
+      results.discord = "sent";
+      await recordDelivery("discord", "sent", "", title, event, meta);
+    } catch (error) {
+      results.discord = error.message;
+      await recordDelivery("discord", "failed", error.message, title, event, meta);
+    }
+  }
+
+  if (destinations.telegramToken && destinations.telegramChatId) {
+    try {
+      await sendTelegram(
+        String(destinations.telegramToken).trim(),
+        String(destinations.telegramChatId).trim(),
+        title,
+        event,
+        bannerAttachment
+      );
+      results.telegram = "sent";
+      await recordDelivery("telegram", "sent", "", title, event, meta);
+    } catch (error) {
+      results.telegram = error.message;
+      await recordDelivery("telegram", "failed", error.message, title, event, meta);
+    }
+  }
+
+  if (destinations.emailTo) {
+    try {
+      await sendEmail(String(destinations.emailTo).trim(), title, event);
+      results.email = "sent";
+      await recordDelivery("email", "sent", "", title, event, meta);
+    } catch (error) {
+      results.email = error.message;
+      await recordDelivery("email", "failed", error.message, title, event, meta);
+    }
+  }
+
+  return results;
+}
+
 async function sendTelegram(botToken, chatId, title, event, bannerAttachment) {
   let response;
   if (bannerAttachment) {
@@ -1116,48 +969,9 @@ module.exports = async function handler(req, res) {
     const event = body?.event || {};
     const meta = body?.meta || {};
     const destinations = body?.destinations || {};
-    const results = {};
     const title = buildNativeBannerTitle(inputTitle, event);
     const bannerAttachment = await loadAlertBanner(event, meta);
-
-    if (destinations.discordWebhook) {
-      try {
-        await sendDiscord(String(destinations.discordWebhook).trim(), title, event, bannerAttachment);
-        results.discord = "sent";
-        await recordDelivery("discord", "sent", "", title, event, meta);
-      } catch (error) {
-        results.discord = error.message;
-        await recordDelivery("discord", "failed", error.message, title, event, meta);
-      }
-    }
-
-    if (destinations.telegramToken && destinations.telegramChatId) {
-      try {
-        await sendTelegram(
-          String(destinations.telegramToken).trim(),
-          String(destinations.telegramChatId).trim(),
-          title,
-          event,
-          bannerAttachment
-        );
-        results.telegram = "sent";
-        await recordDelivery("telegram", "sent", "", title, event, meta);
-      } catch (error) {
-        results.telegram = error.message;
-        await recordDelivery("telegram", "failed", error.message, title, event, meta);
-      }
-    }
-
-    if (destinations.emailTo) {
-      try {
-        await sendEmail(String(destinations.emailTo).trim(), title, event);
-        results.email = "sent";
-        await recordDelivery("email", "sent", "", title, event, meta);
-      } catch (error) {
-        results.email = error.message;
-        await recordDelivery("email", "failed", error.message, title, event, meta);
-      }
-    }
+    const results = await sendSignalAlert(destinations, title, event, meta, bannerAttachment);
 
     buildJsonResponse(res, 200, {
       ok: true,
