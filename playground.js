@@ -478,6 +478,25 @@ function selectedPerpsSymbol() {
   return universe[0]?.symbol || "";
 }
 
+function resolvePerpsSymbolSelection() {
+  const universe = Array.isArray(state.perps.runtime.universe) ? state.perps.runtime.universe : [];
+  const selected = String(state.perps.selectedSymbol || "").trim().toUpperCase();
+  if (selected && universe.some((entry) => entry.symbol === selected)) return selected;
+
+  const query = String(state.perps.selectorQuery || "").trim().toUpperCase();
+  if (!query) return selected || universe[0]?.symbol || "";
+
+  const exact = universe.find(
+    (entry) =>
+      entry.symbol === query ||
+      String(entry.baseAsset || "").trim().toUpperCase() === query
+  );
+  if (exact) return exact.symbol;
+
+  const loose = universe.find((entry) => entry.symbol.startsWith(query));
+  return loose?.symbol || selected || universe[0]?.symbol || query;
+}
+
 function filteredPerpsUniverse() {
   const query = String(state.perps.selectorQuery || "").trim().toLowerCase();
   const universe = Array.isArray(state.perps.runtime.universe) ? state.perps.runtime.universe : [];
@@ -518,6 +537,45 @@ function createPerpsAlertPayload(item) {
     timeframe: item.timeframe,
     timestamp: item.timestamp || item.openedAt || item.detectedAt || Date.now(),
     qualificationReason: item.qualificationReason,
+  };
+}
+
+function buildPerpsManualScanPayload(symbol) {
+  const normalized = String(symbol || "").trim().toUpperCase();
+  if (!normalized) return null;
+
+  const matchingCall = mergePerpsCalls()
+    .filter((call) => call.symbol === normalized)
+    .sort((left, right) => (right.openedAt || right.detectedAt || 0) - (left.openedAt || left.detectedAt || 0))[0];
+  if (matchingCall) {
+    return {
+      ok: true,
+      symbol: normalized,
+      preferred: createPerpsAlertPayload(matchingCall),
+      source: matchingCall.engineLabel,
+      scannedAt: Date.now(),
+    };
+  }
+
+  const matchingCandidate = mergePerpsCandidates()
+    .filter((candidate) => candidate.symbol === normalized)
+    .sort((left, right) => (right.qualityScore || 0) - (left.qualityScore || 0))[0];
+  if (matchingCandidate) {
+    return {
+      ok: true,
+      symbol: normalized,
+      preferred: createPerpsAlertPayload(matchingCandidate),
+      source: matchingCandidate.engineLabel,
+      scannedAt: Date.now(),
+    };
+  }
+
+  return {
+    ok: true,
+    symbol: normalized,
+    preferred: null,
+    scannedAt: Date.now(),
+    note: "No current House or Tradez candidate matched this pair on the latest runtime scan.",
   };
 }
 
@@ -738,24 +796,20 @@ async function maybeSendPerpsAlerts() {
 }
 
 async function runPerpsManualScan() {
-  const symbol = selectedPerpsSymbol() || state.perps.selectorQuery.trim().toUpperCase();
+  const symbol = resolvePerpsSymbolSelection();
   if (!symbol) return;
   state.perps.loading = true;
   render();
   try {
-    const payload = await postJson("/api/playground-perps", {
-      action: "scan",
-      symbol,
-      qualityThresholds: {
-        house: Number(state.perps.runtime.house?.state?.qualityThreshold) || 64,
-        tradez: Number(state.perps.runtime.tradez?.state?.qualityThreshold) || 66,
-      },
-    });
+    await refreshPerpsData({ fullScan: true, source: "manual" });
+    const payload = buildPerpsManualScanPayload(symbol);
     state.perps.manualScan = payload;
-    state.perps.selectedSymbol = payload.symbol || symbol;
+    state.perps.selectedSymbol = symbol;
     pushModuleLog(PERPS_MODULE, "scanLog", {
-      tone: "up",
-      message: `Manual pair scan completed for ${payload.symbol || symbol}.`,
+      tone: payload?.preferred ? "up" : "neutral",
+      message: payload?.preferred
+        ? `Manual pair scan completed for ${payload.symbol || symbol}.`
+        : `Manual pair scan refreshed ${symbol}, but no current House or Tradez setup matched.`,
     });
   } catch (error) {
     state.perps.lastError = error.message || "Manual pair scan failed.";
@@ -1017,6 +1071,12 @@ function buildPerpsPreview() {
         </article>
       `;
     }
+    return `
+      <article class="playground-preview-card playground-empty-card">
+        <strong>No qualifying live alert on the latest scan for ${escapeHtml(payload.symbol || selectedPerpsSymbol() || "this pair")}.</strong>
+        <span>${escapeHtml(payload.note || "The runtime scan completed, but this pair is not currently qualified by House or Tradez.")}</span>
+      </article>
+    `;
   }
 
   const current = mergePerpsCandidates().find((candidate) => candidate.symbol === selectedPerpsSymbol());
