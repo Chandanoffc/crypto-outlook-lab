@@ -43,6 +43,7 @@ function formatBannerPair(value) {
 }
 
 function resolveNativeBannerLabel(event = {}) {
+  if (String(event?.bannerLabel || "").trim()) return String(event.bannerLabel).trim().toUpperCase();
   const type = String(event?.type || "").toLowerCase();
   if (type === "perps") return "NEW PERPS ALERT";
   if (type === "dlmm") return "NEW DLMM ALERT";
@@ -68,6 +69,335 @@ function buildNativeBannerTitle(fallbackTitle, event = {}) {
   }
 
   return fallbackTitle;
+}
+
+const BANNER_WIDTH = 720;
+const BANNER_HEIGHT = 405;
+const BANNER_DELAY_CS = 90;
+const BANNER_PALETTE = [
+  [4, 10, 22],
+  [8, 18, 34],
+  [12, 28, 52],
+  [18, 42, 74],
+  [31, 211, 238],
+  [72, 246, 224],
+  [255, 255, 255],
+  [161, 173, 194],
+  [255, 210, 87],
+  [255, 96, 96],
+  [58, 76, 105],
+  [11, 18, 30],
+  [17, 34, 58],
+  [214, 175, 55],
+  [84, 226, 151],
+  [8, 14, 26],
+];
+
+const FONT_5X7 = {
+  " ": ["00000", "00000", "00000", "00000", "00000", "00000", "00000"],
+  "/": ["00001", "00010", "00100", "01000", "10000", "00000", "00000"],
+  "-": ["00000", "00000", "00000", "11111", "00000", "00000", "00000"],
+  "|": ["00100", "00100", "00100", "00100", "00100", "00100", "00100"],
+  ".": ["00000", "00000", "00000", "00000", "00000", "00110", "00110"],
+  ":": ["00000", "00110", "00110", "00000", "00110", "00110", "00000"],
+  "+": ["00000", "00100", "00100", "11111", "00100", "00100", "00000"],
+  "%": ["11001", "11010", "00100", "01000", "10110", "00110", "00000"],
+  "0": ["01110", "10001", "10011", "10101", "11001", "10001", "01110"],
+  "1": ["00100", "01100", "00100", "00100", "00100", "00100", "01110"],
+  "2": ["01110", "10001", "00001", "00010", "00100", "01000", "11111"],
+  "3": ["11110", "00001", "00001", "01110", "00001", "00001", "11110"],
+  "4": ["00010", "00110", "01010", "10010", "11111", "00010", "00010"],
+  "5": ["11111", "10000", "10000", "11110", "00001", "00001", "11110"],
+  "6": ["01110", "10000", "10000", "11110", "10001", "10001", "01110"],
+  "7": ["11111", "00001", "00010", "00100", "01000", "01000", "01000"],
+  "8": ["01110", "10001", "10001", "01110", "10001", "10001", "01110"],
+  "9": ["01110", "10001", "10001", "01111", "00001", "00001", "01110"],
+  "A": ["01110", "10001", "10001", "11111", "10001", "10001", "10001"],
+  "B": ["11110", "10001", "10001", "11110", "10001", "10001", "11110"],
+  "C": ["01111", "10000", "10000", "10000", "10000", "10000", "01111"],
+  "D": ["11110", "10001", "10001", "10001", "10001", "10001", "11110"],
+  "E": ["11111", "10000", "10000", "11110", "10000", "10000", "11111"],
+  "F": ["11111", "10000", "10000", "11110", "10000", "10000", "10000"],
+  "G": ["01111", "10000", "10000", "10111", "10001", "10001", "01111"],
+  "H": ["10001", "10001", "10001", "11111", "10001", "10001", "10001"],
+  "I": ["01110", "00100", "00100", "00100", "00100", "00100", "01110"],
+  "J": ["00001", "00001", "00001", "00001", "10001", "10001", "01110"],
+  "K": ["10001", "10010", "10100", "11000", "10100", "10010", "10001"],
+  "L": ["10000", "10000", "10000", "10000", "10000", "10000", "11111"],
+  "M": ["10001", "11011", "10101", "10101", "10001", "10001", "10001"],
+  "N": ["10001", "11001", "10101", "10011", "10001", "10001", "10001"],
+  "O": ["01110", "10001", "10001", "10001", "10001", "10001", "01110"],
+  "P": ["11110", "10001", "10001", "11110", "10000", "10000", "10000"],
+  "Q": ["01110", "10001", "10001", "10001", "10101", "10010", "01101"],
+  "R": ["11110", "10001", "10001", "11110", "10100", "10010", "10001"],
+  "S": ["01111", "10000", "10000", "01110", "00001", "00001", "11110"],
+  "T": ["11111", "00100", "00100", "00100", "00100", "00100", "00100"],
+  "U": ["10001", "10001", "10001", "10001", "10001", "10001", "01110"],
+  "V": ["10001", "10001", "10001", "10001", "10001", "01010", "00100"],
+  "W": ["10001", "10001", "10001", "10101", "10101", "10101", "01010"],
+  "X": ["10001", "10001", "01010", "00100", "01010", "10001", "10001"],
+  "Y": ["10001", "10001", "01010", "00100", "00100", "00100", "00100"],
+  "Z": ["11111", "00001", "00010", "00100", "01000", "10000", "11111"],
+};
+
+function sanitizeBannerText(value, fallback = "") {
+  const uppercase = String(value || fallback || "")
+    .toUpperCase()
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!uppercase) return String(fallback || "").toUpperCase().trim();
+  return uppercase
+    .split("")
+    .map((char) => (FONT_5X7[char] ? char : " "))
+    .join("")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function createBannerFrameBuffer() {
+  return new Uint8Array(BANNER_WIDTH * BANNER_HEIGHT);
+}
+
+function fillRect(frame, x, y, width, height, colorIndex) {
+  const startX = Math.max(0, Math.floor(x));
+  const startY = Math.max(0, Math.floor(y));
+  const endX = Math.min(BANNER_WIDTH, Math.floor(x + width));
+  const endY = Math.min(BANNER_HEIGHT, Math.floor(y + height));
+  for (let py = startY; py < endY; py += 1) {
+    const rowOffset = py * BANNER_WIDTH;
+    frame.fill(colorIndex, rowOffset + startX, rowOffset + endX);
+  }
+}
+
+function drawText(frame, text, x, y, scale, colorIndex) {
+  const safeText = sanitizeBannerText(text);
+  let cursorX = Math.floor(x);
+  for (const char of safeText) {
+    const glyph = FONT_5X7[char] || FONT_5X7[" "];
+    for (let row = 0; row < glyph.length; row += 1) {
+      for (let col = 0; col < glyph[row].length; col += 1) {
+        if (glyph[row][col] !== "1") continue;
+        fillRect(frame, cursorX + col * scale, y + row * scale, scale, scale, colorIndex);
+      }
+    }
+    cursorX += 6 * scale;
+  }
+}
+
+function measureTextWidth(text, scale) {
+  const safeText = sanitizeBannerText(text);
+  return Math.max(0, safeText.length * 6 * scale - scale);
+}
+
+function drawCenteredText(frame, text, y, scale, colorIndex) {
+  const width = measureTextWidth(text, scale);
+  const x = Math.max(32, Math.floor((BANNER_WIDTH - width) / 2));
+  drawText(frame, text, x, y, scale, colorIndex);
+}
+
+function drawBannerShell(frame, accentPrimary, accentSecondary) {
+  fillRect(frame, 0, 0, BANNER_WIDTH, BANNER_HEIGHT, 0);
+  fillRect(frame, 18, 18, BANNER_WIDTH - 36, BANNER_HEIGHT - 36, 11);
+  fillRect(frame, 28, 28, BANNER_WIDTH - 56, BANNER_HEIGHT - 56, 1);
+  for (let x = 42; x < BANNER_WIDTH - 42; x += 28) {
+    fillRect(frame, x, 52, 1, BANNER_HEIGHT - 104, 12);
+  }
+  for (let y = 52; y < BANNER_HEIGHT - 52; y += 28) {
+    fillRect(frame, 42, y, BANNER_WIDTH - 84, 1, 12);
+  }
+  fillRect(frame, 56, 42, BANNER_WIDTH - 112, 34, 2);
+  fillRect(frame, 60, 46, 72, 26, accentPrimary);
+  fillRect(frame, BANNER_WIDTH - 182, 48, 102, 22, 3);
+  fillRect(frame, 92, 102, BANNER_WIDTH - 184, 122, 1);
+  fillRect(frame, 102, 112, BANNER_WIDTH - 204, 102, 2);
+  fillRect(frame, 104, 154, BANNER_WIDTH - 208, 4, accentSecondary);
+  fillRect(frame, 84, BANNER_HEIGHT - 58, BANNER_WIDTH - 168, 24, 2);
+}
+
+function buildBannerTopLine(event = {}) {
+  const type = String(event?.type || "").toLowerCase();
+  const label = resolveNativeBannerLabel(event);
+  const pair = formatBannerPair(event?.pair || event?.symbol) || "SIGNAL";
+  const strategy = sanitizeBannerText(event?.strategy || "DLMM", "DLMM");
+  const direction = sanitizeBannerText(event?.direction || event?.side || "", "");
+
+  if (type === "dlmm") {
+    return {
+      left: label,
+      center: strategy || "DLMM",
+      right: pair,
+    };
+  }
+
+  return {
+    left: label,
+    center: pair,
+    right: direction || pair,
+  };
+}
+
+function buildBannerFlashFrames(event = {}) {
+  const configured = Array.isArray(event?.bannerFlashFrames) ? event.bannerFlashFrames : [];
+  const pair = formatBannerPair(event?.pair || event?.symbol) || "SIGNAL";
+  const label = resolveNativeBannerLabel(event);
+  const frames = configured.length ? configured : [label, pair];
+  const cleaned = frames
+    .map((value, index) => sanitizeBannerText(value, index === 0 ? label : pair))
+    .filter(Boolean);
+  if (cleaned.length >= 2) return cleaned.slice(0, 2);
+  if (cleaned.length === 1) return [cleaned[0], sanitizeBannerText(pair, "SIGNAL")];
+  return [sanitizeBannerText(label, "NEW SIGNAL"), sanitizeBannerText(pair, "SIGNAL")];
+}
+
+function lzwEncode(minCodeSize, indices) {
+  const clearCode = 1 << minCodeSize;
+  const endCode = clearCode + 1;
+  let codeSize = minCodeSize + 1;
+  let nextCode = endCode + 1;
+  const output = [];
+  let currentByte = 0;
+  let bitCount = 0;
+
+  const writeCode = (code) => {
+    let value = code;
+    for (let bit = 0; bit < codeSize; bit += 1) {
+      currentByte |= (value & 1) << bitCount;
+      value >>= 1;
+      bitCount += 1;
+      if (bitCount === 8) {
+        output.push(currentByte);
+        currentByte = 0;
+        bitCount = 0;
+      }
+    }
+  };
+
+  const resetDictionary = () => {
+    const dictionary = new Map();
+    for (let index = 0; index < clearCode; index += 1) {
+      dictionary.set(String.fromCharCode(index), index);
+    }
+    codeSize = minCodeSize + 1;
+    nextCode = endCode + 1;
+    return dictionary;
+  };
+
+  let dictionary = resetDictionary();
+  writeCode(clearCode);
+  let sequence = String.fromCharCode(indices[0] || 0);
+
+  for (let index = 1; index < indices.length; index += 1) {
+    const symbol = String.fromCharCode(indices[index]);
+    const nextSequence = sequence + symbol;
+    if (dictionary.has(nextSequence)) {
+      sequence = nextSequence;
+      continue;
+    }
+
+    writeCode(dictionary.get(sequence));
+    if (nextCode < 4096) {
+      dictionary.set(nextSequence, nextCode);
+      nextCode += 1;
+      if (nextCode === 1 << codeSize && codeSize < 12) {
+        codeSize += 1;
+      }
+    } else {
+      writeCode(clearCode);
+      dictionary = resetDictionary();
+    }
+    sequence = symbol;
+  }
+
+  writeCode(dictionary.get(sequence));
+  writeCode(endCode);
+  if (bitCount > 0) output.push(currentByte);
+  return Buffer.from(output);
+}
+
+function packGifSubBlocks(buffer) {
+  const blocks = [];
+  for (let offset = 0; offset < buffer.length; offset += 255) {
+    const chunk = buffer.subarray(offset, Math.min(offset + 255, buffer.length));
+    blocks.push(Buffer.from([chunk.length]));
+    blocks.push(chunk);
+  }
+  blocks.push(Buffer.from([0]));
+  return Buffer.concat(blocks);
+}
+
+function encodeGif(frames, delayCs = BANNER_DELAY_CS) {
+  const header = Buffer.from("474946383961", "hex");
+  const logicalScreenDescriptor = Buffer.from([
+    BANNER_WIDTH & 0xff,
+    (BANNER_WIDTH >> 8) & 0xff,
+    BANNER_HEIGHT & 0xff,
+    (BANNER_HEIGHT >> 8) & 0xff,
+    0xf3,
+    0x00,
+    0x00,
+  ]);
+  const globalColorTable = Buffer.from(BANNER_PALETTE.flat());
+  const loopExtension = Buffer.from([
+    0x21, 0xff, 0x0b,
+    0x4e, 0x45, 0x54, 0x53, 0x43, 0x41, 0x50, 0x45, 0x32, 0x2e, 0x30,
+    0x03, 0x01, 0x00, 0x00, 0x00,
+  ]);
+  const chunks = [header, logicalScreenDescriptor, globalColorTable, loopExtension];
+
+  for (const frame of frames) {
+    const graphicsControl = Buffer.from([
+      0x21, 0xf9, 0x04, 0x00,
+      delayCs & 0xff,
+      (delayCs >> 8) & 0xff,
+      0x00, 0x00,
+    ]);
+    const imageDescriptor = Buffer.from([
+      0x2c,
+      0x00, 0x00, 0x00, 0x00,
+      BANNER_WIDTH & 0xff,
+      (BANNER_WIDTH >> 8) & 0xff,
+      BANNER_HEIGHT & 0xff,
+      (BANNER_HEIGHT >> 8) & 0xff,
+      0x00,
+    ]);
+    const minCodeSize = 4;
+    const imageData = lzwEncode(minCodeSize, frame);
+    chunks.push(graphicsControl, imageDescriptor, Buffer.from([minCodeSize]), packGifSubBlocks(imageData));
+  }
+
+  chunks.push(Buffer.from([0x3b]));
+  return Buffer.concat(chunks);
+}
+
+function createNativeBannerFrame(event, flashText) {
+  const frame = createBannerFrameBuffer();
+  const quality = Number(event?.qualityScore) || 0;
+  const gold = quality > 140;
+  const accentPrimary = gold ? 8 : 4;
+  const accentSecondary = gold ? 13 : 5;
+  const topLine = buildBannerTopLine(event);
+
+  drawBannerShell(frame, accentPrimary, accentSecondary);
+  drawText(frame, "SS", 79, 52, 3, 6);
+  drawText(frame, topLine.left, 150, 52, 2, 6);
+  drawText(frame, topLine.center, Math.max(172, Math.floor((BANNER_WIDTH - measureTextWidth(topLine.center, 2)) / 2)), 52, 2, 6);
+  const rightWidth = measureTextWidth(topLine.right, 2);
+  drawText(frame, topLine.right, Math.max(150, BANNER_WIDTH - 92 - rightWidth), 52, 2, 6);
+  drawCenteredText(frame, flashText, 142, 6, 6);
+  drawCenteredText(frame, "SOLORIS SIGNALS", 222, 2, 7);
+  drawText(frame, "SOLARIS-SIGNALS.VERCEL.APP", 96, BANNER_HEIGHT - 51, 1, 7);
+  drawText(frame, resolveNativeBannerLabel(event), BANNER_WIDTH - 212, BANNER_HEIGHT - 51, 1, 6);
+  return frame;
+}
+
+function generateNativeEntryBanner(event = {}) {
+  const flashFrames = buildBannerFlashFrames(event);
+  const frames = flashFrames.map((text) => createNativeBannerFrame(event, text));
+  return {
+    filename: `soloris-${String(event?.type || "signal").toLowerCase() || "signal"}-banner.gif`,
+    buffer: encodeGif(frames, BANNER_DELAY_CS),
+    mimeType: "image/gif",
+  };
 }
 
 function resolveAlertBannerFile(event, meta = {}) {
@@ -113,6 +443,14 @@ function resolveAlertBannerFile(event, meta = {}) {
 }
 
 async function loadAlertBanner(event, meta = {}) {
+  const eventType = String(meta?.eventType || event?.deliveryType || "").toLowerCase();
+  if (eventType === "entry_opened" || eventType === "test_signal") {
+    const signalType = String(event?.type || "").toLowerCase();
+    if (["house", "tradez", "perps", "dlmm"].includes(signalType)) {
+      return generateNativeEntryBanner(event);
+    }
+  }
+
   const filename = resolveAlertBannerFile(event, meta);
   if (!filename) return null;
 
