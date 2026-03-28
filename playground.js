@@ -52,6 +52,7 @@ function loadState() {
       },
       manualScan: null,
       playgroundSignals: [],
+      recentCalls: [],
       scanLog: [],
       alertLog: [],
       sentIds: [],
@@ -101,6 +102,7 @@ function loadState() {
         playgroundSignals: Array.isArray(stored.perps?.playgroundSignals)
           ? stored.perps.playgroundSignals.slice(0, 24)
           : [],
+        recentCalls: Array.isArray(stored.perps?.recentCalls) ? stored.perps.recentCalls.slice(0, 160) : [],
         scanLog: Array.isArray(stored.perps?.scanLog) ? stored.perps.scanLog.slice(0, MAX_LOG_ENTRIES) : [],
         alertLog: Array.isArray(stored.perps?.alertLog) ? stored.perps.alertLog.slice(0, MAX_LOG_ENTRIES) : [],
         sentIds: Array.isArray(stored.perps?.sentIds) ? stored.perps.sentIds.slice(0, MAX_ALERT_IDS) : [],
@@ -148,6 +150,7 @@ function persistState() {
         backgroundAvailable: state.perps.runtime.backgroundAvailable,
       },
       playgroundSignals: state.perps.playgroundSignals.slice(0, 24),
+      recentCalls: state.perps.recentCalls.slice(0, 160),
       scanLog: state.perps.scanLog.slice(0, MAX_LOG_ENTRIES),
       alertLog: state.perps.alertLog.slice(0, MAX_LOG_ENTRIES),
       sentIds: state.perps.sentIds.slice(0, MAX_ALERT_IDS),
@@ -892,6 +895,44 @@ function createPerpsAlertPayload(item) {
   };
 }
 
+function updatePerpsRecentCall(item) {
+  if (!item?.id || !item?.symbol) return;
+  const entry = {
+    id: item.id,
+    symbol: item.symbol,
+    engine: "playground",
+    engineLabel: "Playground Engine",
+    strategy: item.strategy || "Playground Engine",
+    side: item.side || "Long",
+    status: "Open",
+    qualityScore: Number(item.qualityScore) || 0,
+    entryPrice: Number(item.entryPrice) || 0,
+    stopLoss: Number(item.stopLoss) || 0,
+    takeProfit: Number(item.takeProfit) || 0,
+    takeProfit2: Number(item.takeProfit2) || 0,
+    rr: Number(item.rr) || 0,
+    timeframe: item.timeframe || "4H",
+    openedAt: Number(item.timestamp) || Date.now(),
+    detectedAt: Number(item.timestamp) || Date.now(),
+    closedAt: 0,
+    returnPct: null,
+    pnlUsd: null,
+    lastPrice: Number(item.entryPrice) || 0,
+    holdMs: 0,
+    qualificationReason: item.qualificationReason || "Qualified by Playground Engine.",
+  };
+  const index = state.perps.recentCalls.findIndex((call) => call.id === item.id);
+  if (index >= 0) {
+    state.perps.recentCalls[index] = {
+      ...state.perps.recentCalls[index],
+      ...entry,
+    };
+  } else {
+    state.perps.recentCalls.unshift(entry);
+    state.perps.recentCalls = state.perps.recentCalls.slice(0, 160);
+  }
+}
+
 function _calcEma(values, period) {
   const length = Math.max(1, Number(period) || 1);
   const numbers = (values || []).map((value) => Number(value)).filter((value) => Number.isFinite(value));
@@ -1155,32 +1196,6 @@ function buildPerpsManualScanPayload(symbol) {
   const normalized = String(symbol || "").trim().toUpperCase();
   if (!normalized) return null;
 
-  const matchingCall = mergePerpsCalls()
-    .filter((call) => call.symbol === normalized)
-    .sort((left, right) => (right.openedAt || right.detectedAt || 0) - (left.openedAt || left.detectedAt || 0))[0];
-  if (matchingCall) {
-    return {
-      ok: true,
-      symbol: normalized,
-      preferred: createPerpsAlertPayload(matchingCall),
-      source: matchingCall.engineLabel,
-      scannedAt: Date.now(),
-    };
-  }
-
-  const matchingCandidate = mergePerpsCandidates()
-    .filter((candidate) => candidate.symbol === normalized)
-    .sort((left, right) => (right.qualityScore || 0) - (left.qualityScore || 0))[0];
-  if (matchingCandidate) {
-    return {
-      ok: true,
-      symbol: normalized,
-      preferred: createPerpsAlertPayload(matchingCandidate),
-      source: matchingCandidate.engineLabel,
-      scannedAt: Date.now(),
-    };
-  }
-
   const playgroundSignal = (state.perps.playgroundSignals || [])
     .filter((candidate) => candidate.symbol === normalized)
     .sort((left, right) => (right.qualityScore || 0) - (left.qualityScore || 0))[0];
@@ -1199,7 +1214,7 @@ function buildPerpsManualScanPayload(symbol) {
     symbol: normalized,
     preferred: null,
     scannedAt: Date.now(),
-    note: "No current House or Tradez candidate matched this pair on the latest runtime scan.",
+    note: "No current Playground Engine signal matched this pair on the latest scan.",
   };
 }
 
@@ -1423,33 +1438,16 @@ async function refreshPerpsData({ fullScan = false, source = "manual" } = {}) {
 async function maybeSendPerpsAlerts() {
   if (!state.perps.scannerEnabled || !isDiscordWebhook(state.perps.webhook)) return;
 
-  const calls = mergePerpsCalls()
-    .filter((call) => call.status === "Open" && withinLookback(call.openedAt || call.detectedAt))
-    .sort((left, right) => (right.openedAt || right.detectedAt) - (left.openedAt || left.detectedAt));
-  const runtimeCandidates = mergePerpsCandidates()
+  const candidates = (state.perps.playgroundSignals || [])
     .filter((candidate) => candidate.qualityScore >= 60 && withinLookback(candidate.timestamp || Date.now()))
     .sort((left, right) => right.qualityScore - left.qualityScore);
-  const playgroundCandidates = (state.perps.playgroundSignals || [])
-    .filter((candidate) => candidate.qualityScore >= 60 && withinLookback(candidate.timestamp || Date.now()))
-    .sort((left, right) => right.qualityScore - left.qualityScore);
-  const candidateMap = new Map();
-  [...runtimeCandidates, ...playgroundCandidates].forEach((candidate) => {
-    const key = `${candidate.symbol}:${candidate.side}`;
-    const current = candidateMap.get(key);
-    if (!current || Number(candidate.qualityScore || 0) > Number(current.qualityScore || 0)) {
-      candidateMap.set(key, candidate);
-    }
-  });
-  const candidates = Array.from(candidateMap.values()).sort(
-    (left, right) => Number(right.qualityScore || 0) - Number(left.qualityScore || 0)
-  );
 
   const outbound = [
-    ...calls.map((call) => ({ id: `call:${call.id}`, title: `${call.engineLabel} opened ${call.symbol}`, payload: createPerpsAlertPayload(call) })),
     ...candidates.map((candidate) => ({
       id: `candidate:${candidate.id}`,
-      title: `${candidate.engineLabel} qualified ${candidate.symbol}`,
+      title: `Playground Engine qualified ${candidate.symbol}`,
       payload: createPerpsAlertPayload(candidate),
+      signal: candidate,
     })),
   ];
 
@@ -1462,6 +1460,7 @@ async function maybeSendPerpsAlerts() {
         eventType: "scanner_signal",
       });
       pushSentId(PERPS_MODULE, item.id);
+      if (item.signal) updatePerpsRecentCall(item.signal);
       updateWebhookHealth(PERPS_MODULE, "ok", `Last delivery succeeded at ${formatDateTime(Date.now())}`);
       pushModuleLog(PERPS_MODULE, "alertLog", {
         tone: "up",
@@ -1808,11 +1807,9 @@ function buildPerpsPreview() {
   }
 
   const selected = selectedPerpsSymbol();
-  const current =
-    mergePerpsCandidates().find((candidate) => candidate.symbol === selected) ||
-    (state.perps.playgroundSignals || []).find((candidate) => candidate.symbol === selected);
+  const current = (state.perps.playgroundSignals || []).find((candidate) => candidate.symbol === selected);
   if (!current) {
-    return `<article class="playground-preview-card playground-empty-card"><strong>No current alert preview.</strong><span>Run a manual pair scan to inspect the selected symbol with the latest House, Tradez, and Playground Engine logic.</span></article>`;
+    return `<article class="playground-preview-card playground-empty-card"><strong>No current alert preview.</strong><span>Run a manual pair scan to inspect the selected symbol with the latest Playground Engine logic.</span></article>`;
   }
 
   const payload = createPerpsAlertPayload(current);
@@ -1984,7 +1981,7 @@ function renderHealthCards(moduleKey) {
       </article>
       <article class="playground-health-card">
         <span>Data Source</span>
-        <strong>${moduleKey === PERPS_MODULE ? "Binance + Runtime" : "Meteora DLMM"}</strong>
+        <strong>${moduleKey === PERPS_MODULE ? "Binance + Playground Engine" : "Meteora DLMM"}</strong>
         <small>${escapeHtml(sourceNote)}</small>
       </article>
       <article class="playground-health-card">
@@ -2123,7 +2120,7 @@ function renderLogList(entries, emptyText) {
 }
 
 function buildPerpsReport() {
-  const calls = mergePerpsCalls();
+  const calls = state.perps.recentCalls || [];
   const metrics = computePerpsMetrics(calls);
   return {
     exportedAt: new Date().toISOString(),
@@ -2151,8 +2148,9 @@ function buildDlmmReport() {
 }
 
 function renderPerpsModule() {
-  const metrics = computePerpsMetrics(mergePerpsCalls());
-  const candidates = mergePerpsCandidates();
+  const perpsCalls = state.perps.recentCalls || [];
+  const metrics = computePerpsMetrics(perpsCalls);
+  const candidates = state.perps.playgroundSignals || [];
   const playgroundSignals = state.perps.playgroundSignals || [];
   const selected = selectedPerpsSymbol();
   const currentSelection = state.perps.runtime.universe.find((entry) => entry.symbol === selected) || null;
@@ -2199,7 +2197,7 @@ function renderPerpsModule() {
                 <h3>Recent perps calls table</h3>
               </div>
             </div>
-            ${renderPerpsTable(mergePerpsCalls())}
+            ${renderPerpsTable(perpsCalls)}
           </article>
         </div>
         <div class="playground-column-stack">
