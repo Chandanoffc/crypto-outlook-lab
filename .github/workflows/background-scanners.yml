@@ -1,0 +1,20 @@
+name: Background Scanners
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping-background-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger background scanner endpoint
+        env:
+          UPBIT_CRON_SECRET: ${{ secrets.UPBIT_CRON_SECRET }}
+        run: |
+          curl --fail --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer ${UPBIT_CRON_SECRET}" \
+            "https://soloris-signals.vercel.app/api/upbit-cron"
