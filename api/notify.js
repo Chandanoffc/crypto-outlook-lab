@@ -166,6 +166,26 @@ function resolveSignalContext(event = {}) {
     timeframe: truncateText(parsed.timeframe || parsed.interval || parsed.mode, 40, "—"),
     suggestedRange: truncateText(parsed.suggested_range || parsed.entry_zone || event.suggestedRange, 80, "—"),
     estimatedHoldTime: truncateText(parsed.estimated_hold_time || parsed.estimatedholdtime || event.estimatedHoldTime, 80, "—"),
+    preferredBins:
+      Number.isFinite(Number(event.preferredBins))
+        ? Number(event.preferredBins)
+        : Number(parsed.preferredbins || parsed.preferred_bins),
+    fees10m:
+      Number.isFinite(Number(event.fees10m))
+        ? Number(event.fees10m)
+        : Number(parsed.fees10m || parsed.fee10m),
+    fees30m:
+      Number.isFinite(Number(event.fees30m))
+        ? Number(event.fees30m)
+        : Number(parsed.fees30m || parsed.fee30m),
+    fees1h:
+      Number.isFinite(Number(event.fees1h))
+        ? Number(event.fees1h)
+        : Number(parsed.fees1h || parsed.fee1h),
+    fees24h:
+      Number.isFinite(Number(event.fees24h))
+        ? Number(event.fees24h)
+        : Number(parsed.fees24h || parsed.fee24h),
     confidence:
       Number.isFinite(Number(event.qualityScore)) ? Number(event.qualityScore) : Number(parsed.confidence),
     entryPrice:
@@ -480,7 +500,6 @@ function drawBannerShell(frame, accentPrimary, accentSecondary) {
   fillRect(frame, BANNER_WIDTH - 182, 48, 102, 22, 3);
   fillRect(frame, 92, 102, BANNER_WIDTH - 184, 122, 1);
   fillRect(frame, 102, 112, BANNER_WIDTH - 204, 102, 2);
-  fillRect(frame, 104, 154, BANNER_WIDTH - 208, 4, accentSecondary);
   fillRect(frame, 84, BANNER_HEIGHT - 58, BANNER_WIDTH - 168, 24, 2);
 }
 
@@ -519,28 +538,56 @@ function buildBannerFlashFrames(event = {}) {
   return [sanitizeBannerText(label, "NEW SIGNAL"), sanitizeBannerText(pair, "SIGNAL")];
 }
 
+function compactBannerMetric(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) return "0";
+  if (numeric >= 1_000_000) return `${(numeric / 1_000_000).toFixed(1)}M`;
+  if (numeric >= 1_000) return `${(numeric / 1_000).toFixed(1)}K`;
+  return `${Math.round(numeric)}`;
+}
+
 function createNativeBannerFrame(event, flashText) {
   const frame = createBannerFrameBuffer();
+  const type = String(event?.type || "").toLowerCase();
   const quality = Number(event?.qualityScore) || 0;
   const gold = quality > 140;
-  const accentPrimary = gold ? 8 : 4;
-  const accentSecondary = gold ? 13 : 5;
+  const accentPrimary = type === "dlmm" ? 8 : gold ? 8 : 4;
+  const accentSecondary = type === "dlmm" ? 5 : gold ? 13 : 5;
   const topLine = buildBannerTopLine(event);
 
   drawBannerShell(frame, accentPrimary, accentSecondary);
   drawText(frame, "SS", 79, 52, 3, 6);
   drawText(frame, topLine.left, 150, 52, 2, 6);
-  drawText(frame, topLine.center, Math.max(172, Math.floor((BANNER_WIDTH - measureTextWidth(topLine.center, 2)) / 2)), 52, 2, 6);
+  drawText(frame, topLine.center, Math.max(172, Math.floor((BANNER_WIDTH - measureTextWidth(topLine.center, 2)) / 2)), 52, 2, type === "dlmm" ? 8 : 6);
   const rightWidth = measureTextWidth(topLine.right, 2);
   drawText(frame, topLine.right, Math.max(150, BANNER_WIDTH - 92 - rightWidth), 52, 2, 6);
-  drawCenteredText(frame, flashText, 142, 6, 6);
-  const secondary = sanitizeBannerText(
-    String(event?.type || "").toLowerCase() === "dlmm"
-      ? event?.strategy || "DLMM ALERT"
-      : event?.direction || event?.strategy || "SOLORIS SIGNALS",
-    "SOLORIS SIGNALS"
-  );
-  drawCenteredText(frame, secondary, 222, 2, 7);
+
+  if (type === "dlmm") {
+    const pool = sanitizeBannerText(String(event?.pool || "").slice(0, 52), "POOL");
+    const strategy = sanitizeBannerText(event?.strategy || "DLMM", "DLMM");
+    const feeLineOne = sanitizeBannerText(
+      `F10 ${compactBannerMetric(event?.fees10m)} F30 ${compactBannerMetric(event?.fees30m)} F1H ${compactBannerMetric(event?.fees1h)}`,
+      ""
+    );
+    const feeLineTwo = sanitizeBannerText(
+      `F24 ${compactBannerMetric(event?.fees24h)} BINS ${compactBannerMetric(event?.preferredBins)}`,
+      ""
+    );
+    drawCenteredText(frame, flashText, 132, 5, 6);
+    drawCenteredText(frame, pool, 198, 1, 7);
+    drawCenteredText(frame, strategy, 230, 3, 8);
+    drawCenteredText(frame, feeLineOne, 278, 1, 7);
+    drawCenteredText(frame, feeLineTwo, 296, 1, 7);
+  } else {
+    fillRect(frame, 104, 154, BANNER_WIDTH - 208, 4, accentSecondary);
+    drawCenteredText(frame, flashText, 142, 6, 6);
+    const secondary = sanitizeBannerText(
+      event?.direction || event?.strategy || "SOLORIS SIGNALS",
+      "SOLORIS SIGNALS"
+    );
+    drawCenteredText(frame, secondary, 222, 2, 7);
+  }
+
   drawText(frame, "SOLARIS-SIGNALS.VERCEL.APP", 96, BANNER_HEIGHT - 51, 1, 7);
   drawText(frame, resolveNativeBannerLabel(event), BANNER_WIDTH - 212, BANNER_HEIGHT - 51, 1, 6);
   return frame;
@@ -672,15 +719,28 @@ function buildDlmmDiscordEmbed(event = {}, bannerAttachment) {
   pushEmbedField(fields, "Pair", context.pair, true);
   pushEmbedField(fields, "Pool", context.pool);
   pushEmbedField(fields, "Suggested Range", context.suggestedRange, true);
+  if (Number.isFinite(context.preferredBins) && context.preferredBins > 0) {
+    pushEmbedField(fields, "Preferred Bins", `${Math.round(context.preferredBins)}`, true);
+  }
   pushEmbedField(fields, "Estimated Hold Time", context.estimatedHoldTime, true);
   pushEmbedField(fields, "Confidence", formatScore(context.confidence), true);
+  if (Number.isFinite(context.fees10m) && context.fees10m > 0) pushEmbedField(fields, "Fees 10M", formatNumberValue(context.fees10m, 0), true);
+  if (Number.isFinite(context.fees30m) && context.fees30m > 0) pushEmbedField(fields, "Fees 30M", formatNumberValue(context.fees30m, 0), true);
+  if (Number.isFinite(context.fees1h) && context.fees1h > 0) pushEmbedField(fields, "Fees 1H", formatNumberValue(context.fees1h, 0), true);
+  if (Number.isFinite(context.fees24h) && context.fees24h > 0) pushEmbedField(fields, "Fees 24H", formatNumberValue(context.fees24h, 0), true);
   pushChunkedEmbedField(fields, "Risk Notes", context.riskNotes);
   pushChunkedEmbedField(fields, "Key Metrics", context.keyMetrics);
   pushChunkedEmbedField(fields, "Qualification Reason", context.qualificationReason);
 
   const embed = {
     title: safeDiscordTitle("NEW DLMM ALERT", "NEW DLMM ALERT"),
-    description: truncateText(context.pair || "DLMM Opportunity", 4096, "DLMM Opportunity"),
+    description: truncateText(
+      [context.pair || "DLMM Opportunity", context.pool && context.pool !== "—" ? `CA: ${context.pool}` : ""]
+        .filter(Boolean)
+        .join("\n"),
+      4096,
+      "DLMM Opportunity"
+    ),
     color: resolveDiscordColor(event, context),
     fields,
     footer: {
