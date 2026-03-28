@@ -1395,18 +1395,16 @@ async function refreshPerpsData({ fullScan = false, source = "manual" } = {}) {
 
     await refreshPlaygroundSignals();
 
-    if (!playgroundRuntime?.backgroundAvailable) {
-      pushModuleLog(PERPS_MODULE, "scanLog", {
-        tone: "neutral",
-        message:
-          source === "scheduled"
-            ? "Scheduled perps refresh completed."
-            : fullScan
-              ? "Manual perps runtime scan completed."
-              : "Perps runtime state refreshed.",
-      });
-      await maybeSendPerpsAlerts();
-    }
+    pushModuleLog(PERPS_MODULE, "scanLog", {
+      tone: "neutral",
+      message:
+        source === "scheduled"
+          ? "Scheduled perps refresh completed."
+          : fullScan
+            ? "Manual perps runtime scan completed."
+            : "Perps runtime state refreshed.",
+    });
+    await maybeSendPerpsAlerts();
     updateHeroHealth();
   } catch (error) {
     state.perps.lastError = error.message || "Unable to refresh perps data.";
@@ -1423,7 +1421,6 @@ async function refreshPerpsData({ fullScan = false, source = "manual" } = {}) {
 }
 
 async function maybeSendPerpsAlerts() {
-  if (state.backgroundAvailable) return;
   if (!state.perps.scannerEnabled || !isDiscordWebhook(state.perps.webhook)) return;
 
   const calls = mergePerpsCalls()
@@ -1435,7 +1432,9 @@ async function maybeSendPerpsAlerts() {
   const playgroundCandidates = (state.perps.playgroundSignals || [])
     .filter((candidate) => candidate.qualityScore >= 60 && withinLookback(candidate.timestamp || Date.now()))
     .sort((left, right) => right.qualityScore - left.qualityScore);
-  const candidates = runtimeCandidates.length ? runtimeCandidates : playgroundCandidates;
+  const candidates = runtimeCandidates.length
+    ? runtimeCandidates
+    : playgroundCandidates;
 
   const outbound = [
     ...calls.map((call) => ({ id: `call:${call.id}`, title: `${call.engineLabel} opened ${call.symbol}`, payload: createPerpsAlertPayload(call) })),
