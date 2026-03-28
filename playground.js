@@ -1283,6 +1283,12 @@ async function sendWebhookAlert(moduleKey, title, payload, meta) {
       discordWebhook: webhook,
     },
   });
+  if (response?.results?.discord && response.results.discord !== "sent") {
+    throw new Error(response.results.discord);
+  }
+  if (!response?.results?.discord) {
+    throw new Error("Discord delivery result was not returned by notify API.");
+  }
   return response;
 }
 
