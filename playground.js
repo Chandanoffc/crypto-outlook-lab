@@ -1443,6 +1443,7 @@ async function refreshPerpsData({ fullScan = false, source = "manual" } = {}) {
 
 async function maybeSendPerpsAlerts() {
   if (!state.perps.scannerEnabled || !isDiscordWebhook(state.perps.webhook)) return;
+  const deliveredSignalIds = new Set((state.perps.recentCalls || []).map((call) => call.id));
 
   const candidates = (state.perps.playgroundSignals || [])
     .filter((candidate) => candidate.qualityScore >= 60 && withinLookback(candidate.timestamp || Date.now()))
@@ -1458,7 +1459,7 @@ async function maybeSendPerpsAlerts() {
   ];
 
   for (const item of outbound) {
-    if (state.perps.sentIds.includes(item.id)) continue;
+    if (item.signal && deliveredSignalIds.has(item.signal.id)) continue;
     try {
       await sendWebhookAlert(PERPS_MODULE, item.title, item.payload, {
         source: "playground_perps",
@@ -1467,6 +1468,7 @@ async function maybeSendPerpsAlerts() {
       });
       pushSentId(PERPS_MODULE, item.id);
       if (item.signal) updatePerpsRecentCall(item.signal);
+      if (item.signal) deliveredSignalIds.add(item.signal.id);
       updateWebhookHealth(PERPS_MODULE, "ok", `Last delivery succeeded at ${formatDateTime(Date.now())}`);
       pushModuleLog(PERPS_MODULE, "alertLog", {
         tone: "up",
