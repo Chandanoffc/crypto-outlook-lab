@@ -36,20 +36,20 @@ const FRESH_SIGNAL_WINDOW_MS = 10 * 60 * 1000;
 const DEMO_STATUS_SYNC_BATCH = 20;
 const HIGHER_TIMEFRAME_INTERVAL = "4h";
 const EMA_SLOPE_LOOKBACK = 4;
-const MIN_EMA_SEPARATION_ATR = 0.2;
-const MAX_STALE_SIGNAL_BARS = 7;
-const MAX_AUTO_ENTRY_SIGNAL_BARS = 5;
+const MIN_EMA_SEPARATION_ATR = 0.12;
+const MAX_STALE_SIGNAL_BARS = 12;
+const MAX_AUTO_ENTRY_SIGNAL_BARS = 9;
 const MAX_POST_TOUCH_EXTENSION_ATR = 3.3;
 const MIN_VISIBLE_SIGNAL_RR = 1.1;
 const MIN_EXECUTION_RR = 1.15;
 const MIN_VISIBLE_SIGNAL_VOLUME_FACTOR = 0.96;
-const MIN_AUTO_EXECUTION_VOLUME_FACTOR = 0.92;
+const MIN_AUTO_EXECUTION_VOLUME_FACTOR = 0.78;
 const STRICT_LEVEL_TOUCH_BUFFER_ATR = 0.05;
 const STRICT_LEVEL_RECLAIM_BUFFER_ATR = 0.04;
 const MAX_EXECUTION_DISTANCE_FROM_TOUCH_ATR = 1.05;
 const LIVE_ENTRY_BUFFER_ATR = 0.55;
 const TRADEZ_AUTO_EXECUTION_THRESHOLD_BUFFER = 1;
-const TRADEZ_AUTO_MIN_EXECUTION_THRESHOLD = 67;
+const TRADEZ_AUTO_MIN_EXECUTION_THRESHOLD = 62;
 const DEFAULT_ALERT_CHANNELS = {
   browser: true,
   discordWebhook: "",
@@ -2156,7 +2156,7 @@ function highQualityTradezAutoCandidates(candidates, threshold) {
     .filter((candidate) => {
       const flowConfirmations = candidate.activeSignal?.flowConfirmations || 0;
       const higherTimeframeConfirmed = Boolean(candidate.activeSignal?.higherTimeframeConfirmed);
-      return flowConfirmations >= 2 || (flowConfirmations >= 1 && (higherTimeframeConfirmed || candidate.paperTrade.rr >= MIN_EXECUTION_RR));
+      return flowConfirmations >= 1 || (higherTimeframeConfirmed && candidate.paperTrade.rr >= MIN_EXECUTION_RR * 0.9);
     })
     .filter((candidate) => (candidate.activeSignal?.retestCount || 0) <= 4)
     .filter((candidate) => (candidate.activeSignal?.volumeFactor || 0) >= MIN_AUTO_EXECUTION_VOLUME_FACTOR)
@@ -3551,9 +3551,9 @@ function emaSlopeAligned(series, index, side, atrValue, lookback = EMA_SLOPE_LOO
     if (side === "Long" ? delta >= -minimumDelta : delta <= minimumDelta) supportive += 1;
   }
 
-  if (comparisons < 3) return false;
+  if (comparisons < 2) return false;
   if (supportive < comparisons - 1) return false;
-  return side === "Long" ? netChange > minimumDelta * 2 : netChange < -minimumDelta * 2;
+  return side === "Long" ? netChange > minimumDelta * 0.8 : netChange < -minimumDelta * 0.8;
 }
 
 function wickRejectedLevel(candle, level, side, touchBuffer, reclaimBuffer) {
@@ -3564,10 +3564,10 @@ function wickRejectedLevel(candle, level, side, touchBuffer, reclaimBuffer) {
   const upperWick = Math.max(candle.high - Math.max(candle.open, candle.close), 0);
 
   if (side === "Long") {
-    return wickTouchesLevel(candle, level, side, touchBuffer) && candle.close > level + reclaimBuffer && lowerWick > body * 0.45;
+    return wickTouchesLevel(candle, level, side, touchBuffer) && candle.close > level + reclaimBuffer && lowerWick > body * 0.28;
   }
 
-  return wickTouchesLevel(candle, level, side, touchBuffer) && candle.close < level - reclaimBuffer && upperWick > body * 0.45;
+  return wickTouchesLevel(candle, level, side, touchBuffer) && candle.close < level - reclaimBuffer && upperWick > body * 0.28;
 }
 
 function countFlowConfirmations(side, tradeSummary, takerSummary, depthSummary) {
@@ -3655,9 +3655,9 @@ function buildTradezSignals(snapshot, quoteVolume = 0) {
   const buyerLed = longFlowConfirmations === 3;
   const sellerLed = shortFlowConfirmations === 3;
   const higherTimeframeLongConfirmed =
-    higherTimeframeEma20 > higherTimeframeEma50 && higherTimeframeRsi > 50;
+    higherTimeframeEma20 > higherTimeframeEma50 && higherTimeframeRsi > 44;
   const higherTimeframeShortConfirmed =
-    higherTimeframeEma20 < higherTimeframeEma50 && higherTimeframeRsi < 50;
+    higherTimeframeEma20 < higherTimeframeEma50 && higherTimeframeRsi < 56;
   const bias = buildSetupBias(currentPrice, latestEma20, latestEma50, latestRsi);
   const completedLimit = Math.max(55, candles.length - 24);
   const markers = [];
