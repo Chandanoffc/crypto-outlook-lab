@@ -51,6 +51,7 @@ function loadState() {
         backgroundAvailable: false,
       },
       manualScan: null,
+      playgroundSignals: [],
       scanLog: [],
       alertLog: [],
       sentIds: [],
@@ -97,6 +98,9 @@ function loadState() {
           tradez: null,
           universe: Array.isArray(stored.perps?.runtime?.universe) ? stored.perps.runtime.universe : [],
         },
+        playgroundSignals: Array.isArray(stored.perps?.playgroundSignals)
+          ? stored.perps.playgroundSignals.slice(0, 24)
+          : [],
         scanLog: Array.isArray(stored.perps?.scanLog) ? stored.perps.scanLog.slice(0, MAX_LOG_ENTRIES) : [],
         alertLog: Array.isArray(stored.perps?.alertLog) ? stored.perps.alertLog.slice(0, MAX_LOG_ENTRIES) : [],
         sentIds: Array.isArray(stored.perps?.sentIds) ? stored.perps.sentIds.slice(0, MAX_ALERT_IDS) : [],
@@ -143,6 +147,7 @@ function persistState() {
         universeWarning: state.perps.runtime.universeWarning,
         backgroundAvailable: state.perps.runtime.backgroundAvailable,
       },
+      playgroundSignals: state.perps.playgroundSignals.slice(0, 24),
       scanLog: state.perps.scanLog.slice(0, MAX_LOG_ENTRIES),
       alertLog: state.perps.alertLog.slice(0, MAX_LOG_ENTRIES),
       sentIds: state.perps.sentIds.slice(0, MAX_ALERT_IDS),
@@ -887,6 +892,265 @@ function createPerpsAlertPayload(item) {
   };
 }
 
+function _calcEma(values, period) {
+  const length = Math.max(1, Number(period) || 1);
+  const numbers = (values || []).map((value) => Number(value)).filter((value) => Number.isFinite(value));
+  if (!numbers.length) return [];
+  const multiplier = 2 / (length + 1);
+  const emaValues = [numbers[0]];
+  for (let index = 1; index < numbers.length; index += 1) {
+    emaValues.push(numbers[index] * multiplier + emaValues[index - 1] * (1 - multiplier));
+  }
+  return emaValues;
+}
+
+function _calcRsi(values, period = 14) {
+  const closes = (values || []).map((value) => Number(value)).filter((value) => Number.isFinite(value));
+  if (closes.length <= period) return 50;
+  let gains = 0;
+  let losses = 0;
+  for (let index = 1; index <= period; index += 1) {
+    const delta = closes[index] - closes[index - 1];
+    if (delta >= 0) gains += delta;
+    else losses += Math.abs(delta);
+  }
+  let averageGain = gains / period;
+  let averageLoss = losses / period;
+  for (let index = period + 1; index < closes.length; index += 1) {
+    const delta = closes[index] - closes[index - 1];
+    const gain = delta > 0 ? delta : 0;
+    const loss = delta < 0 ? Math.abs(delta) : 0;
+    averageGain = (averageGain * (period - 1) + gain) / period;
+    averageLoss = (averageLoss * (period - 1) + loss) / period;
+  }
+  if (averageLoss === 0) return 100;
+  const rs = averageGain / averageLoss;
+  return 100 - 100 / (1 + rs);
+}
+
+function _calcMomentum(values, lookback = 6) {
+  const closes = (values || []).map((value) => Number(value)).filter((value) => Number.isFinite(value));
+  if (closes.length <= lookback) return 0;
+  const latest = closes[closes.length - 1];
+  const earlier = closes[closes.length - 1 - lookback];
+  if (!Number.isFinite(latest) || !Number.isFinite(earlier) || earlier === 0) return 0;
+  return ((latest - earlier) / earlier) * 100;
+}
+
+function _calcAtr(candles, period = 14) {
+  if (!Array.isArray(candles) || candles.length <= period) return 0;
+  const trueRanges = [];
+  for (let index = 1; index < candles.length; index += 1) {
+    const current = candles[index];
+    const previous = candles[index - 1];
+    const high = Number(current.high) || 0;
+    const low = Number(current.low) || 0;
+    const previousClose = Number(previous.close) || 0;
+    trueRanges.push(
+      Math.max(
+        high - low,
+        Math.abs(high - previousClose),
+        Math.abs(low - previousClose)
+      )
+    );
+  }
+  if (!trueRanges.length) return 0;
+  let atr = trueRanges.slice(0, period).reduce((sum, value) => sum + value, 0) / period;
+  for (let index = period; index < trueRanges.length; index += 1) {
+    atr = (atr * (period - 1) + trueRanges[index]) / period;
+  }
+  return atr;
+}
+
+function _scorePerpSignal(symbolInfo, candles, fundingRatePct) {
+  const closes = candles.map((candle) => Number(candle.close) || 0).filter((value) => value > 0);
+  if (closes.length < 55) return null;
+
+  const ema20 = _calcEma(closes, 20);
+  const ema50 = _calcEma(closes, 50);
+  const latestClose = closes[closes.length - 1];
+  const latestEma20 = ema20[ema20.length - 1] || latestClose;
+  const latestEma50 = ema50[ema50.length - 1] || latestClose;
+  const previousEma20 = ema20[ema20.length - 2] || latestEma20;
+  const previousEma50 = ema50[ema50.length - 2] || latestEma50;
+  const latestAtr = _calcAtr(candles, 14);
+  const rsi = _calcRsi(closes, 14);
+  const momentum = _calcMomentum(closes, 6);
+  const quoteVolume = Number(symbolInfo?.quoteVolume) || 0;
+  const side =
+    latestEma20 > latestEma50 && latestClose >= latestEma20
+      ? "Long"
+      : latestEma20 < latestEma50 && latestClose <= latestEma20
+        ? "Short"
+        : "";
+  if (!side || !latestAtr || !latestClose) return null;
+
+  const atrPct = (latestAtr / latestClose) * 100;
+  const emaGapPct = Math.abs(latestEma20 - latestEma50) / latestClose * 100;
+  const sideSign = side === "Long" ? 1 : -1;
+  const slopeAligned =
+    (latestEma20 - previousEma20) * sideSign > 0 &&
+    (latestEma50 - previousEma50) * sideSign >= 0;
+  const momentumAligned = momentum * sideSign > -0.1;
+  const fundingAligned =
+    side === "Long" ? Number(fundingRatePct) >= -0.02 : Number(fundingRatePct) <= 0.02;
+
+  let qualityScore = 52;
+  const reasons = [];
+
+  if (side === "Long") {
+    if (latestEma20 > latestEma50) {
+      qualityScore += 10;
+      reasons.push("EMA20 is leading EMA50 on 4H structure");
+    }
+    if (rsi >= 52) {
+      qualityScore += 8;
+      reasons.push(`RSI strength is supportive at ${formatNumber(rsi, 1)}`);
+    }
+  } else {
+    if (latestEma20 < latestEma50) {
+      qualityScore += 10;
+      reasons.push("EMA20 is below EMA50 on 4H structure");
+    }
+    if (rsi <= 48) {
+      qualityScore += 8;
+      reasons.push(`RSI pressure is supportive at ${formatNumber(rsi, 1)}`);
+    }
+  }
+
+  if (slopeAligned) {
+    qualityScore += 7;
+    reasons.push("EMA slopes remain aligned with trend direction");
+  }
+  if (momentumAligned) {
+    qualityScore += 7;
+    reasons.push(`Momentum remains aligned (${formatPercent(momentum, 2)})`);
+  }
+  if (emaGapPct >= 0.45) {
+    qualityScore += 7;
+    reasons.push(`EMA spread is healthy at ${formatPercent(emaGapPct, 2)}`);
+  } else if (emaGapPct < 0.18) {
+    qualityScore -= 8;
+  }
+  if (atrPct >= 1.4) {
+    qualityScore += 5;
+    reasons.push(`ATR regime is active at ${formatPercent(atrPct, 2)}`);
+  } else if (atrPct < 0.65) {
+    qualityScore -= 6;
+  }
+  if (fundingAligned) {
+    qualityScore += 4;
+    reasons.push(`Funding is supportive at ${formatPercent(fundingRatePct, 4)}`);
+  } else {
+    qualityScore -= 6;
+  }
+  if (quoteVolume >= 50_000_000) {
+    qualityScore += 5;
+    reasons.push(`Liquidity is strong (${formatCompactUsd(quoteVolume, 1)})`);
+  } else if (quoteVolume < 10_000_000) {
+    qualityScore -= 8;
+  }
+
+  const stopDistance = Math.max(latestAtr * 0.9, latestClose * 0.008);
+  const stopLoss = side === "Long" ? latestClose - stopDistance : latestClose + stopDistance;
+  const takeProfit = side === "Long" ? latestClose + stopDistance * 1.7 : latestClose - stopDistance * 1.7;
+  const rr = stopDistance > 0 ? Math.abs(takeProfit - latestClose) / Math.abs(latestClose - stopLoss) : 0;
+  if (rr < 1.25) {
+    qualityScore -= 10;
+  } else {
+    qualityScore += Math.min(8, Math.round((rr - 1) * 5));
+    reasons.push(`Projected reward is ${formatNumber(rr, 2)}R`);
+  }
+
+  if (qualityScore < 60) return null;
+
+  return {
+    id: `playground:${symbolInfo.symbol}:${candles[candles.length - 1]?.closeTime || Date.now()}`,
+    engine: "playground",
+    engineLabel: "Playground Engine",
+    symbol: symbolInfo.symbol,
+    side,
+    timeframe: "4H",
+    strategy: "Playground Engine",
+    qualityScore: Math.round(qualityScore),
+    entryPrice: latestClose,
+    stopLoss,
+    takeProfit,
+    takeProfit2: side === "Long" ? latestClose + stopDistance * 2.5 : latestClose - stopDistance * 2.5,
+    rr,
+    timestamp: Number(candles[candles.length - 1]?.closeTime) || Date.now(),
+    qualificationReason: reasons.join(" • ") || "Playground engine 4H perps setup qualified.",
+    metrics: {
+      rsi,
+      momentum,
+      atrPct,
+      emaGapPct,
+      fundingRatePct: Number(fundingRatePct) || 0,
+      quoteVolume,
+    },
+  };
+}
+
+async function fetchPerpsPlaygroundSignal(symbolInfo) {
+  const symbol = String(symbolInfo?.symbol || "").trim().toUpperCase();
+  if (!symbol) return null;
+  const [klines, premium] = await Promise.all([
+    fetchJson(`https://fapi.binance.com/fapi/v1/klines?symbol=${encodeURIComponent(symbol)}&interval=4h&limit=120`),
+    fetchJson(`https://fapi.binance.com/fapi/v1/premiumIndex?symbol=${encodeURIComponent(symbol)}`),
+  ]);
+  const candles = Array.isArray(klines)
+    ? klines.map((entry) => ({
+        openTime: Number(entry[0]) || 0,
+        open: Number(entry[1]) || 0,
+        high: Number(entry[2]) || 0,
+        low: Number(entry[3]) || 0,
+        close: Number(entry[4]) || 0,
+        volume: Number(entry[5]) || 0,
+        closeTime: Number(entry[6]) || 0,
+      }))
+    : [];
+  return _scorePerpSignal(symbolInfo, candles, (Number(premium?.lastFundingRate) || 0) * 100);
+}
+
+async function refreshPlaygroundSignals() {
+  const universe = Array.isArray(state.perps.runtime.universe) ? state.perps.runtime.universe : [];
+  const selected = selectedPerpsSymbol();
+  const priorityUniverse = universe
+    .filter((entry) => entry && entry.symbol)
+    .sort((left, right) => (Number(right.quoteVolume) || 0) - (Number(left.quoteVolume) || 0));
+  const symbols = [];
+  if (selected) {
+    const selectedEntry = priorityUniverse.find((entry) => entry.symbol === selected) || { symbol: selected, quoteVolume: 0 };
+    symbols.push(selectedEntry);
+  }
+  priorityUniverse.forEach((entry) => {
+    if (symbols.length >= 5) return;
+    if (!symbols.some((item) => item.symbol === entry.symbol)) {
+      symbols.push(entry);
+    }
+  });
+
+  if (!symbols.length) {
+    state.perps.playgroundSignals = [];
+    return [];
+  }
+
+  const results = await Promise.allSettled(symbols.map((entry) => fetchPerpsPlaygroundSignal(entry)));
+  const signals = results
+    .map((result) => (result.status === "fulfilled" ? result.value : null))
+    .filter(Boolean)
+    .sort((left, right) => right.qualityScore - left.qualityScore);
+
+  state.perps.playgroundSignals = signals.slice(0, 12);
+  pushModuleLog(PERPS_MODULE, "scanLog", {
+    tone: signals.length ? "up" : "neutral",
+    message: signals.length
+      ? `Playground Engine qualified ${signals.length} live perps setup${signals.length === 1 ? "" : "s"} across ${symbols.length} symbols.`
+      : `Playground Engine scanned ${symbols.length} top perps symbols with no fresh setup above Q60.`,
+  });
+  return signals;
+}
+
 function buildPerpsManualScanPayload(symbol) {
   const normalized = String(symbol || "").trim().toUpperCase();
   if (!normalized) return null;
@@ -913,6 +1177,19 @@ function buildPerpsManualScanPayload(symbol) {
       symbol: normalized,
       preferred: createPerpsAlertPayload(matchingCandidate),
       source: matchingCandidate.engineLabel,
+      scannedAt: Date.now(),
+    };
+  }
+
+  const playgroundSignal = (state.perps.playgroundSignals || [])
+    .filter((candidate) => candidate.symbol === normalized)
+    .sort((left, right) => (right.qualityScore || 0) - (left.qualityScore || 0))[0];
+  if (playgroundSignal) {
+    return {
+      ok: true,
+      symbol: normalized,
+      preferred: createPerpsAlertPayload(playgroundSignal),
+      source: playgroundSignal.engineLabel,
       scannedAt: Date.now(),
     };
   }
@@ -1116,6 +1393,8 @@ async function refreshPerpsData({ fullScan = false, source = "manual" } = {}) {
       state.perps.selectedSymbol = state.perps.runtime.universe[0].symbol;
     }
 
+    await refreshPlaygroundSignals();
+
     if (!playgroundRuntime?.backgroundAvailable) {
       pushModuleLog(PERPS_MODULE, "scanLog", {
         tone: "neutral",
@@ -1150,9 +1429,13 @@ async function maybeSendPerpsAlerts() {
   const calls = mergePerpsCalls()
     .filter((call) => call.status === "Open" && withinLookback(call.openedAt || call.detectedAt))
     .sort((left, right) => (right.openedAt || right.detectedAt) - (left.openedAt || left.detectedAt));
-  const candidates = mergePerpsCandidates()
-    .filter((candidate) => candidate.qualityScore >= 70 && withinLookback(candidate.timestamp || Date.now()))
+  const runtimeCandidates = mergePerpsCandidates()
+    .filter((candidate) => candidate.qualityScore >= 60 && withinLookback(candidate.timestamp || Date.now()))
     .sort((left, right) => right.qualityScore - left.qualityScore);
+  const playgroundCandidates = (state.perps.playgroundSignals || [])
+    .filter((candidate) => candidate.qualityScore >= 60 && withinLookback(candidate.timestamp || Date.now()))
+    .sort((left, right) => right.qualityScore - left.qualityScore);
+  const candidates = runtimeCandidates.length ? runtimeCandidates : playgroundCandidates;
 
   const outbound = [
     ...calls.map((call) => ({ id: `call:${call.id}`, title: `${call.engineLabel} opened ${call.symbol}`, payload: createPerpsAlertPayload(call) })),
@@ -1517,9 +1800,12 @@ function buildPerpsPreview() {
     `;
   }
 
-  const current = mergePerpsCandidates().find((candidate) => candidate.symbol === selectedPerpsSymbol());
+  const selected = selectedPerpsSymbol();
+  const current =
+    mergePerpsCandidates().find((candidate) => candidate.symbol === selected) ||
+    (state.perps.playgroundSignals || []).find((candidate) => candidate.symbol === selected);
   if (!current) {
-    return `<article class="playground-preview-card playground-empty-card"><strong>No current alert preview.</strong><span>Run a manual pair scan to inspect the selected symbol with the latest House and Tradez logic.</span></article>`;
+    return `<article class="playground-preview-card playground-empty-card"><strong>No current alert preview.</strong><span>Run a manual pair scan to inspect the selected symbol with the latest House, Tradez, and Playground Engine logic.</span></article>`;
   }
 
   const payload = createPerpsAlertPayload(current);
@@ -1860,6 +2146,7 @@ function buildDlmmReport() {
 function renderPerpsModule() {
   const metrics = computePerpsMetrics(mergePerpsCalls());
   const candidates = mergePerpsCandidates();
+  const playgroundSignals = state.perps.playgroundSignals || [];
   const selected = selectedPerpsSymbol();
   const currentSelection = state.perps.runtime.universe.find((entry) => entry.symbol === selected) || null;
   return `
@@ -1939,6 +2226,14 @@ function renderPerpsModule() {
                 ? `<div class="playground-chip-row">${candidates.slice(0, 12).map((candidate) => `<span class="playground-chip">${escapeHtml(candidate.symbol)} · ${escapeHtml(candidate.strategy)} · Q${formatNumber(candidate.qualityScore, 0)}</span>`).join("")}</div>`
                 : `<div class="playground-empty-card"><strong>No live perps candidates right now.</strong></div>`
             }
+            <div class="playground-detail-block">
+              <h4>Playground Engine — Live Signals</h4>
+              ${
+                playgroundSignals.length
+                  ? `<div class="playground-chip-row">${playgroundSignals.slice(0, 12).map((signal) => `<span class="playground-chip">${escapeHtml(signal.symbol)} · ${escapeHtml(signal.side)} · Q${formatNumber(signal.qualityScore, 0)}</span>`).join("")}</div>`
+                  : `<div class="playground-empty-card"><strong>No current Playground Engine signals.</strong><span>The local 4H Binance fallback engine will list top setups here every scan cycle.</span></div>`
+              }
+            </div>
           </article>
         </div>
       </section>
