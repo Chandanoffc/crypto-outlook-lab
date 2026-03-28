@@ -1432,9 +1432,17 @@ async function maybeSendPerpsAlerts() {
   const playgroundCandidates = (state.perps.playgroundSignals || [])
     .filter((candidate) => candidate.qualityScore >= 60 && withinLookback(candidate.timestamp || Date.now()))
     .sort((left, right) => right.qualityScore - left.qualityScore);
-  const candidates = runtimeCandidates.length
-    ? runtimeCandidates
-    : playgroundCandidates;
+  const candidateMap = new Map();
+  [...runtimeCandidates, ...playgroundCandidates].forEach((candidate) => {
+    const key = `${candidate.symbol}:${candidate.side}`;
+    const current = candidateMap.get(key);
+    if (!current || Number(candidate.qualityScore || 0) > Number(current.qualityScore || 0)) {
+      candidateMap.set(key, candidate);
+    }
+  });
+  const candidates = Array.from(candidateMap.values()).sort(
+    (left, right) => Number(right.qualityScore || 0) - Number(left.qualityScore || 0)
+  );
 
   const outbound = [
     ...calls.map((call) => ({ id: `call:${call.id}`, title: `${call.engineLabel} opened ${call.symbol}`, payload: createPerpsAlertPayload(call) })),
