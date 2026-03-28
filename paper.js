@@ -59,8 +59,8 @@ Opened: {openedAt}
 Mode: {mode}
 Open on Binance: {binanceLink}`,
 };
-const HOUSE_MIN_ENTRY_SCORE = 11;
-const HOUSE_MIN_REFINED_SCORE = 69;
+const HOUSE_MIN_ENTRY_SCORE = 4;
+const HOUSE_MIN_REFINED_SCORE = 58;
 const MIN_NEAREST_TARGET_RR = 1.05;
 const MAX_ENTRY_DISTANCE_FROM_EMA20_ATR = 1.9;
 const MAX_ENTRY_DISTANCE_FROM_LEVEL_ATR = 1.5;
@@ -1825,7 +1825,7 @@ function highQualityCandidates(candidates, threshold) {
         (candidate.refinedQualityScore ?? candidate.qualityScore) >= Math.max(effectiveThreshold, candidate.requiredQualityGate || 0) &&
         candidate.entryQualityScore >= (candidate.requiredEntryScore || HOUSE_MIN_ENTRY_SCORE) &&
         candidate.alignedCount >= 1 &&
-        candidate.conflictCount === 0 &&
+        candidate.conflictCount <= 1 &&
         !candidate.htfAgreementHardRejected &&
         candidate.trade?.entryLocationQuality &&
         candidate.trade?.distanceFromEma20Atr <= MAX_ENTRY_DISTANCE_FROM_EMA20_ATR &&
@@ -2356,8 +2356,9 @@ function applyCandidateConfirmation(candidate, ticker, confirmation) {
   }
   if (crowdedSetup) entryQualityScore -= 20;
   if (crowdedHardReject) entryQualityScore -= 24;
-  entryQualityScore += alignedCount >= 3 ? 20 : alignedCount === 2 ? 10 : -20;
-  if (conflictCount > 0) entryQualityScore -= 40;
+  entryQualityScore += alignedCount >= 3 ? 18 : alignedCount === 2 ? 8 : alignedCount === 1 ? -6 : -14;
+  if (conflictCount > 1) entryQualityScore -= 20;
+  else if (conflictCount === 1) entryQualityScore -= 12;
   entryQualityScore += distanceFromEma20Pct <= 2.5 ? 4 : -10;
   entryQualityScore += Math.abs(candidate.recentPriceChange) >= 0.8 ? 3 : -3;
   const requiredQualityGate =
@@ -2430,7 +2431,9 @@ function buildCoreTrendStrategySignal(candidate) {
   const refinedScore = candidate.refinedQualityScore ?? candidate.qualityScore;
   const entryScore = candidate.entryQualityScore ?? 0;
   const leadershipOk =
-    candidate.trade?.tone === "up" ? Boolean(candidate.buyerLed) : Boolean(candidate.sellerLed);
+    candidate.trade?.tone === "up"
+      ? candidate.cvdSlope > 0 || candidate.takerRatio > 1.01 || candidate.depthImbalance > 0.01
+      : candidate.cvdSlope < 0 || candidate.takerRatio < 0.99 || candidate.depthImbalance < -0.01;
   const effectiveGate = Math.max(
     effectiveHouseQualityGate(state.qualityThreshold),
     HOUSE_MIN_REFINED_SCORE,
@@ -2444,9 +2447,8 @@ function buildCoreTrendStrategySignal(candidate) {
     candidate.htfAgreementHardRejected ||
     !hasGoodTradingVolume(candidate.quoteVolume) ||
     candidate.rr < MIN_RR ||
-    entryScore < Math.max(HOUSE_MIN_ENTRY_SCORE, candidate.requiredEntryScore || 0) ||
+    entryScore < Math.max(HOUSE_MIN_ENTRY_SCORE, (candidate.requiredEntryScore || 0) - 4) ||
     refinedScore < effectiveGate ||
-    !leadershipOk ||
     !candidate.trade?.entryLocationQuality ||
     candidate.trade?.distanceFromEma20Atr > MAX_ENTRY_DISTANCE_FROM_EMA20_ATR ||
     candidate.trade?.distanceFromLevelAtr > MAX_ENTRY_DISTANCE_FROM_LEVEL_ATR ||
@@ -2459,11 +2461,16 @@ function buildCoreTrendStrategySignal(candidate) {
     return null;
   }
 
+  // Flow leadership is now a score modifier, not a hard veto
+  const leadershipBonus = leadershipOk ? 0 : -8;
+  const adjustedScore = refinedScore + leadershipBonus;
+  if (adjustedScore < effectiveGate) return null;
+
   return buildStrategySignal({
     strategyId: "core",
     side: candidate.trade.stance,
     tone: candidate.trade.tone,
-    qualityScore: refinedScore,
+    qualityScore: adjustedScore,
     detectedAt: Date.now(),
     entry: candidate.trade.entry,
     stopLoss: candidate.trade.stopLoss,
