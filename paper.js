@@ -6,7 +6,7 @@ const START_BALANCE = STRATEGY_START_BALANCE;
 const DEFAULT_INTERVAL = "15m";
 const DEFAULT_QUALITY_THRESHOLD = 61;
 const QUOTE_ASSET = "USDT";
-const AUTO_SCAN_MS = 90 * 1000;
+const AUTO_SCAN_MS = 60 * 1000;
 const PRIORITY_SCAN_COUNT = 10;
 const ROTATION_SCAN_COUNT = 24;
 const ANALYSIS_CONCURRENCY = 5;
@@ -2318,7 +2318,7 @@ function applyCandidateConfirmation(candidate, ticker, confirmation) {
   const lowerLiquiditySetup = quoteVolume < HIGH_VOLUME_FLOOR * 1.6;
   const crowdedSetup = Boolean(candidate.crowdedContinuation);
   const crowdedHardReject = Boolean(candidate.crowdedHardReject);
-  const htfAgreementHardRejected = alignedCount < 1 || conflictCount > 0;
+  const htfAgreementHardRejected = alignedCount < 1 || conflictCount > 1;
   const locationQuality = Boolean(candidate.trade?.entryLocationQuality);
   const slopesAligned = Boolean(candidate.ema20SlopeAligned);
 
@@ -2326,27 +2326,27 @@ function applyCandidateConfirmation(candidate, ticker, confirmation) {
   else entryQualityScore -= 20;
 
   if (direction === "up") {
-    entryQualityScore += candidate.rsi >= 52 && candidate.rsi <= 64 ? 8 : -8;
-    entryQualityScore += candidate.cvdSlope > 0 ? 10 : -14;
-    entryQualityScore += candidate.takerRatio > 1.01 ? 8 : -10;
-    entryQualityScore += candidate.depthImbalance > 0.02 ? 6 : -8;
-    entryQualityScore += candidate.oiChange1h > 0 ? 6 : -4;
+    entryQualityScore += candidate.rsi >= 44 && candidate.rsi <= 72 ? 8 : -4;
+    entryQualityScore += candidate.cvdSlope > 0 ? 10 : -5;
+    entryQualityScore += candidate.takerRatio > 1.01 ? 8 : -4;
+    entryQualityScore += candidate.depthImbalance > 0.02 ? 6 : -3;
+    entryQualityScore += candidate.oiChange1h > 0 ? 6 : -2;
     if (candidate.fundingRate > 0.03) entryQualityScore -= 10;
   } else {
-    entryQualityScore += candidate.rsi <= 48 && candidate.rsi >= 34 ? 8 : -8;
-    entryQualityScore += candidate.cvdSlope < 0 ? 10 : -14;
-    entryQualityScore += candidate.takerRatio < 0.99 ? 8 : -10;
-    entryQualityScore += candidate.depthImbalance < -0.02 ? 6 : -8;
-    entryQualityScore += candidate.oiChange1h > 0 ? 6 : -4;
+    entryQualityScore += candidate.rsi <= 56 && candidate.rsi >= 28 ? 8 : -4;
+    entryQualityScore += candidate.cvdSlope < 0 ? 10 : -5;
+    entryQualityScore += candidate.takerRatio < 0.99 ? 8 : -4;
+    entryQualityScore += candidate.depthImbalance < -0.02 ? 6 : -3;
+    entryQualityScore += candidate.oiChange1h > 0 ? 6 : -2;
     if (candidate.fundingRate < -0.03) entryQualityScore -= 10;
   }
 
-  entryQualityScore += locationQuality ? 10 : -24;
-  entryQualityScore += candidate.trade?.mode === "pullback" ? 6 : candidate.trade?.mode === "breakout" ? 2 : -18;
-  entryQualityScore += candidate.trade?.distanceFromEma20Atr <= MAX_ENTRY_DISTANCE_FROM_EMA20_ATR ? 6 : -14;
-  entryQualityScore += candidate.trade?.distanceFromLevelAtr <= MAX_ENTRY_DISTANCE_FROM_LEVEL_ATR ? 6 : -12;
-  entryQualityScore += slopesAligned ? 12 : -22;
-  entryQualityScore += candidate.trade?.nearestTargetRr >= MIN_NEAREST_TARGET_RR ? 8 : -18;
+  entryQualityScore += locationQuality ? 10 : -8;
+  entryQualityScore += candidate.trade?.mode === "pullback" ? 6 : candidate.trade?.mode === "breakout" ? 2 : -6;
+  entryQualityScore += candidate.trade?.distanceFromEma20Atr <= MAX_ENTRY_DISTANCE_FROM_EMA20_ATR ? 6 : -6;
+  entryQualityScore += candidate.trade?.distanceFromLevelAtr <= MAX_ENTRY_DISTANCE_FROM_LEVEL_ATR ? 6 : -5;
+  entryQualityScore += slopesAligned ? 12 : -8;
+  entryQualityScore += candidate.trade?.nearestTargetRr >= MIN_NEAREST_TARGET_RR ? 8 : -6;
   if (candidate.compressedStructure) entryQualityScore -= 10;
   if (candidate.extremeCompressedStructure) entryQualityScore -= 6;
   if (candidate.lowVolatilityChop) entryQualityScore -= 12;
@@ -2443,7 +2443,7 @@ function buildCoreTrendStrategySignal(candidate) {
   if (
     candidate.bias.tone === "neutral" ||
     candidate.alignedCount < 1 ||
-    candidate.conflictCount > 0 ||
+    candidate.conflictCount > 1 ||
     candidate.htfAgreementHardRejected ||
     !hasGoodTradingVolume(candidate.quoteVolume) ||
     candidate.rr < MIN_RR ||
