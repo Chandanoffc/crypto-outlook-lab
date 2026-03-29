@@ -42,7 +42,7 @@ const MAX_AUTO_ENTRY_SIGNAL_BARS = 9;
 const MAX_POST_TOUCH_EXTENSION_ATR = 3.3;
 const MIN_VISIBLE_SIGNAL_RR = 1.1;
 const MIN_EXECUTION_RR = 1.15;
-const MIN_VISIBLE_SIGNAL_VOLUME_FACTOR = 0.96;
+const MIN_VISIBLE_SIGNAL_VOLUME_FACTOR = 0.75;
 const MIN_AUTO_EXECUTION_VOLUME_FACTOR = 0.78;
 const STRICT_LEVEL_TOUCH_BUFFER_ATR = 0.05;
 const STRICT_LEVEL_RECLAIM_BUFFER_ATR = 0.04;
@@ -3711,46 +3711,46 @@ function buildTradezSignals(snapshot, quoteVolume = 0) {
     const bullishVolumeConfirmed =
       candle.close > candle.open &&
       volumeFactor >= MIN_VISIBLE_SIGNAL_VOLUME_FACTOR &&
-      rangePosition(candle, "Long") >= 0.52 &&
-      (!nextCandle || nextCandle.close >= candle.close * 0.992);
+      rangePosition(candle, "Long") >= 0.42;
     const previousBullishVolumeConfirmed =
       previousCandle &&
       previousCandle.close > previousCandle.open &&
       previousVolumeFactor >= MIN_VISIBLE_SIGNAL_VOLUME_FACTOR &&
-      rangePosition(previousCandle, "Long") >= 0.52 &&
-      candle.close >= previousCandle.close * 0.992;
+      rangePosition(previousCandle, "Long") >= 0.42;
     const bearishVolumeConfirmed =
       candle.close < candle.open &&
       volumeFactor >= MIN_VISIBLE_SIGNAL_VOLUME_FACTOR &&
-      rangePosition(candle, "Short") >= 0.52 &&
-      (!nextCandle || nextCandle.close <= candle.close * 1.008);
+      rangePosition(candle, "Short") >= 0.42;
     const previousBearishVolumeConfirmed =
       previousCandle &&
       previousCandle.close < previousCandle.open &&
       previousVolumeFactor >= MIN_VISIBLE_SIGNAL_VOLUME_FACTOR &&
-      rangePosition(previousCandle, "Short") >= 0.52 &&
-      candle.close <= previousCandle.close * 1.008;
+      rangePosition(previousCandle, "Short") >= 0.42;
     const longSlopeAligned = emaSlopeAligned(ema20Series, index, "Long", atrValue);
     const shortSlopeAligned = emaSlopeAligned(ema20Series, index, "Short", atrValue);
     const longSetup =
       bullishTrend &&
-      higherTimeframeLongConfirmed &&
+      (higherTimeframeLongConfirmed || longFlowConfirmations >= 2) &&
       longSlopeAligned &&
       emaSeparationAtr >= MIN_EMA_SEPARATION_ATR &&
       longFlowConfirmations >= 1 &&
       (
         ((currentLongTouchS1 || currentLongTouchS2) && bullishVolumeConfirmed) ||
-        ((previousLongTouchS1 || previousLongTouchS2) && previousBullishVolumeConfirmed)
+        ((previousLongTouchS1 || previousLongTouchS2) && previousBullishVolumeConfirmed) ||
+        ((currentLongTouchS1 || currentLongTouchS2) && longFlowConfirmations >= 2) ||
+        ((previousLongTouchS1 || previousLongTouchS2) && longFlowConfirmations >= 2)
       );
     const shortSetup =
       bearishTrend &&
-      higherTimeframeShortConfirmed &&
+      (higherTimeframeShortConfirmed || shortFlowConfirmations >= 2) &&
       shortSlopeAligned &&
       emaSeparationAtr >= MIN_EMA_SEPARATION_ATR &&
       shortFlowConfirmations >= 1 &&
       (
         ((currentShortTouchR1 || currentShortTouchR2) && bearishVolumeConfirmed) ||
-        ((previousShortTouchR1 || previousShortTouchR2) && previousBearishVolumeConfirmed)
+        ((previousShortTouchR1 || previousShortTouchR2) && previousBearishVolumeConfirmed) ||
+        ((currentShortTouchR1 || currentShortTouchR2) && shortFlowConfirmations >= 2) ||
+        ((previousShortTouchR1 || previousShortTouchR2) && shortFlowConfirmations >= 2)
       );
 
     if (!longSetup && !shortSetup) continue;
