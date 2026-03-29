@@ -1079,9 +1079,9 @@ function _scorePerpSignal(symbolInfo, candles, fundingRatePct) {
   const momentum = _calcMomentum(closes, 6);
   const quoteVolume = Number(symbolInfo?.quoteVolume) || 0;
   const side =
-    latestEma20 > latestEma50 && latestClose >= latestEma20
+    latestEma20 > latestEma50 && latestClose >= latestEma20 * 0.982
       ? "Long"
-      : latestEma20 < latestEma50 && latestClose <= latestEma20
+      : latestEma20 < latestEma50 && latestClose <= latestEma20 * 1.018
         ? "Short"
         : "";
   if (!side || !latestAtr || !latestClose) return null;
@@ -1104,18 +1104,22 @@ function _scorePerpSignal(symbolInfo, candles, fundingRatePct) {
       qualityScore += 10;
       reasons.push("EMA20 is leading EMA50 on 4H structure");
     }
-    if (rsi >= 52) {
+    if (rsi >= 44 && rsi <= 70) {
       qualityScore += 8;
-      reasons.push(`RSI strength is supportive at ${formatNumber(rsi, 1)}`);
+      reasons.push(`RSI is in the bullish continuation zone at ${formatNumber(rsi, 1)}`);
+    } else if (rsi > 70) {
+      qualityScore -= 4;
     }
   } else {
     if (latestEma20 < latestEma50) {
       qualityScore += 10;
       reasons.push("EMA20 is below EMA50 on 4H structure");
     }
-    if (rsi <= 48) {
+    if (rsi <= 56 && rsi >= 30) {
       qualityScore += 8;
-      reasons.push(`RSI pressure is supportive at ${formatNumber(rsi, 1)}`);
+      reasons.push(`RSI is in the bearish continuation zone at ${formatNumber(rsi, 1)}`);
+    } else if (rsi < 30) {
+      qualityScore -= 4;
     }
   }
 
@@ -1163,7 +1167,7 @@ function _scorePerpSignal(symbolInfo, candles, fundingRatePct) {
     reasons.push(`Projected reward is ${formatNumber(rr, 2)}R`);
   }
 
-  if (qualityScore < 60) return null;
+  if (qualityScore < 54) return null;
 
   return {
     id: `playground:${symbolInfo.symbol}:${candles[candles.length - 1]?.closeTime || Date.now()}`,
@@ -1225,7 +1229,7 @@ async function refreshPlaygroundSignals() {
     symbols.push(selectedEntry);
   }
   priorityUniverse.forEach((entry) => {
-    if (symbols.length >= 5) return;
+    if (symbols.length >= 10) return;
     if (!symbols.some((item) => item.symbol === entry.symbol)) {
       symbols.push(entry);
     }
@@ -1519,7 +1523,12 @@ async function refreshPerpsData({ fullScan = false, source = "manual" } = {}) {
 
 async function maybeSendPerpsAlerts() {
   if (!state.perps.scannerEnabled || !isDiscordWebhook(state.perps.webhook)) return;
-  const deliveredSignalIds = new Set((state.perps.recentCalls || []).map((call) => call.id));
+  const fourHoursAgo = Date.now() - 4 * 60 * 60 * 1000;
+  const deliveredSignalIds = new Set(
+    (state.perps.recentCalls || [])
+      .filter((call) => Number(call.openedAt || call.detectedAt || 0) > fourHoursAgo)
+      .map((call) => call.id)
+  );
 
   const candidates = (state.perps.playgroundSignals || [])
     .filter((candidate) => candidate.qualityScore >= 60 && withinLookback(candidate.timestamp || Date.now()))
