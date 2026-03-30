@@ -36,7 +36,7 @@ const FRESH_SIGNAL_WINDOW_MS = 10 * 60 * 1000;
 const DEMO_STATUS_SYNC_BATCH = 20;
 const HIGHER_TIMEFRAME_INTERVAL = "4h";
 const EMA_SLOPE_LOOKBACK = 4;
-const MIN_EMA_SEPARATION_ATR = 0.12;
+const MIN_EMA_SEPARATION_ATR = 0.04;
 const MAX_STALE_SIGNAL_BARS = 12;
 const MAX_AUTO_ENTRY_SIGNAL_BARS = 9;
 const MAX_POST_TOUCH_EXTENSION_ATR = 3.3;
@@ -46,10 +46,10 @@ const MIN_VISIBLE_SIGNAL_VOLUME_FACTOR = 0.75;
 const MIN_AUTO_EXECUTION_VOLUME_FACTOR = 0.78;
 const STRICT_LEVEL_TOUCH_BUFFER_ATR = 0.05;
 const STRICT_LEVEL_RECLAIM_BUFFER_ATR = 0.04;
-const MAX_EXECUTION_DISTANCE_FROM_TOUCH_ATR = 1.05;
-const LIVE_ENTRY_BUFFER_ATR = 0.55;
+const MAX_EXECUTION_DISTANCE_FROM_TOUCH_ATR = 2.2;
+const LIVE_ENTRY_BUFFER_ATR = 1.2;
 const TRADEZ_AUTO_EXECUTION_THRESHOLD_BUFFER = 1;
-const TRADEZ_AUTO_MIN_EXECUTION_THRESHOLD = 62;
+const TRADEZ_AUTO_MIN_EXECUTION_THRESHOLD = 56;
 const DEFAULT_ALERT_CHANNELS = {
   browser: true,
   discordWebhook: "",
@@ -3553,7 +3553,7 @@ function emaSlopeAligned(series, index, side, atrValue, lookback = EMA_SLOPE_LOO
 
   if (comparisons < 2) return false;
   if (supportive < comparisons - 1) return false;
-  return side === "Long" ? netChange > minimumDelta * 0.8 : netChange < -minimumDelta * 0.8;
+  return side === "Long" ? netChange > -minimumDelta * 0.5 : netChange < minimumDelta * 0.5;
 }
 
 function wickRejectedLevel(candle, level, side, touchBuffer, reclaimBuffer) {
@@ -3844,7 +3844,7 @@ function buildTradezSignals(snapshot, quoteVolume = 0) {
     const staleSetup = sinceTouchBars > MAX_STALE_SIGNAL_BARS;
     const overextendedSetup = extensionFromTouch > atrValue * MAX_POST_TOUCH_EXTENSION_ATR;
     const chasedSetup = executionDistanceFromTouch > atrValue * MAX_EXECUTION_DISTANCE_FROM_TOUCH_ATR;
-    if (!wickRejected || retestCount > 2 || staleSetup || overextendedSetup || chasedSetup || !softerDisplayFlowConfirmed) continue;
+    if (!wickRejected || retestCount > 5 || staleSetup || overextendedSetup || chasedSetup || !softerDisplayFlowConfirmed) continue;
     const emaConfluenceScore = touch20 && touch50 ? 18 : touch50 ? 14 : touch20 ? 12 : 4;
     let qualityScore = 46;
     qualityScore += side === "Long" ? 18 : 18;
@@ -4813,8 +4813,7 @@ async function loadSelectedToken(tokenOrSymbol) {
 }
 
 async function scanUniverse(manual = false) {
-  if (remoteRuntimeEnabled) {
-    if (!manual) return;
+  if (remoteRuntimeEnabled && manual) {
     setStatus("Running manual Tradez background scan...", "neutral");
     try {
       const payload = await postRemoteRuntimeAction("scan", {
@@ -4827,10 +4826,7 @@ async function scanUniverse(manual = false) {
         payload.state?.lastStatusMessage || "Tradez background scan complete.",
         payload.state?.lastStatusTone || "neutral"
       );
-    } catch (error) {
-      setStatus(error.message || "Tradez background scan failed.", "down");
-    }
-    return;
+    } catch (_scanError) {}
   }
 
   setStatus(
@@ -5151,16 +5147,16 @@ async function bootstrapTradezRuntime() {
         setStatus("Background Auto Trade 2 engine connected.", "up");
       }
       startRemoteRuntimePolling();
-      return;
     }
   } catch (error) {
     // Fall back to the legacy in-browser scanner when the server runtime is unavailable.
   }
 
-  remoteRuntimeEnabled = false;
-  stopRemoteRuntimePolling();
-  await scanUniverse(false);
+  if (!remoteRuntimeEnabled) {
+    stopRemoteRuntimePolling();
+  }
   startAutoScan();
+  await scanUniverse(false);
 }
 
 bootstrapTradezRuntime();
