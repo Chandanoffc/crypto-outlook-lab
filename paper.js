@@ -59,11 +59,11 @@ Opened: {openedAt}
 Mode: {mode}
 Open on Binance: {binanceLink}`,
 };
-const HOUSE_MIN_ENTRY_SCORE = 4;
-const HOUSE_MIN_REFINED_SCORE = 58;
+const HOUSE_MIN_ENTRY_SCORE = -20;
+const HOUSE_MIN_REFINED_SCORE = 48;
 const MIN_NEAREST_TARGET_RR = 1.05;
-const MAX_ENTRY_DISTANCE_FROM_EMA20_ATR = 1.9;
-const MAX_ENTRY_DISTANCE_FROM_LEVEL_ATR = 1.5;
+const MAX_ENTRY_DISTANCE_FROM_EMA20_ATR = 3.5;
+const MAX_ENTRY_DISTANCE_FROM_LEVEL_ATR = 3.0;
 const MIN_EMA_SPREAD_ATR = 0.22;
 const MIN_ATR_PCT_FOR_CONTINUATION = 0.45;
 const MIN_RECENT_BODY_RATIO = 0.33;
@@ -1827,7 +1827,6 @@ function highQualityCandidates(candidates, threshold) {
         candidate.alignedCount >= 1 &&
         candidate.conflictCount <= 1 &&
         !candidate.htfAgreementHardRejected &&
-        candidate.trade?.entryLocationQuality &&
         candidate.trade?.distanceFromEma20Atr <= MAX_ENTRY_DISTANCE_FROM_EMA20_ATR &&
         candidate.trade?.distanceFromLevelAtr <= MAX_ENTRY_DISTANCE_FROM_LEVEL_ATR &&
         candidate.trade?.nearestTargetRr >= MIN_NEAREST_TARGET_RR &&
@@ -2323,7 +2322,7 @@ function applyCandidateConfirmation(candidate, ticker, confirmation) {
   const slopesAligned = Boolean(candidate.ema20SlopeAligned);
 
   if (hasGoodTradingVolume(quoteVolume)) entryQualityScore += 12;
-  else entryQualityScore -= 20;
+  else entryQualityScore -= 6;
 
   if (direction === "up") {
     entryQualityScore += candidate.rsi >= 44 && candidate.rsi <= 72 ? 8 : -4;
@@ -2341,8 +2340,8 @@ function applyCandidateConfirmation(candidate, ticker, confirmation) {
     if (candidate.fundingRate < -0.03) entryQualityScore -= 10;
   }
 
-  entryQualityScore += locationQuality ? 10 : -8;
-  entryQualityScore += candidate.trade?.mode === "pullback" ? 6 : candidate.trade?.mode === "breakout" ? 2 : -6;
+  entryQualityScore += locationQuality ? 10 : -2;
+  entryQualityScore += candidate.trade?.mode === "pullback" ? 6 : candidate.trade?.mode === "breakout" ? 4 : 0;
   entryQualityScore += candidate.trade?.distanceFromEma20Atr <= MAX_ENTRY_DISTANCE_FROM_EMA20_ATR ? 6 : -6;
   entryQualityScore += candidate.trade?.distanceFromLevelAtr <= MAX_ENTRY_DISTANCE_FROM_LEVEL_ATR ? 6 : -5;
   entryQualityScore += slopesAligned ? 12 : -8;
@@ -2449,7 +2448,6 @@ function buildCoreTrendStrategySignal(candidate) {
     candidate.rr < MIN_RR ||
     entryScore < Math.max(HOUSE_MIN_ENTRY_SCORE, (candidate.requiredEntryScore || 0) - 4) ||
     refinedScore < effectiveGate ||
-    !candidate.trade?.entryLocationQuality ||
     candidate.trade?.distanceFromEma20Atr > MAX_ENTRY_DISTANCE_FROM_EMA20_ATR ||
     candidate.trade?.distanceFromLevelAtr > MAX_ENTRY_DISTANCE_FROM_LEVEL_ATR ||
     candidate.trade?.nearestTargetRr < MIN_NEAREST_TARGET_RR ||
@@ -3500,21 +3498,21 @@ function renderDashboard(universe = []) {
 }
 
 async function scanUniverse({ manual = false } = {}) {
-  if (remoteRuntimeEnabled) {
-    if (!manual) return;
+  if (remoteRuntimeEnabled && manual) {
     setStatus("Requesting a manual House scan from the background runtime...", "neutral");
-    const payload = await postRemoteRuntimeAction("scan", {
-      interval: state.interval,
-      qualityThreshold: state.qualityThreshold,
-      autoEnabled: state.autoEnabled,
-    });
-    applyRemoteRuntimeState(payload.state || {});
-    syncControls();
-    await refreshUniverseDisplay();
-    if (payload.state?.lastStatusMessage) {
-      setStatus(payload.state.lastStatusMessage, payload.state.lastStatusTone || "neutral");
-    }
-    return;
+    try {
+      const payload = await postRemoteRuntimeAction("scan", {
+        interval: state.interval,
+        qualityThreshold: state.qualityThreshold,
+        autoEnabled: state.autoEnabled,
+      });
+      applyRemoteRuntimeState(payload.state || {});
+      syncControls();
+      await refreshUniverseDisplay();
+      if (payload.state?.lastStatusMessage) {
+        setStatus(payload.state.lastStatusMessage, payload.state.lastStatusTone || "neutral");
+      }
+    } catch (_scanError) {}
   }
 
   if (scanning) return;
@@ -3885,14 +3883,14 @@ async function bootstrapPaperRuntime() {
         setStatus("Background House engine connected.", "up");
       }
       startRemoteRuntimePolling();
-      return;
     }
   } catch (error) {
     // Fall back to the legacy in-browser scanner when the server runtime is unavailable.
   }
 
-  remoteRuntimeEnabled = false;
-  stopRemoteRuntimePolling();
+  if (!remoteRuntimeEnabled) {
+    stopRemoteRuntimePolling();
+  }
   scheduleAutoScan();
   scanUniverse();
 }
