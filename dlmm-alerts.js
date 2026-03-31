@@ -412,10 +412,11 @@ function buildDlmmAnalysis(pool, stats) {
   monitors.push(`24H volume ${pool.volume24h.toFixed(0)}`);
   monitors.push(`TVL ${pool.tvl.toFixed(0)}`);
   monitors.push(`Fee/TVL 24H ${pool.feeTvlRatio24h.toFixed(2)}%`);
-  if (pool.fees10m > 0) monitors.push(`Fees 10M ${pool.fees10m.toFixed(0)}`);
-  if (pool.fees30m > 0) monitors.push(`Fees 30M ${pool.fees30m.toFixed(0)}`);
-  if (pool.fees1h > 0) monitors.push(`Fees 1H ${pool.fees1h.toFixed(0)}`);
-  if (pool.fees24h > 0) monitors.push(`Fees 24H ${pool.fees24h.toFixed(0)}`);
+  if (pool.fees5m  > 0) monitors.push(`Fees 5M  $${pool.fees5m.toFixed(2)}`);
+  if (pool.fees10m > 0) monitors.push(`Fees 10M $${pool.fees10m.toFixed(2)}`);
+  if (pool.fees30m > 0) monitors.push(`Fees 30M $${pool.fees30m.toFixed(2)}`);
+  if (pool.fees1h  > 0) monitors.push(`Fees 1H  $${pool.fees1h.toFixed(2)}`);
+  if (pool.fees24h > 0) monitors.push(`Fees 24H $${pool.fees24h.toFixed(2)}`);
   monitors.push(`Bin step ${pool.binStep}`);
   monitors.push(`Preferred bins ${preferredBins}`);
   if (Number.isFinite(pool.dynamicFeeRate)) monitors.push(`Dynamic fee ${pool.dynamicFeeRate.toFixed(2)}%`);
@@ -465,9 +466,10 @@ function shapeDlmmPool(rawPool = {}, candles = []) {
     volume24h,
     tvl,
     feeTvlRatio24h,
+    fees5m:  readDlmmFeeWindow(rawPool, "5m"),
     fees10m: readDlmmFeeWindow(rawPool, "10m"),
     fees30m: readDlmmFeeWindow(rawPool, "30m"),
-    fees1h: readDlmmFeeWindow(rawPool, "1h"),
+    fees1h:  readDlmmFeeWindow(rawPool, "1h"),
     fees24h: readDlmmFeeWindow(rawPool, "24h"),
     totalApr: baseApr + farmApr,
     dynamicFeeRate,
@@ -1289,9 +1291,10 @@ function createDlmmAlertPayload(opportunity) {
     preferredBins: opportunity.analysis.preferredBins,
     suggestedRange: opportunity.analysis.suggestedRange,
     estimatedHoldTime: opportunity.analysis.estimatedHoldTime,
+    fees5m:  opportunity.fees5m,
     fees10m: opportunity.fees10m,
     fees30m: opportunity.fees30m,
-    fees1h: opportunity.fees1h,
+    fees1h:  opportunity.fees1h,
     fees24h: opportunity.fees24h,
     riskNotes: opportunity.analysis.riskNotes,
     importantParametersToMonitor: opportunity.analysis.monitors,
@@ -1339,13 +1342,56 @@ async function sendWebhookAlert(moduleKey, title, payload, meta) {
     event.direction = String(payload.direction || payload.side || "").trim().toUpperCase();
     event.strategy = String(payload.strategy || "DLMM Alerts").trim();
     event.preferredBins = Number(payload.preferredBins) || 0;
+    event.fees5m  = Number(payload.fees5m)  || 0;
     event.fees10m = Number(payload.fees10m) || 0;
     event.fees30m = Number(payload.fees30m) || 0;
-    event.fees1h = Number(payload.fees1h) || 0;
+    event.fees1h  = Number(payload.fees1h)  || 0;
     event.fees24h = Number(payload.fees24h) || 0;
     event.bannerLabel = "NEW DLMM ALERT";
     event.bannerFlashFrames = [event.bannerLabel, pair].filter(Boolean);
     event.bannerTitle = [event.bannerLabel, event.strategy, pair].filter(Boolean).join(" | ");
+    const _ff = (v) => {
+      const n = Number(v);
+      return n > 0 ? `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—";
+    };
+    const _monitors = Array.isArray(payload.importantParametersToMonitor) ? payload.importantParametersToMonitor : [];
+    const _tvlLine    = _monitors.find((m) => String(m).startsWith("TVL")) || "";
+    const _volLine    = _monitors.find((m) => String(m).startsWith("24H volume")) || "";
+    const _ratioLine  = _monitors.find((m) => String(m).startsWith("Fee/TVL")) || "";
+    const _rangeLine  = _monitors.find((m) => String(m).startsWith("24H pool price range")) || "";
+    const _dynLine    = _monitors.find((m) => String(m).startsWith("Dynamic fee")) || "";
+    const _binLine    = _monitors.find((m) => String(m).startsWith("Bin step")) || "";
+    const _prefLine   = _monitors.find((m) => String(m).startsWith("Preferred bins")) || "";
+    const _reasons    = Array.isArray(payload.qualificationReason) ? payload.qualificationReason.join(" • ") : String(payload.qualificationReason || "—");
+    const _risks      = Array.isArray(payload.riskNotes) ? payload.riskNotes.join(" • ") : String(payload.riskNotes || "None");
+    event.message = [
+      `🟡 NEW DLMM ALERT — ${event.strategy} — ${pair}`,
+      ``,
+      `Pool CA: ${event.pool}`,
+      `Strategy: ${event.strategy}`,
+      `Suggested Range: ${payload.suggestedRange || "—"}`,
+      `${_binLine}  |  ${_prefLine}`,
+      `Estimated Hold: ${payload.estimatedHoldTime || "—"}`,
+      `Confidence: ${payload.confidence || "—"}`,
+      ``,
+      `📊 Fee Windows (per bin)`,
+      `Fees  5m: ${_ff(event.fees5m)}`,
+      `Fees 10m: ${_ff(event.fees10m)}`,
+      `Fees 30m: ${_ff(event.fees30m)}`,
+      `Fees  1H: ${_ff(event.fees1h)}`,
+      `Fees 24H: ${_ff(event.fees24h)}`,
+      ``,
+      `📈 Pool Metrics`,
+      _tvlLine   ? _tvlLine   : "",
+      _volLine   ? _volLine   : "",
+      _ratioLine ? _ratioLine : "",
+      _rangeLine ? `Price Range 24H: ${_rangeLine.replace("24H pool price range ", "")}` : "",
+      _dynLine   ? _dynLine   : "",
+      ``,
+      `✅ Qualifies: ${_reasons}`,
+      `⚠️ Risk: ${_risks}`,
+    ].filter((line) => line !== "").join("\n");
+    event.formattedMessage = event.message;
   }
 
   const response = await postJson("/api/notify", {
@@ -1401,9 +1447,10 @@ async function testWebhook(moduleKey) {
               preferredBins: 16,
               suggestedRange: "±10%",
               estimatedHoldTime: "1-3 days",
+              fees5m:  55,
               fees10m: 120,
               fees30m: 340,
-              fees1h: 620,
+              fees1h:  620,
               fees24h: 4800,
               riskNotes: ["Webhook validation test"],
               importantParametersToMonitor: ["TVL", "24H volume", "Fee/TVL ratio"],
@@ -1616,9 +1663,10 @@ function updateDlmmCalls(opportunities) {
         existing.currentRange = pool.analysis.suggestedRange;
         existing.binStep = pool.binStep;
         existing.preferredBins = pool.analysis.preferredBins;
+        existing.fees5m  = pool.fees5m;
         existing.fees10m = pool.fees10m;
         existing.fees30m = pool.fees30m;
-        existing.fees1h = pool.fees1h;
+        existing.fees1h  = pool.fees1h;
         existing.fees24h = pool.fees24h;
         existing.lastSeenAt = now;
         existing.misses = 0;
@@ -1643,9 +1691,10 @@ function updateDlmmCalls(opportunities) {
           currentRange: pool.analysis.suggestedRange,
           preferredBins: pool.analysis.preferredBins,
           estimatedHoldTime: pool.analysis.estimatedHoldTime,
+          fees5m:  pool.fees5m,
           fees10m: pool.fees10m,
           fees30m: pool.fees30m,
-          fees1h: pool.fees1h,
+          fees1h:  pool.fees1h,
           fees24h: pool.fees24h,
           riskNotes: pool.analysis.riskNotes,
           monitors: pool.analysis.monitors,
@@ -1694,9 +1743,10 @@ async function maybeSendDlmmAlerts() {
         qualificationReasons: call.latestNotes,
       },
       binStep: call.binStep || selectedPool()?.binStep || null,
+      fees5m:  call.fees5m,
       fees10m: call.fees10m,
       fees30m: call.fees30m,
-      fees1h: call.fees1h,
+      fees1h:  call.fees1h,
       fees24h: call.fees24h,
     });
 
@@ -1961,6 +2011,11 @@ function buildDlmmPreview() {
         <div><span>Hold Time</span><strong>${escapeHtml(payload.analysis.estimatedHoldTime)}</strong></div>
         <div><span>TVL</span><strong>${formatCompactUsd(payload.pool.tvl)}</strong></div>
         <div><span>24H Volume</span><strong>${formatCompactUsd(payload.pool.volume24h)}</strong></div>
+        <div><span>Fees 5m</span><strong>${formatCompactUsd(payload.pool.fees5m || 0)}</strong></div>
+        <div><span>Fees 10m</span><strong>${formatCompactUsd(payload.pool.fees10m || 0)}</strong></div>
+        <div><span>Fees 30m</span><strong>${formatCompactUsd(payload.pool.fees30m || 0)}</strong></div>
+        <div><span>Fees 1H</span><strong>${formatCompactUsd(payload.pool.fees1h || 0)}</strong></div>
+        <div><span>Fees 24H</span><strong>${formatCompactUsd(payload.pool.fees24h || 0)}</strong></div>
       </div>
       <p class="playground-preview-copy">${escapeHtml(payload.analysis.summary)}</p>
       <div class="playground-chip-row">
@@ -2170,9 +2225,9 @@ function renderDlmmTable(calls) {
             <details class="playground-row-detail">
               <summary>Details</summary>
               <div class="playground-row-detail-body">
-                <p><strong>Range:</strong> ${escapeHtml(call.currentRange || "—")} · <strong>Hold:</strong> ${escapeHtml(call.estimatedHoldTime || "—")}</p>
+                <p><strong>Range:</strong> ${escapeHtml(call.currentRange || "—")} · <strong>Hold:</strong> ${escapeHtml(call.estimatedHoldTime || "—")} · <strong>Bin Step:</strong> ${call.binStep || "—"} · <strong>Pref Bins:</strong> ${call.preferredBins || "—"}</p>
+                <p><strong>Fees 5m:</strong> ${formatCompactUsd(call.fees5m || 0)} · <strong>10m:</strong> ${formatCompactUsd(call.fees10m || 0)} · <strong>30m:</strong> ${formatCompactUsd(call.fees30m || 0)} · <strong>1H:</strong> ${formatCompactUsd(call.fees1h || 0)} · <strong>24H:</strong> ${formatCompactUsd(call.fees24h || 0)}</p>
                 <p><strong>Risk:</strong> ${escapeHtml((call.riskNotes || []).join(" • ") || "No risk notes")}</p>
-                <p><strong>Monitor:</strong> ${escapeHtml((call.monitors || []).join(" • ") || "No monitor list")}</p>
                 <p><strong>Qualification:</strong> ${escapeHtml((call.latestNotes || []).join(" • ") || "Current pool scan qualifies")}</p>
               </div>
             </details>

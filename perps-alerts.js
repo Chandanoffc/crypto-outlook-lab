@@ -1,8 +1,10 @@
 const PLAYGROUND_STORAGE_KEY = "soloris-perps-alerts-v1";
 const PERPS_SCAN_INTERVAL_OPTIONS = [
-  { label: "1 minute", value: 60_000 },
-  { label: "5 minutes", value: 5 * 60_000 },
-  { label: "15 minutes", value: 15 * 60_000 },
+  { label: "1 minute",  value: 60_000       },
+  { label: "3 minutes", value: 3 * 60_000   },
+  { label: "5 minutes", value: 5 * 60_000   },
+  { label: "10 minutes",value: 10 * 60_000  },
+  { label: "15 minutes",value: 15 * 60_000  },
 ];
 const DLMM_SCAN_INTERVAL_OPTIONS = [
   { label: "2 minutes", value: 2 * 60_000 },
@@ -16,6 +18,24 @@ const MAX_ALERT_IDS = 200;
 const PERPS_MODULE = "perps";
 const DLMM_MODULE = "dlmm";
 const METEORA_BASE_URL = "https://dlmm.datapi.meteora.ag";
+
+const PLAYGROUND_FALLBACK_UNIVERSE = [
+  { symbol: "BTCUSDT",  quoteVolume: 5_000_000_000 },
+  { symbol: "ETHUSDT",  quoteVolume: 2_000_000_000 },
+  { symbol: "SOLUSDT",  quoteVolume: 1_200_000_000 },
+  { symbol: "BNBUSDT",  quoteVolume: 800_000_000  },
+  { symbol: "XRPUSDT",  quoteVolume: 600_000_000  },
+  { symbol: "DOGEUSDT", quoteVolume: 500_000_000  },
+  { symbol: "AVAXUSDT", quoteVolume: 350_000_000  },
+  { symbol: "ADAUSDT",  quoteVolume: 280_000_000  },
+  { symbol: "LINKUSDT", quoteVolume: 220_000_000  },
+  { symbol: "SUIUSDT",  quoteVolume: 190_000_000  },
+  { symbol: "DOTUSDT",  quoteVolume: 160_000_000  },
+  { symbol: "LTCUSDT",  quoteVolume: 140_000_000  },
+  { symbol: "NEARUSDT", quoteVolume: 130_000_000  },
+  { symbol: "APTUSDT",  quoteVolume: 120_000_000  },
+  { symbol: "OPUSDT",   quoteVolume: 110_000_000  },
+];
 
 const state = loadState();
 let perpsTimer = null;
@@ -1077,9 +1097,9 @@ function _scorePerpSignal(symbolInfo, candles, fundingRatePct) {
   const momentum = _calcMomentum(closes, 6);
   const quoteVolume = Number(symbolInfo?.quoteVolume) || 0;
   const side =
-    latestEma20 > latestEma50 && latestClose >= latestEma20 * 0.982
+    latestEma20 > latestEma50 && latestClose >= latestEma20 * 0.962
       ? "Long"
-      : latestEma20 < latestEma50 && latestClose <= latestEma20 * 1.018
+      : latestEma20 < latestEma50 && latestClose <= latestEma20 * 1.038
         ? "Short"
         : "";
   if (!side || !latestAtr || !latestClose) return null;
@@ -1139,7 +1159,7 @@ function _scorePerpSignal(symbolInfo, candles, fundingRatePct) {
     qualityScore += 5;
     reasons.push(`ATR regime is active at ${formatPercent(atrPct, 2)}`);
   } else if (atrPct < 0.65) {
-    qualityScore -= 6;
+    qualityScore -= 2;
   }
   if (fundingAligned) {
     qualityScore += 4;
@@ -1151,7 +1171,7 @@ function _scorePerpSignal(symbolInfo, candles, fundingRatePct) {
     qualityScore += 5;
     reasons.push(`Liquidity is strong (${formatCompactUsd(quoteVolume, 1)})`);
   } else if (quoteVolume < 10_000_000) {
-    qualityScore -= 8;
+    qualityScore -= 2;
   }
 
   const stopDistance = Math.max(latestAtr * 0.9, latestClose * 0.008);
@@ -1165,7 +1185,7 @@ function _scorePerpSignal(symbolInfo, candles, fundingRatePct) {
     reasons.push(`Projected reward is ${formatNumber(rr, 2)}R`);
   }
 
-  if (qualityScore < 54) return null;
+  if (qualityScore < 44) return null;
 
   return {
     id: `playground:${symbolInfo.symbol}:${candles[candles.length - 1]?.closeTime || Date.now()}`,
@@ -1216,9 +1236,11 @@ async function fetchPerpsPlaygroundSignal(symbolInfo) {
 }
 
 async function refreshPlaygroundSignals() {
-  const universe = Array.isArray(state.perps.runtime.universe) ? state.perps.runtime.universe : [];
+  const runtimeUniverse = Array.isArray(state.perps.runtime.universe) && state.perps.runtime.universe.length
+    ? state.perps.runtime.universe
+    : PLAYGROUND_FALLBACK_UNIVERSE;
   const selected = selectedPerpsSymbol();
-  const priorityUniverse = universe
+  const priorityUniverse = runtimeUniverse
     .filter((entry) => entry && entry.symbol)
     .sort((left, right) => (Number(right.quoteVolume) || 0) - (Number(left.quoteVolume) || 0));
   const symbols = [];
@@ -1227,7 +1249,7 @@ async function refreshPlaygroundSignals() {
     symbols.push(selectedEntry);
   }
   priorityUniverse.forEach((entry) => {
-    if (symbols.length >= 10) return;
+    if (symbols.length >= 15) return;
     if (!symbols.some((item) => item.symbol === entry.symbol)) {
       symbols.push(entry);
     }
@@ -1332,6 +1354,22 @@ async function sendWebhookAlert(moduleKey, title, payload, meta) {
     event.bannerLabel = "NEW PERPS ALERT";
     event.bannerFlashFrames = [event.bannerLabel, pair].filter(Boolean);
     event.bannerTitle = [event.bannerLabel, pair, event.direction].filter(Boolean).join(" | ");
+    const _fmtP = (v) => Number.isFinite(Number(v)) && Number(v) > 0 ? `$${Number(v).toLocaleString(undefined, { maximumFractionDigits: 4 })}` : "—";
+    event.message = [
+      `🚨 NEW PERPS ALERT — ${event.direction} ${pair}`,
+      ``,
+      `Strategy: ${event.strategy}`,
+      `Timeframe: ${payload.timeframe || "4H"}`,
+      `Quality: Q${payload.confidence || "—"}`,
+      ``,
+      `Entry: ${_fmtP(payload.entry)}`,
+      `Stop Loss: ${_fmtP(payload.stop)}`,
+      `Take Profit: ${_fmtP(payload.takeProfit)}`,
+      `RR: ${Number.isFinite(Number(payload.rr)) ? Number(payload.rr).toFixed(2) + "R" : "—"}`,
+      ``,
+      `Why: ${payload.qualificationReason || "Playground Engine signal qualified."}`,
+    ].join("\n");
+    event.formattedMessage = event.message;
   } else if (moduleKey === DLMM_MODULE) {
     event.type = "dlmm";
     event.pair = pair;
@@ -1521,15 +1559,15 @@ async function refreshPerpsData({ fullScan = false, source = "manual" } = {}) {
 
 async function maybeSendPerpsAlerts() {
   if (!state.perps.scannerEnabled || !isDiscordWebhook(state.perps.webhook)) return;
-  const fourHoursAgo = Date.now() - 4 * 60 * 60 * 1000;
+  const sixHoursAgo = Date.now() - 6 * 60 * 60 * 1000;
   const deliveredSignalIds = new Set(
     (state.perps.recentCalls || [])
-      .filter((call) => Number(call.openedAt || call.detectedAt || 0) > fourHoursAgo)
+      .filter((call) => Number(call.openedAt || call.detectedAt || 0) > sixHoursAgo)
       .map((call) => call.id)
   );
 
   const candidates = (state.perps.playgroundSignals || [])
-    .filter((candidate) => candidate.qualityScore >= 60 && withinLookback(candidate.timestamp || Date.now()))
+    .filter((candidate) => candidate.qualityScore >= 44 && withinLookback(candidate.timestamp || Date.now()))
     .sort((left, right) => right.qualityScore - left.qualityScore);
 
   const outbound = [
