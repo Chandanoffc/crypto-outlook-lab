@@ -550,11 +550,26 @@ function mergePlaygroundRuntimeState(payload) {
     state.perps.scanIntervalMs = Number(remoteState.perps.scanIntervalMs) || state.perps.scanIntervalMs;
     state.perps.webhook = String(remoteState.perps.webhook || state.perps.webhook || "").trim();
     state.perps.webhookHealth = remoteState.perps.webhookHealth || state.perps.webhookHealth;
+    state.perps.recentCalls = Array.isArray(remoteState.perps.recentCalls)
+      ? remoteState.perps.recentCalls.slice(0, 160)
+      : state.perps.recentCalls;
+    state.perps.playgroundSignals = Array.isArray(remoteState.perps.playgroundSignals)
+      ? remoteState.perps.playgroundSignals.slice(0, 24)
+      : state.perps.playgroundSignals;
     state.perps.scanLog = Array.isArray(remoteState.perps.scanLog) ? remoteState.perps.scanLog.slice(0, MAX_LOG_ENTRIES) : state.perps.scanLog;
     state.perps.alertLog = Array.isArray(remoteState.perps.alertLog) ? remoteState.perps.alertLog.slice(0, MAX_LOG_ENTRIES) : state.perps.alertLog;
     state.perps.sentIds = Array.isArray(remoteState.perps.sentIds) ? remoteState.perps.sentIds.slice(0, MAX_ALERT_IDS) : state.perps.sentIds;
     state.perps.lastSyncAt = Number(remoteState.perps.lastSyncAt) || state.perps.lastSyncAt;
     state.perps.lastError = remoteState.perps.lastError || "";
+    if (remoteState.perps.runtime) {
+      state.perps.runtime.universe = Array.isArray(remoteState.perps.runtime.universe)
+        ? remoteState.perps.runtime.universe
+        : state.perps.runtime.universe;
+      state.perps.runtime.universeSource = remoteState.perps.runtime.universeSource || state.perps.runtime.universeSource;
+      state.perps.runtime.universeWarning = remoteState.perps.runtime.universeWarning || state.perps.runtime.universeWarning;
+      state.perps.runtime.backgroundAvailable =
+        remoteState.perps.runtime.backgroundAvailable !== false;
+    }
   }
 
   if (remoteState.dlmm) {
@@ -868,6 +883,30 @@ function computePerpsMetrics(calls) {
       count: record.count,
     }))
     .sort((left, right) => right.avgReturnPct - left.avgReturnPct);
+  const totalPnlUsd = calls.reduce(
+    (sum, call) => sum + (Number.isFinite(Number(call.pnlUsd)) ? Number(call.pnlUsd) : 0),
+    0
+  );
+  const totalReturnPct = calls.reduce(
+    (sum, call) =>
+      sum +
+      (Number.isFinite(Number(call.returnPct))
+        ? Number(call.returnPct)
+        : Number.isFinite(Number(call.performancePct))
+          ? Number(call.performancePct)
+          : 0),
+    0
+  );
+  const openReturnPct = open.reduce(
+    (sum, call) =>
+      sum +
+      (Number.isFinite(Number(call.returnPct))
+        ? Number(call.returnPct)
+        : Number.isFinite(Number(call.performancePct))
+          ? Number(call.performancePct)
+          : 0),
+    0
+  );
 
   return {
     totalCallsOverall: calls.length,
@@ -879,9 +918,61 @@ function computePerpsMetrics(calls) {
     lossPercentage: closed.length ? (losses.length / closed.length) * 100 : 0,
     averageRr,
     averageHold,
+    totalPnlUsd,
+    totalReturnPct,
+    openReturnPct,
     bestPairs: sortedPairs.slice(0, 3),
     worstPairs: sortedPairs.slice(-3).reverse(),
   };
+}
+
+function renderPerformanceSummary(metrics, mode) {
+  const summaryText =
+    mode === PERPS_MODULE
+      ? metrics.openCalls
+        ? `${metrics.openCalls} active perps call${metrics.openCalls === 1 ? "" : "s"} on the board with ${formatPercent(metrics.openReturnPct, 1)} net live move across tracked alerts.`
+        : metrics.totalCallsOverall
+          ? `${metrics.totalCallsOverall} perps call${metrics.totalCallsOverall === 1 ? "" : "s"} tracked so far with ${metrics.wins} wins and ${metrics.losses} losses.`
+          : "Perps alerts are armed and waiting for the next qualified 4H setup."
+      : metrics.activeCalls
+        ? `${metrics.activeCalls} active DLMM pool${metrics.activeCalls === 1 ? "" : "s"} currently qualify, with ${formatCompactUsd(metrics.totalFees24h)} in combined 24H fee flow.`
+        : metrics.totalCallsOverall
+          ? `${metrics.totalCallsOverall} DLMM opportunities tracked so far with ${metrics.profitableCalls} positive edge setups.`
+          : "DLMM alerts are armed and waiting for the next qualifying Meteora pool.";
+
+  const cards =
+    mode === PERPS_MODULE
+      ? [
+          ["Trades Called", metrics.totalCallsOverall, "Tracked perps alerts"],
+          ["Net PnL", formatUsd(metrics.totalPnlUsd), "Realized PnL across tracked calls"],
+          ["Net Return", formatPercent(metrics.totalReturnPct, 1), "Combined return across tracked calls"],
+        ]
+      : [
+          ["Calls Surfaced", metrics.totalCallsOverall, "Tracked DLMM opportunities"],
+          ["24H Fees", formatCompactUsd(metrics.totalFees24h), "Combined active fee flow"],
+          ["Net Edge", formatPercent(metrics.grossPerformancePct, 1), "Combined edge performance"],
+        ];
+
+  return `
+    <section class="playground-performance-strip">
+      ${cards
+        .map(
+          ([label, value, note]) => `
+            <article class="playground-performance-card">
+              <span>${escapeHtml(label)}</span>
+              <strong>${escapeHtml(String(value))}</strong>
+              <small>${escapeHtml(note)}</small>
+            </article>
+          `
+        )
+        .join("")}
+      <article class="playground-performance-card playground-performance-card--summary">
+        <span>Overall Summary</span>
+        <strong>${escapeHtml(mode === PERPS_MODULE ? "Perps Engine Snapshot" : "DLMM Scanner Snapshot")}</strong>
+        <small>${escapeHtml(summaryText)}</small>
+      </article>
+    </section>
+  `;
 }
 
 function bestWorstLabel(entries) {
@@ -1885,12 +1976,18 @@ function computeDlmmMetrics() {
   const losing = calls.filter((call) => Number(call.performancePct) < 0);
   const aggregatePerformance =
     calls.length > 0 ? calls.reduce((sum, call) => sum + (Number(call.performancePct) || 0), 0) / calls.length : 0;
+  const grossPerformancePct = calls.reduce((sum, call) => sum + (Number(call.performancePct) || 0), 0);
+  const totalFees24h = calls
+    .filter((call) => call.status === "Open")
+    .reduce((sum, call) => sum + (Number(call.fees24h) || 0), 0);
   return {
     totalCallsOverall: calls.length,
     totalCallsToday: calls.filter((call) => withinLookback(call.detectedAt)).length,
     profitableCalls: profitable.length,
     losingCalls: losing.length,
     aggregatePerformance,
+    grossPerformancePct,
+    totalFees24h,
     activeCalls: calls.filter((call) => call.status === "Open").length,
   };
 }
@@ -2318,6 +2415,7 @@ function renderPerpsModule() {
       </section>
 
       ${renderHealthCards(PERPS_MODULE)}
+      ${renderPerformanceSummary(metrics, PERPS_MODULE)}
       ${renderMetricCards(metrics, PERPS_MODULE)}
 
       <section class="playground-module-grid">
