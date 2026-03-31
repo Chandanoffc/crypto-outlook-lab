@@ -5,11 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Soloris Playground is a production-grade operations workstation for perpetual alerts, DLMM opportunity scans, webhook delivery, and exportable reports."
+      content="Perps Alerts — 4H EMA signal scanner with Discord webhook delivery."
     />
-    <link rel="canonical" href="https://soloris-signals.vercel.app/playground.html" />
-    <meta property="og:url" content="https://soloris-signals.vercel.app/playground.html" />
-    <title>Soloris Playground Ops Workstation</title>
+    <link rel="canonical" href="https://soloris-signals.vercel.app/perps-alerts.html" />
+    <meta property="og:url" content="https://soloris-signals.vercel.app/perps-alerts.html" />
+    <title>Soloris Perps Alerts</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -17,7 +17,7 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./styles.css" />
-    <script src="./playground.js" defer></script>
+    <script src="./perps-alerts.js" defer></script>
   </head>
   <body class="dashboard-home shell-page playground-page">
     <div class="page-shell shell-layout">
@@ -34,13 +34,8 @@
           </a>
 
           <nav class="page-tabs shell-page-tabs" aria-label="Primary pages">
-            <a class="page-tab" href="./index.html">Main</a>
-            <a class="page-tab" href="./paper.html">Auto Trade</a>
-            <a class="page-tab" href="./arena.html">Signals Arena</a>
-            <a class="page-tab" href="./tradez.html">EMA Signals</a>
-            <a class="page-tab" href="./perps-alerts.html">Perps Alerts</a>
+            <a class="page-tab is-current" href="./perps-alerts.html">Perps Alerts</a>
             <a class="page-tab" href="./dlmm-alerts.html">DLMM Alerts</a>
-            <a class="page-tab is-current" href="./playground.html">Playground</a>
           </nav>
 
           <div class="header-actions">
@@ -49,7 +44,7 @@
               Live Feeds
             </span>
             <span class="app-pill">Ops Lab</span>
-            <a class="header-icon-button" href="./playground.html" aria-label="Refresh Playground">
+            <a class="header-icon-button" href="./perps-alerts.html" aria-label="Refresh Perps Alerts">
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path
                   d="M20 11a8 8 0 1 1-2.34-5.66M20 4v5h-5"
@@ -70,10 +65,10 @@
           <section class="panel hero-shell playground-hero-shell">
             <div class="hero-copy">
               <p class="eyebrow">Playground Ops Workstation</p>
-              <h1>Perps Alerts and DLMM Alerts</h1>
+              <h1>Perps Alerts</h1>
               <p class="subtitle">
-                Live two-module operations dashboard for perpetual scanners, DLMM pool analysis,
-                Discord delivery, scanner health, alert logs, and exportable 24-hour reporting.
+                4H EMA trend scanner across Binance USDT perps — auto-delivers signals to Discord
+                with entry, TP, SL, and quality score.
               </p>
             </div>
 
@@ -83,11 +78,6 @@
                 <strong id="playground-hero-perps-health">Syncing</strong>
                 <small id="playground-hero-perps-note">Loading runtime state</small>
               </article>
-              <article class="playground-mini-health-card">
-                <span>DLMM Scanner</span>
-                <strong id="playground-hero-dlmm-health">Syncing</strong>
-                <small id="playground-hero-dlmm-note">Loading Meteora pools</small>
-              </article>
             </div>
           </section>
         </header>
@@ -96,23 +86,14 @@
           <section class="panel playground-panel">
             <div class="playground-panel-head">
               <div>
-                <p class="panel-label">Two Module Workspace</p>
-                <h2>Switch between Perps Alerts and DLMM Alerts below</h2>
+                <p class="panel-label">Perps Alerts Workstation</p>
+                <h2>Scanner control, alert delivery, and 24H exports</h2>
                 <p class="subtitle-inline">
-                  Perps uses the platform's existing House and Tradez engines. DLMM uses Meteora's
-                  official pool APIs and current pool state.
+                  Binance perp universe, Discord webhook delivery, recent calls, scanner logs, and
+                  exportable 24-hour reporting.
                 </p>
               </div>
             </div>
-
-            <nav id="playground-top-tabs" class="playground-tabbar" aria-label="Playground modules">
-              <button class="playground-tab is-active" type="button" data-module-tab="perps">
-                Perps Alerts
-              </button>
-              <button class="playground-tab" type="button" data-module-tab="dlmm">
-                DLMM Alerts
-              </button>
-            </nav>
 
             <section id="playground-content" class="playground-content" aria-live="polite"></section>
           </section>
