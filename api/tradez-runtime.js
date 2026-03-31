@@ -23,6 +23,18 @@ async function readJsonBody(req) {
   return body ? JSON.parse(body) : {};
 }
 
+function shouldRecoverState(state) {
+  return (
+    (!state.openTrades.length && !state.closedTrades.length) ||
+    Number(state.balance) <= 0 ||
+    state.openTrades.some(
+      (trade) =>
+        Number.isFinite(Number(trade.closedAt)) ||
+        Number.isFinite(Number(trade.exitPrice))
+    )
+  );
+}
+
 async function loadPersistedState() {
   if (!hasDatabase()) {
     return {
@@ -35,7 +47,7 @@ async function loadPersistedState() {
   const stored = await getRuntimeState("tradez_auto_trade");
   if (stored.found && stored.state) {
     const sanitized = sanitizeRuntimeState(stored.state);
-    if (!sanitized.openTrades.length && !sanitized.closedTrades.length) {
+    if (shouldRecoverState(sanitized)) {
       const recovered = await recoverRuntimeStateFromTradeEvents(sanitized);
       if (recovered.recovered) {
         const saved = await upsertRuntimeState("tradez_auto_trade", recovered.state);
