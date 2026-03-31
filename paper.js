@@ -3498,21 +3498,21 @@ function renderDashboard(universe = []) {
 }
 
 async function scanUniverse({ manual = false } = {}) {
-  if (remoteRuntimeEnabled && manual) {
+  if (remoteRuntimeEnabled) {
+    if (!manual) return;
     setStatus("Requesting a manual House scan from the background runtime...", "neutral");
-    try {
-      const payload = await postRemoteRuntimeAction("scan", {
-        interval: state.interval,
-        qualityThreshold: state.qualityThreshold,
-        autoEnabled: state.autoEnabled,
-      });
-      applyRemoteRuntimeState(payload.state || {});
-      syncControls();
-      await refreshUniverseDisplay();
-      if (payload.state?.lastStatusMessage) {
-        setStatus(payload.state.lastStatusMessage, payload.state.lastStatusTone || "neutral");
-      }
-    } catch (_scanError) {}
+    const payload = await postRemoteRuntimeAction("scan", {
+      interval: state.interval,
+      qualityThreshold: state.qualityThreshold,
+      autoEnabled: state.autoEnabled,
+    });
+    applyRemoteRuntimeState(payload.state || {});
+    syncControls();
+    await refreshUniverseDisplay();
+    if (payload.state?.lastStatusMessage) {
+      setStatus(payload.state.lastStatusMessage, payload.state.lastStatusTone || "neutral");
+    }
+    return;
   }
 
   if (scanning) return;
@@ -3883,14 +3883,14 @@ async function bootstrapPaperRuntime() {
         setStatus("Background House engine connected.", "up");
       }
       startRemoteRuntimePolling();
+      return;
     }
   } catch (error) {
     // Fall back to the legacy in-browser scanner when the server runtime is unavailable.
   }
 
-  if (!remoteRuntimeEnabled) {
-    stopRemoteRuntimePolling();
-  }
+  remoteRuntimeEnabled = false;
+  stopRemoteRuntimePolling();
   scheduleAutoScan();
   scanUniverse();
 }

@@ -249,6 +249,7 @@ let remoteRuntimeEnabled = false;
 let remoteRuntimeHydrating = false;
 let remoteRuntimePollTimer = null;
 let remoteDisplayRefreshTimer = null;
+let remoteHouseComparisonState = null;
 
 function loadTradezPaperState() {
   const stored = readStoredJson(TRADEZ_AUTO_STORAGE_KEY, {});
@@ -1151,6 +1152,24 @@ async function fetchRemoteRuntimeState() {
   return payload;
 }
 
+function applyRemoteHouseComparisonState(remoteState) {
+  if (!remoteState || typeof remoteState !== "object") return;
+  remoteHouseComparisonState = remoteState;
+  writeStoredJson(HOUSE_AUTO_STORAGE_KEY, remoteState);
+  renderTradezComparison();
+}
+
+async function fetchRemoteHouseRuntimeState() {
+  const response = await fetch("/api/house-runtime", {
+    cache: "no-store",
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload.error || `House runtime failed (${response.status})`);
+  }
+  return payload;
+}
+
 async function postRemoteRuntimeAction(action, settings = {}) {
   const response = await fetch("/api/tradez-runtime", {
     method: "POST",
@@ -1196,8 +1215,14 @@ function stopRemoteRuntimePolling() {
 }
 
 async function pullRemoteRuntimeState() {
-  const payload = await fetchRemoteRuntimeState();
+  const [payload, housePayload] = await Promise.all([
+    fetchRemoteRuntimeState(),
+    fetchRemoteHouseRuntimeState().catch(() => null),
+  ]);
   remoteRuntimeEnabled = Boolean(payload.backgroundAvailable);
+  if (housePayload?.backgroundAvailable) {
+    applyRemoteHouseComparisonState(housePayload.state || {});
+  }
   if (!remoteRuntimeEnabled) return payload;
   applyRemoteRuntimeState(payload.state || {});
   renderTradezRuntimeState();
@@ -2528,7 +2553,10 @@ function openTradezQualifiedTrades(candidates) {
 }
 
 function readHouseTradeMetrics() {
-  const stored = readStoredJson(HOUSE_AUTO_STORAGE_KEY, {});
+  const stored =
+    remoteHouseComparisonState && typeof remoteHouseComparisonState === "object"
+      ? remoteHouseComparisonState
+      : readStoredJson(HOUSE_AUTO_STORAGE_KEY, {});
   const openTrades = Array.isArray(stored.openTrades) ? stored.openTrades : [];
   const closedTrades = Array.isArray(stored.closedTrades) ? stored.closedTrades : [];
   const startingBalance = Number(stored.startingBalance) || 1000;
@@ -4813,7 +4841,8 @@ async function loadSelectedToken(tokenOrSymbol) {
 }
 
 async function scanUniverse(manual = false) {
-  if (remoteRuntimeEnabled && manual) {
+  if (remoteRuntimeEnabled) {
+    if (!manual) return;
     setStatus("Running manual Tradez background scan...", "neutral");
     try {
       const payload = await postRemoteRuntimeAction("scan", {
@@ -4826,7 +4855,10 @@ async function scanUniverse(manual = false) {
         payload.state?.lastStatusMessage || "Tradez background scan complete.",
         payload.state?.lastStatusTone || "neutral"
       );
-    } catch (_scanError) {}
+    } catch (error) {
+      setStatus(error.message || "Tradez background scan failed.", "down");
+    }
+    return;
   }
 
   setStatus(
@@ -5137,8 +5169,12 @@ async function bootstrapTradezRuntime() {
 
   try {
     const payload = await fetchRemoteRuntimeState();
+    const housePayload = await fetchRemoteHouseRuntimeState().catch(() => null);
     if (payload.backgroundAvailable) {
       remoteRuntimeEnabled = true;
+      if (housePayload?.backgroundAvailable) {
+        applyRemoteHouseComparisonState(housePayload.state || {});
+      }
       applyRemoteRuntimeState(payload.state || {});
       renderTradezRuntimeState();
       if (payload.state?.lastStatusMessage) {
@@ -5147,16 +5183,16 @@ async function bootstrapTradezRuntime() {
         setStatus("Background Auto Trade 2 engine connected.", "up");
       }
       startRemoteRuntimePolling();
+      return;
     }
   } catch (error) {
     // Fall back to the legacy in-browser scanner when the server runtime is unavailable.
   }
 
-  if (!remoteRuntimeEnabled) {
-    stopRemoteRuntimePolling();
-  }
-  startAutoScan();
+  remoteRuntimeEnabled = false;
+  stopRemoteRuntimePolling();
   await scanUniverse(false);
+  startAutoScan();
 }
 
 bootstrapTradezRuntime();
