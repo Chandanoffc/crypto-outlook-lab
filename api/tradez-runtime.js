@@ -3,6 +3,7 @@ const {
   applyRuntimeSettings,
   buildResetRuntimeState,
   defaultRuntimeState,
+  recoverRuntimeStateFromTradeEvents,
   runTradezScan,
   sanitizeRuntimeState,
 } = require("../lib/tradez-runtime");
@@ -33,9 +34,21 @@ async function loadPersistedState() {
 
   const stored = await getRuntimeState("tradez_auto_trade");
   if (stored.found && stored.state) {
+    const sanitized = sanitizeRuntimeState(stored.state);
+    if (!sanitized.openTrades.length && !sanitized.closedTrades.length) {
+      const recovered = await recoverRuntimeStateFromTradeEvents(sanitized);
+      if (recovered.recovered) {
+        const saved = await upsertRuntimeState("tradez_auto_trade", recovered.state);
+        return {
+          available: true,
+          state: sanitizeRuntimeState(saved.state || recovered.state),
+          updatedAt: saved.updatedAt || stored.updatedAt || null,
+        };
+      }
+    }
     return {
       available: true,
-      state: sanitizeRuntimeState(stored.state),
+      state: sanitized,
       updatedAt: stored.updatedAt || null,
     };
   }
