@@ -24,6 +24,7 @@ async function readJsonBody(req) {
 }
 
 function shouldRecoverState(state) {
+  if (state.freshStart) return false;
   return (
     (!state.openTrades.length && !state.closedTrades.length) ||
     Number(state.balance) <= 0 ||
