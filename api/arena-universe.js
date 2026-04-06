@@ -1,4 +1,5 @@
 const fallbackExchangeInfo = require("../fallback-perps.js");
+const BINANCE_SPOT_BASE_URL = "https://data-api.binance.vision";
 
 const QUOTE_ASSET = "USDT";
 const EXCHANGE_CACHE_TTL_MS = 10 * 60 * 1000;
@@ -96,7 +97,7 @@ function buildShellTickers(activeSymbols) {
 
 async function fetchSpotTickers(activeSymbols) {
   const rawTickers = await fetchJson(
-    "https://api.binance.com/api/v3/ticker/24hr",
+    `${BINANCE_SPOT_BASE_URL}/api/v3/ticker/24hr`,
     "Spot 24H tickers"
   );
   return mapTickerEntries(rawTickers, activeSymbols);

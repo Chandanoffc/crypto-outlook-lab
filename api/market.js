@@ -3,6 +3,7 @@ const fallbackExchangeInfo = require("../fallback-perps.js");
 const DEFAULT_TOKEN = "BTC";
 const DEFAULT_INTERVAL = "15m";
 const QUOTE_ASSET = "USDT";
+const BINANCE_SPOT_BASE_URL = "https://data-api.binance.vision";
 const NEWS_LIMIT = 6;
 const VALID_INTERVALS = new Set(["5m", "15m", "30m", "1h", "4h", "1d"]);
 const EXCHANGE_CACHE_TTL_MS = 10 * 60 * 1000;
@@ -81,19 +82,19 @@ async function fetchSpotCoreSnapshot(resolved, interval) {
   return fetchFirstSuccessful(candidates, async (symbol) => {
     const requests = await Promise.allSettled([
       fetchJson(
-        `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=240`,
+        `${BINANCE_SPOT_BASE_URL}/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=240`,
         "Spot klines"
       ),
       fetchJson(
-        `https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`,
+        `${BINANCE_SPOT_BASE_URL}/api/v3/ticker/24hr?symbol=${symbol}`,
         "Spot 24H ticker"
       ),
       fetchJson(
-        `https://api.binance.com/api/v3/depth?symbol=${symbol}&limit=100`,
+        `${BINANCE_SPOT_BASE_URL}/api/v3/depth?symbol=${symbol}&limit=100`,
         "Spot orderbook"
       ),
       fetchJson(
-        `https://api.binance.com/api/v3/aggTrades?symbol=${symbol}&limit=400`,
+        `${BINANCE_SPOT_BASE_URL}/api/v3/aggTrades?symbol=${symbol}&limit=400`,
         "Spot agg trades"
       ),
     ]);
