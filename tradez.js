@@ -650,6 +650,7 @@ function logTradezTradeEvent(eventType, trade, extra = {}) {
 
 async function sendTradezTestSignal() {
   saveTradezDeliveryFromForm();
+  await syncRemoteTradezAlertDelivery({ silent: true });
   const destinations = tradezRemoteChannelPayload();
   const hasRemoteDestination =
     Boolean(destinations.discordWebhook) ||
@@ -1186,6 +1187,28 @@ async function postRemoteRuntimeAction(action, settings = {}) {
     throw new Error(payload.error || `Tradez runtime update failed (${response.status})`);
   }
   return payload;
+}
+
+function buildRemoteTradezAlertDeliverySettings() {
+  return {
+    alertDelivery: {
+      discordWebhook: String(tradezDelivery.discordWebhook || "").trim(),
+      notifyEntries: Boolean(tradezDelivery.notifyEntries),
+      notifyExits: Boolean(tradezDelivery.notifyExits),
+    },
+  };
+}
+
+async function syncRemoteTradezAlertDelivery({ silent = true } = {}) {
+  if (!remoteRuntimeEnabled) return;
+  try {
+    const payload = await postRemoteRuntimeAction("settings", buildRemoteTradezAlertDeliverySettings());
+    applyRemoteRuntimeState(payload.state || {});
+  } catch (error) {
+    if (!silent) {
+      setStatus(error.message || "Unable to sync Auto Trade 2 delivery to the background runtime.", "down");
+    }
+  }
 }
 
 async function refreshRemoteDisplayData() {
@@ -4985,9 +5008,10 @@ function bindEvents() {
 
   dom.alertPermissionButton.addEventListener("click", requestAlertPermission);
   if (dom.deliveryForm) {
-    dom.deliveryForm.addEventListener("submit", (event) => {
+    dom.deliveryForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       saveTradezDeliveryFromForm();
+      await syncRemoteTradezAlertDelivery({ silent: false });
       setStatus(`Auto Trade 2 delivery saved. ${tradezModeLabel()} is ready.`, "up");
     });
   }
@@ -5176,6 +5200,7 @@ async function bootstrapTradezRuntime() {
         applyRemoteHouseComparisonState(housePayload.state || {});
       }
       applyRemoteRuntimeState(payload.state || {});
+      await syncRemoteTradezAlertDelivery({ silent: true });
       renderTradezRuntimeState();
       if (payload.state?.lastStatusMessage) {
         setStatus(payload.state.lastStatusMessage, payload.state.lastStatusTone || "neutral");

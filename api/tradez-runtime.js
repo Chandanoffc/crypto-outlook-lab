@@ -36,6 +36,14 @@ function shouldRecoverState(state) {
   );
 }
 
+function inferBaseUrl(req) {
+  const forwardedProto = req.headers["x-forwarded-proto"];
+  const forwardedHost = req.headers["x-forwarded-host"];
+  const proto = forwardedProto ? String(forwardedProto).split(",")[0].trim() : "https";
+  const host = forwardedHost || req.headers.host || "soloris-signals.vercel.app";
+  return `${proto}://${host}`;
+}
+
 async function loadPersistedState() {
   if (!hasDatabase()) {
     return {
@@ -110,7 +118,7 @@ module.exports = async function handler(req, res) {
     const loaded = await loadPersistedState();
 
     if (action === "reset") {
-      const resetState = buildResetRuntimeState();
+      const resetState = buildResetRuntimeState(loaded.state);
       const saved = await upsertRuntimeState("tradez_auto_trade", resetState);
       buildJsonResponse(res, 200, {
         ok: true,
@@ -126,7 +134,7 @@ module.exports = async function handler(req, res) {
       const inputState = Object.keys(settings).length
         ? applyRuntimeSettings(loaded.state, settings)
         : loaded.state;
-      const result = await runTradezScan(inputState, { manual: true });
+      const result = await runTradezScan(inputState, { manual: true, baseUrl: inferBaseUrl(req) });
       const saved = await upsertRuntimeState("tradez_auto_trade", result.state);
       buildJsonResponse(res, 200, {
         ok: true,

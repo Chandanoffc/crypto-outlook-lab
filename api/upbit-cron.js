@@ -106,7 +106,8 @@ async function runHouseBackgroundScan() {
   const stored = await getRuntimeState("house_auto_trade");
   const currentState =
     stored.found && stored.state ? sanitizeRuntimeState(stored.state) : defaultRuntimeState();
-  const result = await runHouseScan(currentState, { manual: false });
+  const baseUrl = process.env.SOLORIS_BASE_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://soloris-signals.vercel.app");
+  const result = await runHouseScan(currentState, { manual: false, baseUrl });
   const saved = await upsertRuntimeState("house_auto_trade", result.state);
 
   return {
@@ -128,7 +129,8 @@ async function runTradezBackgroundScan() {
   const stored = await getRuntimeState("tradez_auto_trade");
   const currentState =
     stored.found && stored.state ? sanitizeTradezRuntimeState(stored.state) : defaultTradezRuntimeState();
-  const result = await runTradezScan(currentState, { manual: false });
+  const baseUrl = process.env.SOLORIS_BASE_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://soloris-signals.vercel.app");
+  const result = await runTradezScan(currentState, { manual: false, baseUrl });
   const saved = await upsertRuntimeState("tradez_auto_trade", result.state);
 
   return {

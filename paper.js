@@ -932,6 +932,28 @@ async function postRemoteRuntimeAction(action, settings = {}) {
   return payload;
 }
 
+function buildRemoteAlertDeliverySettings() {
+  return {
+    alertDelivery: {
+      discordWebhook: String(autoDelivery.discordWebhook || "").trim(),
+      notifyEntries: Boolean(autoDelivery.notifyEntries),
+      notifyExits: Boolean(autoDelivery.notifyExits),
+    },
+  };
+}
+
+async function syncRemoteAlertDelivery({ silent = true } = {}) {
+  if (!remoteRuntimeEnabled) return;
+  try {
+    const payload = await postRemoteRuntimeAction("settings", buildRemoteAlertDeliverySettings());
+    applyRemoteRuntimeState(payload.state || {});
+  } catch (error) {
+    if (!silent) {
+      setStatus(error.message || "Unable to sync Auto Trade delivery to the background runtime.", "down");
+    }
+  }
+}
+
 async function refreshUniverseDisplay() {
   const universe = await getPerpUniverse();
   const tickers = await fetchUniverseTickers();
@@ -3797,15 +3819,17 @@ function updateAutoDeliveryFromDom() {
 }
 
 if (dom.alertSaveButton) {
-  dom.alertSaveButton.addEventListener("click", () => {
+  dom.alertSaveButton.addEventListener("click", async () => {
     updateAutoDeliveryFromDom();
+    await syncRemoteAlertDelivery({ silent: false });
     setStatus("Auto Trade alert delivery saved.", "up");
   });
 }
 
 if (dom.alertTestButton) {
-  dom.alertTestButton.addEventListener("click", () => {
+  dom.alertTestButton.addEventListener("click", async () => {
     updateAutoDeliveryFromDom();
+    await syncRemoteAlertDelivery({ silent: true });
     const now = Date.now();
     const demoTrade = {
       symbol: "BTCUSDT",
@@ -3875,6 +3899,7 @@ async function bootstrapPaperRuntime() {
     if (payload.backgroundAvailable) {
       remoteRuntimeEnabled = true;
       applyRemoteRuntimeState(payload.state || {});
+      await syncRemoteAlertDelivery({ silent: true });
       syncControls();
       await refreshUniverseDisplay();
       if (payload.state?.lastStatusMessage) {
