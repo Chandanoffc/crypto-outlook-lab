@@ -388,7 +388,10 @@ async function buildVenueMatrix(resolved, ticker, premiumIndex, openInterest) {
 }
 
 module.exports = async function handler(req, res) {
-  const token = firstQueryValue(req.query?.token) || DEFAULT_TOKEN;
+  const token =
+    firstQueryValue(req.query?.token) ||
+    firstQueryValue(req.query?.symbol) ||
+    DEFAULT_TOKEN;
   const interval = firstQueryValue(req.query?.interval) || DEFAULT_INTERVAL;
 
   if (!VALID_INTERVALS.has(interval)) {
