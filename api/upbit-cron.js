@@ -13,6 +13,7 @@ const {
 } = require("../lib/playground-runtime");
 
 const ALERT_WINDOW_MS = 5 * 60 * 1000;
+const BACKGROUND_SCAN_COOLDOWN_MS = 4 * 60 * 1000;
 
 function buildJsonResponse(res, statusCode, payload) {
   res.statusCode = statusCode;
@@ -94,6 +95,11 @@ function isFreshMarketSupportNotice(notice, now) {
   return ageMs >= 0 && ageMs <= ALERT_WINDOW_MS;
 }
 
+function scannedRecently(lastScanAt) {
+  const scanTime = Number(lastScanAt) || 0;
+  return scanTime > 0 && Date.now() - scanTime < BACKGROUND_SCAN_COOLDOWN_MS;
+}
+
 async function runHouseBackgroundScan() {
   if (!hasDatabase()) {
     return {
@@ -106,6 +112,18 @@ async function runHouseBackgroundScan() {
   const stored = await getRuntimeState("house_auto_trade");
   const currentState =
     stored.found && stored.state ? sanitizeRuntimeState(stored.state) : defaultRuntimeState();
+  if (scannedRecently(currentState.lastScanAt)) {
+    return {
+      ok: true,
+      skipped: true,
+      reason: "House background scan is already fresh.",
+      summary: {
+        ok: true,
+        skipped: true,
+        lastScanAt: Number(currentState.lastScanAt) || 0,
+      },
+    };
+  }
   const baseUrl = process.env.SOLORIS_BASE_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://soloris-signals.vercel.app");
   const result = await runHouseScan(currentState, { manual: false, baseUrl });
   const saved = await upsertRuntimeState("house_auto_trade", result.state);
@@ -129,6 +147,18 @@ async function runTradezBackgroundScan() {
   const stored = await getRuntimeState("tradez_auto_trade");
   const currentState =
     stored.found && stored.state ? sanitizeTradezRuntimeState(stored.state) : defaultTradezRuntimeState();
+  if (scannedRecently(currentState.lastScanAt)) {
+    return {
+      ok: true,
+      skipped: true,
+      reason: "Tradez background scan is already fresh.",
+      summary: {
+        ok: true,
+        skipped: true,
+        lastScanAt: Number(currentState.lastScanAt) || 0,
+      },
+    };
+  }
   const baseUrl = process.env.SOLORIS_BASE_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://soloris-signals.vercel.app");
   const result = await runTradezScan(currentState, { manual: false, baseUrl });
   const saved = await upsertRuntimeState("tradez_auto_trade", result.state);
@@ -152,6 +182,22 @@ async function runPlaygroundBackgroundScan(req) {
   const stored = await getRuntimeState("playground_ops");
   const currentState =
     stored.found && stored.state ? sanitizePlaygroundRuntimeState(stored.state) : defaultPlaygroundRuntimeState();
+  const playgroundLastSyncAt = Math.max(
+    Number(currentState?.perps?.lastSyncAt || 0),
+    Number(currentState?.dlmm?.lastSyncAt || 0)
+  );
+  if (scannedRecently(playgroundLastSyncAt)) {
+    return {
+      ok: true,
+      skipped: true,
+      reason: "Playground background scan is already fresh.",
+      summary: {
+        ok: true,
+        skipped: true,
+        lastScanAt: playgroundLastSyncAt,
+      },
+    };
+  }
   const forwardedProto = req.headers["x-forwarded-proto"];
   const forwardedHost = req.headers["x-forwarded-host"];
   const proto = forwardedProto ? String(forwardedProto).split(",")[0].trim() : "https";
@@ -177,18 +223,16 @@ module.exports = async function handler(req, res) {
 
   try {
     requireAuthorized(req);
-    const houseScanPromise = runHouseBackgroundScan().catch((error) => ({
-      ok: false,
-      error: error.message || "House background scan failed.",
-    }));
-    const tradezScanPromise = runTradezBackgroundScan().catch((error) => ({
-      ok: false,
-      error: error.message || "Tradez background scan failed.",
-    }));
     const destinations = getDestinations();
     if (!destinations.discordWebhook && !(destinations.telegramToken && destinations.telegramChatId)) {
-      const houseAutoTrade = await houseScanPromise;
-      const tradezAutoTrade = await tradezScanPromise;
+      const houseAutoTrade = await runHouseBackgroundScan().catch((error) => ({
+        ok: false,
+        error: error.message || "House background scan failed.",
+      }));
+      const tradezAutoTrade = await runTradezBackgroundScan().catch((error) => ({
+        ok: false,
+        error: error.message || "Tradez background scan failed.",
+      }));
       const playgroundOps = await runPlaygroundBackgroundScan(req).catch((error) => ({
         ok: false,
         error: error.message || "Playground background scan failed.",
@@ -238,8 +282,14 @@ module.exports = async function handler(req, res) {
       results.push(outcome);
     }
 
-    const houseAutoTrade = await houseScanPromise;
-    const tradezAutoTrade = await tradezScanPromise;
+    const houseAutoTrade = await runHouseBackgroundScan().catch((error) => ({
+      ok: false,
+      error: error.message || "House background scan failed.",
+    }));
+    const tradezAutoTrade = await runTradezBackgroundScan().catch((error) => ({
+      ok: false,
+      error: error.message || "Tradez background scan failed.",
+    }));
     const playgroundOps = await runPlaygroundBackgroundScan(req).catch((error) => ({
       ok: false,
       error: error.message || "Playground background scan failed.",

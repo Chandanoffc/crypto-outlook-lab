@@ -1,8 +1,6 @@
 name: Background Scanners
 
 on:
-  schedule:
-    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 jobs:
