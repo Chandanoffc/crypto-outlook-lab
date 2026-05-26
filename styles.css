@@ -17,9 +17,6 @@
   --text-main: #eef2f7;
   --text-soft: #a5afbf;
   --text-dim: #768195;
-  --orange: #eef2f7;
-  --orange-soft: rgba(34, 211, 238, 0.08);
-  --orange-glow: rgba(34, 211, 238, 0.1);
   --tab-accent: #22d3ee;
   --tab-accent-soft: rgba(34, 211, 238, 0.12);
   --tab-accent-edge: rgba(34, 211, 238, 0.26);
@@ -82,11 +79,7 @@ body::before {
 }
 
 body::after {
-  background:
-    linear-gradient(rgba(255, 255, 255, 0.008) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.006) 1px, transparent 1px);
-  background-size: 100% 56px, 56px 100%;
-  opacity: 0.018;
+  display: none;
 }
 
 body.dashboard-home {
@@ -369,19 +362,10 @@ select {
   border-radius: 22px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 36%),
-    linear-gradient(180deg, rgba(216, 255, 77, 0.05), transparent 62%),
     rgba(8, 10, 8, 0.84);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.03),
-    0 0 18px rgba(216, 255, 77, 0.04);
-}
-
-.topbar {
-  display: flex;
-  justify-content: space-between;
-  gap: 20px;
-  align-items: end;
-  margin-bottom: 22px;
+    0 0 18px rgba(34, 211, 238, 0.03);
 }
 
 .eyebrow,
@@ -394,7 +378,6 @@ select {
   color: #79dceb;
 }
 
-.topbar h1,
 .panel-head h2,
 .panel h3 {
   margin: 0;
@@ -406,15 +389,6 @@ select {
 
 .panel h3 {
   font-size: 1rem;
-}
-
-.topbar h1 {
-  font-family: var(--display-font);
-  font-size: clamp(1.85rem, 3.8vw, 2.85rem);
-  line-height: 1.02;
-  letter-spacing: 0.04em;
-  color: var(--orange);
-  text-shadow: 0 0 20px rgba(216, 255, 77, 0.1);
 }
 
 .subtitle {
@@ -449,28 +423,12 @@ select {
   font-weight: 700;
   transform: translateY(-1px);
   box-shadow:
-    inset 0 0 0 1px rgba(216, 255, 77, 0.06),
     0 12px 24px rgba(0, 0, 0, 0.24),
-    0 0 18px rgba(216, 255, 77, 0.08);
+    0 0 14px rgba(34, 211, 238, 0.06);
 }
 
 .nav-links .mini-button:hover {
   transform: translateY(-2px);
-}
-
-.nav-links .mini-button.is-current {
-  border-color: var(--tab-accent-edge);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 32%),
-    linear-gradient(180deg, rgba(216, 255, 77, 0.18), rgba(31, 41, 12, 0.96));
-  box-shadow:
-    inset 0 0 0 1px rgba(216, 255, 77, 0.08),
-    0 14px 26px rgba(0, 0, 0, 0.26),
-    0 0 20px rgba(216, 255, 77, 0.12);
-}
-
-body.dashboard-home .topbar h1 {
-  font-size: clamp(1.72rem, 3.4vw, 2.55rem);
 }
 
 body.dashboard-home .subtitle,
@@ -846,11 +804,10 @@ body.dashboard-home .mini-button {
   border: 1px solid rgba(255, 255, 255, 0.07);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 28%),
-    linear-gradient(180deg, rgba(216, 255, 77, 0.03), transparent 48%),
-    #040503;
+    #040506;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.03),
-    0 0 20px rgba(216, 255, 77, 0.02);
+    0 0 20px rgba(34, 211, 238, 0.02);
 }
 
 .chart-series-labels {
@@ -1195,7 +1152,7 @@ body.dashboard-home .mini-button {
     linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(22, 24, 20, 0.96));
   border: 1px solid rgba(255, 255, 255, 0.15);
   box-shadow:
-    0 0 18px rgba(216, 255, 77, 0.18),
+    0 0 14px rgba(34, 211, 238, 0.18),
     0 0 0 2px rgba(0, 0, 0, 0.28);
 }
 
@@ -1317,11 +1274,9 @@ body.dashboard-home .mini-button {
   border: 1px solid var(--panel-edge-soft);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 32%),
-    linear-gradient(180deg, rgba(216, 255, 77, 0.04), transparent 52%),
     rgba(8, 10, 8, 0.8);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.03),
-    0 0 18px rgba(216, 255, 77, 0.03);
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .subpanel .panel-label {
@@ -1915,11 +1870,9 @@ body.paper-trader-page .panel-monitor-large .monitor-symbol {
   border: 1px solid rgba(255, 255, 255, 0.06);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 30%),
-    linear-gradient(180deg, rgba(216, 255, 77, 0.025), transparent 58%),
     rgba(8, 10, 8, 0.9);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.03),
-    0 0 16px rgba(216, 255, 77, 0.02);
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .tradez-feed-card.is-long {
@@ -2401,7 +2354,6 @@ body.signals-page .quality-chip {
   padding: 10px 12px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 32%),
-    linear-gradient(180deg, rgba(216, 255, 77, 0.04), transparent 50%),
     rgba(8, 10, 8, 0.74);
 }
 
@@ -2531,11 +2483,6 @@ body.signals-page .quality-chip {
 
   .hero-shell {
     padding: 16px;
-  }
-
-  .topbar {
-    flex-direction: column;
-    align-items: stretch;
   }
 
   .token-form {
@@ -3141,9 +3088,6 @@ body.tradez-page {
   --text-main: #e5e7eb;
   --text-soft: #9ca3af;
   --text-dim: #6b7280;
-  --orange: #e5e7eb;
-  --orange-soft: rgba(34, 211, 238, 0.08);
-  --orange-glow: rgba(34, 211, 238, 0.12);
   --tab-accent: #22d3ee;
   --tab-accent-soft: rgba(34, 211, 238, 0.14);
   --tab-accent-edge: rgba(34, 211, 238, 0.34);
