@@ -3517,6 +3517,49 @@ function renderDashboard(universe = []) {
       ? `Auto-scans every 90 seconds, can open up to ${MAX_NEW_TRADES_PER_SCAN} fresh trades per pass, can hold up to ${MAX_CONCURRENT_TRADES} quality positions, and currently requires an effective house bar of Q${effectiveHouseQualityGate()}.`
       : "Auto engine paused. Manual scans still work.";
   renderPaperTabs();
+  renderEquityCurve("paper-equity-chart", state.startingBalance, state.closedTrades || []);
+}
+
+function computeEquityCurve(startingBalance, closedTrades) {
+  const sorted = [...closedTrades]
+    .filter((t) => t.closedAt && t.pnlUsd != null)
+    .sort((a, b) => a.closedAt - b.closedAt);
+  let balance = startingBalance;
+  const anchor = sorted[0]?.openedAt || Date.now();
+  const points = [{ time: Math.floor((anchor - 1000) / 1000), value: balance }];
+  for (const trade of sorted) {
+    balance += Number(trade.pnlUsd) || 0;
+    points.push({ time: Math.floor(trade.closedAt / 1000), value: Math.max(0, balance) });
+  }
+  return points;
+}
+
+function renderEquityCurve(containerId, startingBalance, closedTrades) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  if (typeof LightweightCharts === "undefined") return;
+  container.innerHTML = "";
+  if (!closedTrades || closedTrades.length < 2) {
+    container.innerHTML = '<p class="subsection-meta" style="padding:10px 0">Not enough closed trades to plot yet.</p>';
+    return;
+  }
+  try {
+    const chart = LightweightCharts.createChart(container, {
+      height: 120,
+      layout: { background: { color: "transparent" }, textColor: "#888" },
+      grid: { vertLines: { visible: false }, horzLines: { color: "rgba(255,255,255,0.05)" } },
+      rightPriceScale: { borderVisible: false },
+      timeScale: { borderVisible: false, timeVisible: true },
+      handleScroll: false,
+      handleScale: false,
+    });
+    const series = chart.addLineSeries({ color: "#4ade80", lineWidth: 2, priceLineVisible: false });
+    const points = computeEquityCurve(startingBalance, closedTrades);
+    if (points.length >= 2) series.setData(points);
+    else container.innerHTML = '<p class="subsection-meta" style="padding:10px 0">Not enough closed trades to plot yet.</p>';
+  } catch (_) {
+    container.innerHTML = '<p class="subsection-meta" style="padding:10px 0">Chart unavailable.</p>';
+  }
 }
 
 async function scanUniverse({ manual = false } = {}) {

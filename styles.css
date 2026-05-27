@@ -7801,3 +7801,209 @@ body.playground-page .playground-empty-card {
     width: 100%;
   }
 }
+
+/* ─────────────────────────────────────────────
+   Compact page header (replaces hero sections)
+   ───────────────────────────────────────────── */
+.page-compact-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0 8px;
+  flex-wrap: wrap;
+}
+
+.page-compact-title h1 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0 0 2px;
+  line-height: 1.2;
+}
+
+.page-compact-sub {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  display: block;
+}
+
+.compact-form {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.compact-form input[type="text"],
+.compact-form input[type="number"],
+.compact-form select {
+  width: auto;
+  max-width: 140px;
+  min-width: 60px;
+}
+
+.compact-form button {
+  white-space: nowrap;
+}
+
+.compact-health-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: var(--surface-2, rgba(255,255,255,0.04));
+  border: 1px solid var(--border, rgba(255,255,255,0.08));
+  font-size: 0.8rem;
+}
+
+.compact-health-card span {
+  color: var(--text-muted);
+}
+
+.compact-health-card strong {
+  font-weight: 600;
+}
+
+.compact-health-card small {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+/* ─────────────────────────────────────────────
+   Equity curve
+   ───────────────────────────────────────────── */
+.equity-curve-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 16px 0 6px;
+}
+
+.equity-curve-head .panel-label {
+  margin: 0;
+}
+
+.equity-chart-frame {
+  height: 120px;
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+/* ─────────────────────────────────────────────
+   Help modal (strategy rules)
+   ───────────────────────────────────────────── */
+.help-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.help-modal[hidden] {
+  display: none;
+}
+
+.help-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+}
+
+.help-modal-inner {
+  position: relative;
+  z-index: 1;
+  background: var(--surface-1, #1a1a2e);
+  border: 1px solid var(--border, rgba(255,255,255,0.1));
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 560px;
+  width: calc(100% - 32px);
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.help-modal-inner h3 {
+  margin: 0 0 16px;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.help-modal-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  line-height: 1;
+  transition: color 0.15s;
+}
+
+.help-modal-close:hover {
+  color: var(--text-primary, #fff);
+}
+
+.help-modal-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.help-modal-item {
+  background: var(--surface-2, rgba(255,255,255,0.04));
+  border: 1px solid var(--border, rgba(255,255,255,0.08));
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+
+.help-modal-item strong {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-primary, #fff);
+  margin-bottom: 2px;
+}
+
+.help-modal-item span {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--accent, #4ade80);
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+
+.help-modal-item p {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.help-modal-item-up span {
+  color: var(--tone-up, #4ade80);
+}
+
+.help-modal-item-down span {
+  color: var(--tone-down, #f87171);
+}
+
+.help-btn {
+  min-width: 28px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}

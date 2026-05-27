@@ -37,13 +37,11 @@
           </a>
 
           <nav class="page-tabs shell-page-tabs" aria-label="Primary pages">
-            <a class="page-tab is-current" href="./index.html">Main</a>
+            <a class="page-tab is-current" href="./index.html">Market Desk</a>
             <a class="page-tab" href="./paper.html">Auto Trade</a>
-            <a class="page-tab" href="./arena.html">Signals Arena</a>
-            <a class="page-tab" href="./tradez.html">EMA Signals</a>
-            <a class="page-tab" href="./perps-alerts.html">Perps Alerts</a>
-            <a class="page-tab" href="./dlmm-alerts.html">DLMM Alerts</a>
-            <a class="page-tab" href="./playground.html">Playground</a>
+            <a class="page-tab" href="./tradez.html">Trade Desk</a>
+            <a class="page-tab" href="./perps-alerts.html">Perps</a>
+            <a class="page-tab" href="./dlmm-alerts.html">DLMM</a>
           </nav>
 
           <div class="header-actions">
@@ -70,29 +68,23 @@
 
       <div class="shell-main">
         <header class="shell-top-shell">
-          <section class="panel hero-shell shell-hero-shell">
-            <div class="hero-copy">
-              <p class="eyebrow">Market Desk</p>
-              <h1>Analyze any token, then execute from one workspace</h1>
-              <p class="subtitle">
-                One shared analysis page for structure, momentum, catalysts, tactical outlook,
-                and execution context across Binance USDT perps.
-              </p>
+          <div class="page-compact-header">
+            <div class="page-compact-title">
+              <h1>Market Desk</h1>
+              <span class="page-compact-sub">Binance USDT perps · structure, flow, and execution context</span>
             </div>
-
-            <form id="token-form" class="token-form hero-form token-analysis-center-form">
+            <form id="token-form" class="compact-form token-analysis-center-form">
               <label class="visually-hidden" for="token-input">Token</label>
               <input
                 id="token-input"
                 name="token"
                 class="token-analysis-token-input"
                 type="text"
-                placeholder="Enter token ticker, for example BTC or SOL"
+                placeholder="BTC"
                 value="BTC"
                 autocomplete="off"
                 spellcheck="false"
               />
-
               <label class="visually-hidden" aria-hidden="true">
                 Chart Interval
                 <select id="interval-select" name="interval">
@@ -102,17 +94,15 @@
                   <option value="4h">4h</option>
                 </select>
               </label>
-
               <div class="timeframe-switcher" role="group" aria-label="Chart timeframe">
                 <button type="button" class="mini-button timeframe-button" data-analysis-interval="5m">5m</button>
                 <button type="button" class="mini-button timeframe-button is-active" data-analysis-interval="15m">15m</button>
                 <button type="button" class="mini-button timeframe-button" data-analysis-interval="1h">1H</button>
                 <button type="button" class="mini-button timeframe-button" data-analysis-interval="4h">4H</button>
               </div>
-
               <button type="submit" class="token-analysis-submit">Analyze</button>
             </form>
-          </section>
+          </div>
 
           <div id="status-banner" class="status-banner">
             Preparing futures dashboard...

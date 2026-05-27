@@ -157,21 +157,17 @@ const dom = {
   tradeSummary: document.getElementById("tradez-trade-summary"),
   planNote: document.getElementById("tradez-plan-note"),
   signalList: document.getElementById("tradez-signal-list"),
-  workspaceTabLive: document.getElementById("tradez-workspace-tab-live"),
-  workspaceTabCompare: document.getElementById("tradez-workspace-tab-compare"),
-  workspaceNote: document.getElementById("tradez-workspace-note"),
-  workspacePanelLive: document.getElementById("tradez-workspace-panel-live"),
-  workspacePanelCompare: document.getElementById("tradez-workspace-panel-compare"),
   tabSignals: document.getElementById("tradez-tab-signals"),
   tabAlerts: document.getElementById("tradez-tab-alerts"),
-  tabNotes: document.getElementById("tradez-tab-notes"),
   tabNote: document.getElementById("tradez-tab-note"),
   panelSignals: document.getElementById("tradez-panel-signals"),
   panelAlerts: document.getElementById("tradez-panel-alerts"),
-  panelNotes: document.getElementById("tradez-panel-notes"),
   signalTable: document.getElementById("tradez-signal-table"),
   alertTable: document.getElementById("tradez-alert-table"),
-  notesGrid: document.getElementById("tradez-notes-grid"),
+  equityChart: document.getElementById("tradez-equity-chart"),
+  helpBtn: document.getElementById("tradez-help-btn"),
+  helpModal: document.getElementById("tradez-help-modal"),
+  helpClose: document.getElementById("tradez-help-close"),
   compareGrid: document.getElementById("tradez-compare-grid"),
   auto2Toggle: document.getElementById("tradez-auto2-toggle"),
   auto2Reset: document.getElementById("tradez-auto2-reset"),
@@ -310,8 +306,7 @@ function loadState() {
     selectedSymbol: stored.selectedSymbol || null,
     selectedFeedSymbol: stored.selectedFeedSymbol || null,
     qualityThreshold: Number(stored.qualityThreshold) || DEFAULT_QUALITY_THRESHOLD,
-    activeTab: stored.activeTab || "signals",
-    workspaceMode: stored.workspaceMode === "compare" ? "compare" : "live",
+    activeTab: stored.activeTab === "alerts" ? "alerts" : "signals",
     lastScanAt: Number(stored.lastScanAt) || 0,
     alertEvents: readStoredJson(ALERT_EVENTS_KEY, []).slice(0, 36),
     seenSignalIds: new Set(readStoredJson(SIGNAL_IDS_KEY, [])),
@@ -329,7 +324,6 @@ function persistState() {
     selectedFeedSymbol: state.selectedFeedSymbol,
     qualityThreshold: state.qualityThreshold,
     activeTab: state.activeTab,
-    workspaceMode: state.workspaceMode,
     lastScanAt: state.lastScanAt,
   });
   writeStoredJson(ALERT_EVENTS_KEY, state.alertEvents.slice(0, 36));
@@ -3104,6 +3098,7 @@ function renderTradezPaperDashboard() {
 
   renderTradezAutoTabs();
   renderTradezComparison();
+  renderEquityCurve("tradez-equity-chart", tradezPaper.startingBalance, tradezPaper.closedTrades || []);
 }
 
 function mapKlineEntry(entry) {
@@ -4821,6 +4816,48 @@ function renderSignalFeed() {
   });
 }
 
+function computeEquityCurve(startingBalance, closedTrades) {
+  const sorted = [...closedTrades]
+    .filter((t) => t.closedAt && t.pnlUsd != null)
+    .sort((a, b) => a.closedAt - b.closedAt);
+  let balance = startingBalance;
+  const anchor = sorted[0]?.openedAt || Date.now();
+  const points = [{ time: Math.floor((anchor - 1000) / 1000), value: balance }];
+  for (const trade of sorted) {
+    balance += Number(trade.pnlUsd) || 0;
+    points.push({ time: Math.floor(trade.closedAt / 1000), value: Math.max(0, balance) });
+  }
+  return points;
+}
+
+function renderEquityCurve(containerId, startingBalance, closedTrades) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  if (typeof LightweightCharts === "undefined") return;
+  container.innerHTML = "";
+  if (!closedTrades || closedTrades.length < 2) {
+    container.innerHTML = '<p class="subsection-meta" style="padding:10px 0">Not enough closed trades to plot yet.</p>';
+    return;
+  }
+  try {
+    const chart = LightweightCharts.createChart(container, {
+      height: 120,
+      layout: { background: { color: "transparent" }, textColor: "#888" },
+      grid: { vertLines: { visible: false }, horzLines: { color: "rgba(255,255,255,0.05)" } },
+      rightPriceScale: { borderVisible: false },
+      timeScale: { borderVisible: false, timeVisible: true },
+      handleScroll: false,
+      handleScale: false,
+    });
+    const series = chart.addLineSeries({ color: "#4ade80", lineWidth: 2, priceLineVisible: false });
+    const points = computeEquityCurve(startingBalance, closedTrades);
+    if (points.length >= 2) series.setData(points);
+    else container.innerHTML = '<p class="subsection-meta" style="padding:10px 0">Not enough closed trades to plot yet.</p>';
+  } catch (_) {
+    container.innerHTML = '<p class="subsection-meta" style="padding:10px 0">Chart unavailable.</p>';
+  }
+}
+
 function renderAlertFeed() {
   if (!state.alertEvents.length) {
     dom.alertTable.innerHTML = `
@@ -4867,67 +4904,17 @@ function renderAlertFeed() {
     .join("");
 }
 
-function renderStrategyNotes() {
-  renderAnalysisGrid(dom.notesGrid, [
-    {
-      label: "What qualifies",
-      value: "Trend + level + volume",
-      note: "Longs need EMA20 above EMA50 with a reaction at S1 or S2, plus strong buying volume. Shorts need EMA50 above EMA20 with a reaction at R1 or R2, plus strong selling volume.",
-      tone: "up",
-    },
-    {
-      label: "Best upgrade",
-      value: "EMA + S/R confluence",
-      note: "A plain S1/R1 touch is valid, but quality improves when the candle also tags EMA20 or EMA50 at the same time. S2 and R2 are treated as the stronger version of the setup.",
-      tone: "neutral",
-    },
-    {
-      label: "Trade plan",
-      value: "TP1 level, TP2 extension",
-      note: "For longs, TP1 is R1 and TP2 is R2. For shorts, TP1 is S1 and TP2 is S2. After TP1, the stop should move to entry so the second leg is protected.",
-      tone: "up",
-    },
-    {
-      label: "Avoid",
-      value: "Weak volume or cramped room",
-      note: "If volume does not confirm, or the next target level is too close to justify the risk, the setup should stay on watch instead of being promoted.",
-      tone: "down",
-    },
-  ]);
-}
-
 function updateTabs() {
   const tabs = [
     { key: "signals", button: dom.tabSignals, panel: dom.panelSignals, note: "Signal Feed shows the highest-quality live EMA pullback opportunities across the scanned universe." },
     { key: "alerts", button: dom.tabAlerts, panel: dom.panelAlerts, note: "Alert Events logs newly detected qualifying setups as the engine rotates through the universe." },
-    { key: "notes", button: dom.tabNotes, panel: dom.panelNotes, note: "Strategy Notes keeps the pattern disciplined so we do not treat every EMA touch as an entry." },
   ];
 
   tabs.forEach((tab) => {
     tab.button.classList.toggle("is-active", state.activeTab === tab.key);
     tab.panel.hidden = state.activeTab !== tab.key;
-    if (state.activeTab === tab.key) dom.tabNote.textContent = tab.note;
+    if (state.activeTab === tab.key && dom.tabNote) dom.tabNote.textContent = tab.note;
   });
-}
-
-function updateWorkspaceMode() {
-  if (!dom.workspaceTabLive || !dom.workspacePanelLive || !dom.workspacePanelCompare) return;
-
-  const isLiveMode = state.workspaceMode !== "compare";
-  dom.workspaceTabLive.classList.toggle("is-active", isLiveMode);
-  dom.workspaceTabCompare.classList.toggle("is-active", !isLiveMode);
-  dom.workspacePanelLive.hidden = !isLiveMode;
-  dom.workspacePanelCompare.hidden = isLiveMode;
-
-  if (dom.workspaceNote) {
-    dom.workspaceNote.textContent = isLiveMode
-      ? "Live Desk keeps the signal stream front and center while the heavier benchmarking workspace stays tucked away until needed."
-      : "System Compare shows the live competition arena, runtime snapshots, and Auto Trade 2 controls.";
-  }
-
-  if (!isLiveMode && !competitionReport) {
-    refreshCompetitionScorecard(competitionLookbackHours);
-  }
 }
 
 function pushAlertEvent(candidate) {
@@ -5245,28 +5232,19 @@ function bindEvents() {
     persistState();
     updateTabs();
   });
-  dom.tabNotes.addEventListener("click", () => {
-    state.activeTab = "notes";
-    persistState();
-    updateTabs();
-  });
-
-  if (dom.workspaceTabLive) {
-    dom.workspaceTabLive.addEventListener("click", () => {
-      state.workspaceMode = "live";
-      persistState();
-      updateWorkspaceMode();
+  if (dom.helpBtn) {
+    dom.helpBtn.addEventListener("click", () => {
+      if (dom.helpModal) dom.helpModal.hidden = false;
     });
   }
-
-  if (dom.workspaceTabCompare) {
-    dom.workspaceTabCompare.addEventListener("click", () => {
-      state.workspaceMode = "compare";
-      persistState();
-      updateWorkspaceMode();
-      if (!competitionReport) {
-        refreshCompetitionScorecard(competitionLookbackHours);
-      }
+  if (dom.helpClose) {
+    dom.helpClose.addEventListener("click", () => {
+      if (dom.helpModal) dom.helpModal.hidden = true;
+    });
+  }
+  if (dom.helpModal) {
+    dom.helpModal.querySelector(".help-modal-backdrop")?.addEventListener("click", () => {
+      dom.helpModal.hidden = true;
     });
   }
 
@@ -5365,9 +5343,7 @@ async function init() {
   syncTradezDeliveryInputs();
   refreshTradezDeliverySummary();
   updateAlertPermissionButton();
-  updateWorkspaceMode();
   updateTabs();
-  renderStrategyNotes();
   renderAlertFeed();
   renderTradezPaperDashboard();
   initChart();

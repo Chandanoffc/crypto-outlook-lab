@@ -17,6 +17,7 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./styles.css" />
+    <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
     <script src="./fallback-perps.js" defer></script>
     <script src="./paper.js" defer></script>
   </head>
@@ -35,13 +36,11 @@
           </a>
 
           <nav class="page-tabs shell-page-tabs" aria-label="Primary pages">
-            <a class="page-tab" href="./index.html">Main</a>
+            <a class="page-tab" href="./index.html">Market Desk</a>
             <a class="page-tab is-current" href="./paper.html">Auto Trade</a>
-            <a class="page-tab" href="./arena.html">Signals Arena</a>
-            <a class="page-tab" href="./tradez.html">EMA Signals</a>
-            <a class="page-tab" href="./perps-alerts.html">Perps Alerts</a>
-            <a class="page-tab" href="./dlmm-alerts.html">DLMM Alerts</a>
-            <a class="page-tab" href="./playground.html">Playground</a>
+            <a class="page-tab" href="./tradez.html">Trade Desk</a>
+            <a class="page-tab" href="./perps-alerts.html">Perps</a>
+            <a class="page-tab" href="./dlmm-alerts.html">DLMM</a>
           </nav>
 
           <div class="header-actions">
@@ -68,46 +67,23 @@
 
       <div class="shell-main">
         <header class="shell-top-shell">
-          <section class="panel hero-shell shell-hero-shell">
-            <div class="hero-copy">
-              <p class="eyebrow">Auto Paper Trader</p>
-              <h1>Automated paper execution desk</h1>
-              <p class="subtitle">
-                Automated paper-trading simulator. It scans the full Binance USDT perp universe,
-                can hold multiple high-quality paper positions, starts at $1,000, uses the house
-                trend-continuation model, and logs every TP or SL outcome.
-              </p>
+          <div class="page-compact-header">
+            <div class="page-compact-title">
+              <h1>Auto Trade</h1>
+              <span class="page-compact-sub">House trend engine · <span id="universe-count">Loading...</span> perps</span>
             </div>
-
-            <form id="auto-form" class="token-form token-form-wide hero-form">
-              <label>
-                Perp Universe
-                <input id="universe-input" type="text" value="All Binance USDT Perps" readonly />
-              </label>
-
-              <label>
-                Signal Interval
-                <select id="scan-interval">
-                  <option value="5m">5m</option>
-                  <option value="15m" selected>15m</option>
-                  <option value="1h">1h</option>
-                  <option value="4h">4h</option>
-                </select>
-              </label>
-
-              <label>
-                Min Quality
-                <input id="quality-threshold" type="number" min="50" max="95" step="1" value="68" />
-              </label>
-
-              <label>
-                Universe Count
-                <input id="universe-count" type="text" value="Loading..." readonly />
-              </label>
-
+            <form id="auto-form" class="compact-form">
+              <select id="scan-interval" title="Signal Interval">
+                <option value="5m">5m</option>
+                <option value="15m" selected>15m</option>
+                <option value="1h">1h</option>
+                <option value="4h">4h</option>
+              </select>
+              <input id="quality-threshold" type="number" min="50" max="95" step="1" value="68" title="Min Quality" />
+              <input id="universe-input" type="hidden" value="All Binance USDT Perps" />
               <button id="scan-button" type="submit">Run Scan</button>
             </form>
-          </section>
+          </div>
 
           <div id="paper-status-banner" class="status-banner">
             Initializing auto paper trader...
@@ -162,6 +138,12 @@
             <small id="metric-last-scan-note">Auto engine idle</small>
           </article>
           </section>
+
+          <div class="equity-curve-head">
+            <p class="panel-label">Equity Curve</p>
+            <span class="subsection-meta">Balance over all closed trades</span>
+          </div>
+          <div id="paper-equity-chart" class="equity-chart-frame"></div>
         </header>
 
         <main class="dashboard-grid auto-grid">

@@ -1326,6 +1326,199 @@ async function fetchPerpsPlaygroundSignal(symbolInfo) {
   return _scorePerpSignal(symbolInfo, candles, (Number(premium?.lastFundingRate) || 0) * 100);
 }
 
+// ---------------------------------------------------------------------------
+// Funding Flush Reversal Engine
+// Identifies counter-trend setups where extreme funding rates signal a
+// crowded position beginning to unwind. Targets 65–72% win rate with tight
+// stops anchored at swing structure levels.
+// ---------------------------------------------------------------------------
+
+function _scoreFundingFlushSignal(symbolInfo, candles, fundingRatePct, oiHistory) {
+  const closes = candles.map((c) => Number(c.close) || 0).filter((v) => v > 0);
+  if (closes.length < 40) return null;
+
+  const funding = Number(fundingRatePct) || 0;
+  const fundingAbs = Math.abs(funding);
+  if (fundingAbs < 0.045) return null;
+
+  // Extreme positive funding → longs overcrowded → look Short.
+  // Extreme negative funding → shorts overcrowded → look Long.
+  const flushSide = funding > 0 ? "Short" : "Long";
+
+  const rsi = _calcRsi(closes, 14);
+  if (flushSide === "Short" && rsi < 62) return null;
+  if (flushSide === "Long" && rsi > 38) return null;
+
+  const latestClose = closes[closes.length - 1];
+  const latestAtr = _calcAtr(candles, 14);
+  if (!latestAtr || !latestClose) return null;
+
+  const ema20 = _calcEma(closes, 20);
+  const latestEma20 = ema20[ema20.length - 1] || latestClose;
+
+  // Open interest change: declining OI = forced de-leveraging in progress.
+  let oiChangePct = 0;
+  let oiDeclining = null;
+  if (Array.isArray(oiHistory) && oiHistory.length >= 3) {
+    const latestOi = Number(oiHistory[oiHistory.length - 1]?.sumOpenInterest) || 0;
+    const earlierOi = Number(oiHistory[0]?.sumOpenInterest) || 0;
+    if (earlierOi > 0) {
+      oiChangePct = ((latestOi - earlierOi) / earlierOi) * 100;
+      oiDeclining = oiChangePct < 0.2;
+    }
+  }
+
+  // Swing-level detection — find nearest structural level in the last 24 candles.
+  const swingWindow = candles.slice(-24);
+  const swingHighs = [];
+  const swingLows = [];
+  for (let i = 1; i < swingWindow.length - 1; i += 1) {
+    const prev = swingWindow[i - 1];
+    const curr = swingWindow[i];
+    const next = swingWindow[i + 1];
+    const currHigh = Number(curr.high) || 0;
+    const currLow = Number(curr.low) || 0;
+    if (currHigh > (Number(prev.high) || 0) && currHigh > (Number(next.high) || 0)) swingHighs.push(currHigh);
+    if (currLow < (Number(prev.low) || 0) && currLow < (Number(next.low) || 0)) swingLows.push(currLow);
+  }
+  // Fallback: use 10-candle extreme if no swing points found.
+  const recent10 = candles.slice(-10);
+  if (!swingHighs.length) swingHighs.push(Math.max(...recent10.map((c) => Number(c.high) || 0)));
+  if (!swingLows.length) swingLows.push(Math.min(...recent10.map((c) => Number(c.low) || 0)));
+
+  let nearLevel = false;
+  const levelTolerance = latestAtr * 1.8;
+  if (flushSide === "Short") {
+    const nearest = swingHighs.sort((a, b) => Math.abs(a - latestClose) - Math.abs(b - latestClose))[0];
+    if (Math.abs(nearest - latestClose) <= levelTolerance) nearLevel = true;
+  } else {
+    const nearest = swingLows.sort((a, b) => Math.abs(a - latestClose) - Math.abs(b - latestClose))[0];
+    if (Math.abs(nearest - latestClose) <= levelTolerance) nearLevel = true;
+  }
+  if (!nearLevel) return null;
+
+  // Build score.
+  let score = 0;
+  const reasons = [];
+
+  if (fundingAbs >= 0.07) {
+    score += 35;
+    reasons.push(`Extreme funding at ${formatPercent(funding, 4)} — severe crowd overhang`);
+  } else if (fundingAbs >= 0.05) {
+    score += 25;
+    reasons.push(`Funding at ${formatPercent(funding, 4)} — heavy ${funding > 0 ? "long" : "short"} overhang`);
+  } else {
+    score += 15;
+    reasons.push(`Funding elevated at ${formatPercent(funding, 4)}`);
+  }
+
+  if (flushSide === "Short") {
+    if (rsi >= 70) { score += 18; reasons.push(`RSI overbought at ${formatNumber(rsi, 1)} — exhaustion signal`); }
+    else { score += 12; reasons.push(`RSI elevated at ${formatNumber(rsi, 1)}`); }
+  } else {
+    if (rsi <= 30) { score += 18; reasons.push(`RSI oversold at ${formatNumber(rsi, 1)} — exhaustion signal`); }
+    else { score += 12; reasons.push(`RSI depressed at ${formatNumber(rsi, 1)}`); }
+  }
+
+  if (oiDeclining === true) {
+    if (oiChangePct < -0.3) {
+      score += 18;
+      reasons.push(`OI declining ${formatPercent(oiChangePct, 2)} — forced de-leveraging in progress`);
+    } else {
+      score += 10;
+      reasons.push(`OI flat — crowd not adding to position`);
+    }
+  } else if (oiDeclining === false) {
+    score -= 8;
+  }
+
+  score += 15;
+  reasons.push(`Price at structural ${flushSide === "Short" ? "resistance" : "support"} level — precise entry zone`);
+
+  const emaDistPct = latestEma20 ? Math.abs(latestClose - latestEma20) / latestClose * 100 : 0;
+  const priceAboveEma = latestClose > latestEma20;
+  if ((flushSide === "Short" && priceAboveEma) || (flushSide === "Long" && !priceAboveEma)) {
+    if (emaDistPct >= 3) {
+      score += 12;
+      reasons.push(`Price extended ${formatPercent(emaDistPct, 1)} ${flushSide === "Short" ? "above" : "below"} EMA20 — overextension`);
+    } else if (emaDistPct >= 1.5) {
+      score += 6;
+      reasons.push(`Price ${formatPercent(emaDistPct, 1)} ${flushSide === "Short" ? "above" : "below"} EMA20`);
+    }
+  }
+
+  const quoteVolume = Number(symbolInfo?.quoteVolume) || 0;
+  if (quoteVolume >= 50_000_000) {
+    score += 5;
+    reasons.push(`High liquidity (${formatCompactUsd(quoteVolume, 1)})`);
+  } else if (quoteVolume < 10_000_000) {
+    score -= 5;
+  }
+
+  if (score < 44) return null;
+
+  // Tight stop for reversals — thesis is invalidated if price closes through the level.
+  const stopDistance = Math.max(latestAtr * 0.7, latestClose * 0.006);
+  const takeProfit = flushSide === "Short" ? latestClose - stopDistance * 1.5 : latestClose + stopDistance * 1.5;
+  const stopLoss = flushSide === "Short" ? latestClose + stopDistance : latestClose - stopDistance;
+  const takeProfit2 = flushSide === "Short" ? latestClose - stopDistance * 2.5 : latestClose + stopDistance * 2.5;
+  const rr = Math.abs(takeProfit - latestClose) / Math.max(Math.abs(latestClose - stopLoss), 0.0000001);
+  if (rr < 1.1) return null;
+
+  return {
+    id: `flush:${symbolInfo.symbol}:${candles[candles.length - 1]?.closeTime || Date.now()}`,
+    engine: "funding_flush",
+    engineLabel: "Funding Flush Engine",
+    symbol: symbolInfo.symbol,
+    side: flushSide,
+    timeframe: "4H",
+    strategy: "Funding Flush Reversal",
+    qualityScore: Math.round(Math.min(score, 100)),
+    entryPrice: latestClose,
+    stopLoss,
+    takeProfit,
+    takeProfit2,
+    rr,
+    timestamp: Number(candles[candles.length - 1]?.closeTime) || Date.now(),
+    qualificationReason: reasons.join(" • "),
+    metrics: {
+      rsi,
+      fundingRatePct: funding,
+      oiChangePct,
+      emaDistPct,
+      quoteVolume,
+      nearLevel,
+    },
+  };
+}
+
+async function fetchFundingFlushSignal(symbolInfo) {
+  const symbol = String(symbolInfo?.symbol || "").trim().toUpperCase();
+  if (!symbol) return null;
+  const [klinesResult, premiumResult, oiResult] = await Promise.allSettled([
+    fetchJson(`https://fapi.binance.com/fapi/v1/klines?symbol=${encodeURIComponent(symbol)}&interval=4h&limit=60`),
+    fetchJson(`https://fapi.binance.com/fapi/v1/premiumIndex?symbol=${encodeURIComponent(symbol)}`),
+    fetchJson(`https://fapi.binance.com/futures/data/openInterestHist?symbol=${encodeURIComponent(symbol)}&period=4h&limit=8`),
+  ]);
+  const candles =
+    klinesResult.status === "fulfilled" && Array.isArray(klinesResult.value)
+      ? klinesResult.value.map((entry) => ({
+          openTime: Number(entry[0]) || 0,
+          open: Number(entry[1]) || 0,
+          high: Number(entry[2]) || 0,
+          low: Number(entry[3]) || 0,
+          close: Number(entry[4]) || 0,
+          volume: Number(entry[5]) || 0,
+          closeTime: Number(entry[6]) || 0,
+        }))
+      : [];
+  const fundingRatePct =
+    (Number(premiumResult.status === "fulfilled" ? premiumResult.value?.lastFundingRate : 0) || 0) * 100;
+  const oiHistory =
+    oiResult.status === "fulfilled" && Array.isArray(oiResult.value) ? oiResult.value : [];
+  return _scoreFundingFlushSignal(symbolInfo, candles, fundingRatePct, oiHistory);
+}
+
 async function refreshPlaygroundSignals() {
   const runtimeUniverse = Array.isArray(state.perps.runtime.universe) && state.perps.runtime.universe.length
     ? state.perps.runtime.universe
@@ -1351,19 +1544,44 @@ async function refreshPlaygroundSignals() {
     return [];
   }
 
-  const results = await Promise.allSettled(symbols.map((entry) => fetchPerpsPlaygroundSignal(entry)));
-  const signals = results
+  // Run both engines in parallel — Funding Flush (priority) + Playground (trend-following).
+  const [playgroundResults, flushResults] = await Promise.all([
+    Promise.allSettled(symbols.map((entry) => fetchPerpsPlaygroundSignal(entry))),
+    Promise.allSettled(symbols.map((entry) => fetchFundingFlushSignal(entry))),
+  ]);
+
+  const playgroundSignals = playgroundResults
     .map((result) => (result.status === "fulfilled" ? result.value : null))
-    .filter(Boolean)
-    .sort((left, right) => right.qualityScore - left.qualityScore);
+    .filter(Boolean);
+
+  const flushSignals = flushResults
+    .map((result) => (result.status === "fulfilled" ? result.value : null))
+    .filter(Boolean);
+
+  // Flush signals take priority — suppress playground signal for the same symbol
+  // so the user doesn't get conflicting trade directions on the same pair.
+  const flushSymbolSet = new Set(flushSignals.map((s) => s.symbol));
+  const filteredPlayground = playgroundSignals.filter((s) => !flushSymbolSet.has(s.symbol));
+
+  const signals = [...flushSignals, ...filteredPlayground].sort(
+    (left, right) => right.qualityScore - left.qualityScore
+  );
 
   state.perps.playgroundSignals = signals.slice(0, 12);
-  pushModuleLog(PERPS_MODULE, "scanLog", {
-    tone: signals.length ? "up" : "neutral",
-    message: signals.length
-      ? `Playground Engine qualified ${signals.length} live perps setup${signals.length === 1 ? "" : "s"} across ${symbols.length} symbols.`
-      : `Playground Engine scanned ${symbols.length} top perps symbols with no fresh setup above Q60.`,
-  });
+
+  const flushCount = flushSignals.length;
+  const pgCount = filteredPlayground.length;
+  const totalCount = flushCount + pgCount;
+  let logMessage;
+  if (totalCount === 0) {
+    logMessage = `Scanned ${symbols.length} symbols — no setups qualified on Playground or Funding Flush engines.`;
+  } else {
+    const parts = [];
+    if (flushCount) parts.push(`${flushCount} Funding Flush signal${flushCount === 1 ? "" : "s"}`);
+    if (pgCount) parts.push(`${pgCount} Playground signal${pgCount === 1 ? "" : "s"}`);
+    logMessage = `${parts.join(" + ")} qualified across ${symbols.length} symbols.`;
+  }
+  pushModuleLog(PERPS_MODULE, "scanLog", { tone: totalCount > 0 ? "up" : "neutral", message: logMessage });
   return signals;
 }
 
