@@ -210,6 +210,10 @@ const dom = {
   auto2TradeTable: document.getElementById("tradez-auto2-trade-table"),
   auto2DemoTable: document.getElementById("tradez-auto2-demo-table"),
   auto2ActivityTable: document.getElementById("tradez-auto2-activity-table"),
+  competitionScorecard: document.getElementById("competition-scorecard"),
+  compTab24h: document.getElementById("comp-tab-24h"),
+  compTab7d: document.getElementById("comp-tab-7d"),
+  compTab30d: document.getElementById("comp-tab-30d"),
 };
 
 function maybeForceAutoTrade2Reset() {
@@ -250,6 +254,9 @@ let remoteRuntimeHydrating = false;
 let remoteRuntimePollTimer = null;
 let remoteDisplayRefreshTimer = null;
 let remoteHouseComparisonState = null;
+let competitionReport = null;
+let competitionLookbackHours = 24;
+let competitionRefreshTimer = null;
 
 function loadTradezPaperState() {
   const stored = readStoredJson(TRADEZ_AUTO_STORAGE_KEY, {});
@@ -1617,43 +1624,83 @@ function buildTradezDailyBriefing(dayKey) {
   };
 }
 
-function maybeSendTradezDailyBriefing(now = Date.now()) {
+async function maybeSendTradezDailyBriefing(now = Date.now()) {
   const previousDayKey = utcDayKey(now - UTC_DAY_MS);
   if (tradezPaper.lastDailyBriefingUtcDate === previousDayKey) return;
 
+  tradezPaper.lastDailyBriefingUtcDate = previousDayKey;
+
   const briefing = buildTradezDailyBriefing(previousDayKey);
-  const lines = [
-    "📘 EMA BOOK DAILY BRIEFING",
-    `Date (UTC): ${briefing.label}`,
-    `Trades taken: ${briefing.tradesTaken}`,
-    `Profits hit: ${briefing.profitsHit}`,
-    `Avg gain: ${briefing.profitsHit ? formatPercent(briefing.avgGainPct) : "0.00%"}`,
-    `SLs hit: ${briefing.slsHit}`,
-    `Avg loss: ${briefing.slsHit ? `-${Math.abs(briefing.avgLossPct).toFixed(2)}%` : "0.00%"}`,
-    `Breakeven exits: ${briefing.breakevens}`,
-    `Overall realized PnL: ${formatCompactUsd(briefing.realizedUsd, 2)}`,
-    `Overall realized return: ${formatPercent(briefing.realizedPct)}`,
-    `Open runners carried: ${briefing.openRunners}`,
-  ];
+
+  // Try to fetch competition data to build a head-to-head report
+  let dbReport = null;
+  try {
+    dbReport = await fetchCompetitionReport(24);
+  } catch (_error) {
+    // Fall back to EMA-only briefing if the API is unavailable
+  }
+
+  let lines;
+  if (dbReport?.available && dbReport.house && dbReport.ema) {
+    const { house, ema, leader } = dbReport;
+    const leaderLine =
+      leader === "house_trend"
+        ? "🏆 AUTO TRADE leads this session"
+        : leader === "ema_book"
+          ? "🏆 AUTO TRADE 2 leads this session"
+          : "🤝 Dead heat — tied session";
+    lines = [
+      "⚔️  SOLORIS DAILY COMPETITION REPORT",
+      `📅 ${previousDayKey} (UTC)`,
+      "",
+      "🔵 AUTO TRADE (House Trend · 15m)",
+      `   Trades: ${house.resolved}  TPs: ${house.tpCount}  SLs: ${house.slCount}  BEs: ${house.beCount}`,
+      house.resolved > 0
+        ? `   Win: ${house.winRate.toFixed(1)}%  Avg gain: ${formatCompPct(house.avgGainPct)}  P&L: ${formatCompUsd(house.totalPnlUsd)}`
+        : "   No resolved trades this period.",
+      "",
+      "🟣 AUTO TRADE 2 (EMA Signals · 1H)",
+      `   Trades: ${ema.resolved}  TPs: ${ema.tpCount}  SLs: ${ema.slCount}  BEs: ${ema.beCount}`,
+      ema.resolved > 0
+        ? `   Win: ${ema.winRate.toFixed(1)}%  Avg gain: ${formatCompPct(ema.avgGainPct)}  P&L: ${formatCompUsd(ema.totalPnlUsd)}`
+        : "   No resolved trades this period.",
+      "",
+      leaderLine,
+      "",
+      `EMA runners now open: ${briefing.openRunners}`,
+    ];
+  } else {
+    lines = [
+      "📘 EMA BOOK DAILY BRIEFING",
+      `Date (UTC): ${briefing.label}`,
+      `Trades taken: ${briefing.tradesTaken}`,
+      `Profits hit: ${briefing.profitsHit}`,
+      `Avg gain: ${briefing.profitsHit ? formatPercent(briefing.avgGainPct) : "0.00%"}`,
+      `SLs hit: ${briefing.slsHit}`,
+      `Avg loss: ${briefing.slsHit ? `-${Math.abs(briefing.avgLossPct).toFixed(2)}%` : "0.00%"}`,
+      `Breakeven exits: ${briefing.breakevens}`,
+      `Overall realized PnL: ${formatCompactUsd(briefing.realizedUsd, 2)}`,
+      `Overall realized return: ${formatPercent(briefing.realizedPct)}`,
+      `Open runners carried: ${briefing.openRunners}`,
+    ];
+  }
+
+  const title = dbReport?.available ? "Daily Competition Report" : "EMA Book Daily Briefing";
 
   dispatchTradezDelivery(
     {
       time: now,
       symbol: "EMA_BOOK",
-      title: "EMA Book Daily Briefing",
+      title,
       deliveryType: "daily_briefing",
       message: lines.join("\n"),
       formattedMessage: lines.join("\n"),
     },
-    "EMA Book Daily Briefing"
+    title
   );
 
-  tradezPaper.lastDailyBriefingUtcDate = previousDayKey;
   logTradezPaperActivity(
-    `Daily EMA briefing sent for ${briefing.label} • ${briefing.tradesTaken} trades • ${formatCompactUsd(
-      briefing.realizedUsd,
-      2
-    )} realized.`,
+    `Daily briefing sent for ${previousDayKey} • ${briefing.tradesTaken} EMA trades • ${formatCompactUsd(briefing.realizedUsd, 2)} realized.`,
     briefing.realizedUsd >= 0 ? "up" : "down"
   );
   persistTradezPaperState();
@@ -2672,6 +2719,139 @@ function overallLeaderScore(metrics) {
   const winScore = Math.max(0, Math.min(100, metrics.winRate || 0));
   const qualityScore = normalizedQualityScore(metrics.averageQuality || 0);
   return returnScore * 0.45 + winScore * 0.35 + qualityScore * 0.2;
+}
+
+async function fetchCompetitionReport(lookbackHours = 24) {
+  const response = await fetch(`/api/competition-report?lookback=${lookbackHours}`, { cache: "no-store" });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.error || `Competition report failed (${response.status})`);
+  return payload;
+}
+
+function formatCompPct(value) {
+  if (!Number.isFinite(Number(value)) || value === 0) return "—";
+  const n = Number(value);
+  return `${n >= 0 ? "+" : ""}${n.toFixed(1)}%`;
+}
+
+function formatCompUsd(value) {
+  if (!Number.isFinite(Number(value))) return "—";
+  const n = Number(value);
+  const abs = Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return `${n >= 0 ? "+" : "-"}$${abs}`;
+}
+
+function renderCompetitionScorecard() {
+  const container = dom.competitionScorecard;
+  if (!container) return;
+
+  if (!competitionReport) {
+    container.innerHTML = `<div class="competition-loading">Loading competition data…</div>`;
+    return;
+  }
+
+  if (!competitionReport.available) {
+    container.innerHTML = `<div class="competition-unavailable"><p class="panel-label">No data yet</p><p>${competitionReport.note || "Competition stats require the database to be connected and at least one resolved trade from each strategy."}</p></div>`;
+    return;
+  }
+
+  const { house, ema, leader } = competitionReport;
+  const lookbackLabel = competitionLookbackHours <= 24 ? "24H" : competitionLookbackHours <= 168 ? "7D" : "30D";
+
+  const houseLeads = leader === "house_trend";
+  const emaLeads = leader === "ema_book";
+  const tied = leader === "tied";
+
+  const leaderBadge = houseLeads
+    ? `<span class="comp-badge comp-badge-house">🔵 Auto Trade leads</span>`
+    : emaLeads
+      ? `<span class="comp-badge comp-badge-ema">🟣 Auto Trade 2 leads</span>`
+      : `<span class="comp-badge comp-badge-tied">🤝 Dead heat</span>`;
+
+  const renderSide = (data, label, colorClass, accentClass) => {
+    if (!data) return "";
+    const winClass = data.winRate >= 55 ? "up" : data.winRate < 45 ? "down" : "neutral";
+    const pnlClass = data.totalPnlUsd >= 0 ? "up" : "down";
+    return `
+      <div class="comp-card ${colorClass}">
+        <div class="comp-card-head">
+          <span class="comp-strategy-dot ${accentClass}"></span>
+          <div>
+            <p class="comp-strategy-label panel-label">${label}</p>
+            <p class="comp-strategy-trades">${data.resolved} resolved trades · ${lookbackLabel} window</p>
+          </div>
+        </div>
+        <div class="comp-stats-grid">
+          <div class="comp-stat">
+            <span class="comp-stat-value ${winClass}">${data.winRate.toFixed(1)}%</span>
+            <span class="comp-stat-label">Win Rate</span>
+          </div>
+          <div class="comp-stat">
+            <span class="comp-stat-value up">${data.tpCount}</span>
+            <span class="comp-stat-label">TPs Hit</span>
+          </div>
+          <div class="comp-stat">
+            <span class="comp-stat-value down">${data.slCount}</span>
+            <span class="comp-stat-label">SLs Hit</span>
+          </div>
+          <div class="comp-stat">
+            <span class="comp-stat-value neutral">${data.beCount}</span>
+            <span class="comp-stat-label">Breakevens</span>
+          </div>
+          <div class="comp-stat">
+            <span class="comp-stat-value up">${formatCompPct(data.avgGainPct)}</span>
+            <span class="comp-stat-label">Avg Gain</span>
+          </div>
+          <div class="comp-stat">
+            <span class="comp-stat-value down">${formatCompPct(data.avgLossPct)}</span>
+            <span class="comp-stat-label">Avg Loss</span>
+          </div>
+          <div class="comp-stat comp-stat-wide">
+            <span class="comp-stat-value ${pnlClass}">${formatCompUsd(data.totalPnlUsd)}</span>
+            <span class="comp-stat-label">Realized P&amp;L</span>
+          </div>
+          <div class="comp-stat comp-stat-wide">
+            <span class="comp-stat-value neutral">${formatCompPct(data.expectancy)}</span>
+            <span class="comp-stat-label">Expectancy / trade</span>
+          </div>
+        </div>
+      </div>`;
+  };
+
+  container.innerHTML = `
+    <div class="comp-leader-banner">${leaderBadge}<span class="comp-window-label">${lookbackLabel} window · ${new Date(competitionReport.generatedAt).toLocaleTimeString()}</span></div>
+    <div class="comp-cards">
+      ${renderSide(house, "AUTO TRADE · House Trend · 15m", "comp-card-house", "dot-house")}
+      ${renderSide(ema, "AUTO TRADE 2 · EMA Signals · 1H", "comp-card-ema", "dot-ema")}
+    </div>`;
+}
+
+async function refreshCompetitionScorecard(lookbackHours = competitionLookbackHours) {
+  competitionLookbackHours = lookbackHours;
+  if (dom.competitionScorecard) {
+    dom.competitionScorecard.innerHTML = `<div class="competition-loading">Fetching ${lookbackHours <= 24 ? "24H" : lookbackHours <= 168 ? "7D" : "30D"} competition data…</div>`;
+  }
+  try {
+    competitionReport = await fetchCompetitionReport(lookbackHours);
+  } catch (_error) {
+    competitionReport = null;
+  }
+  renderCompetitionScorecard();
+}
+
+function setupCompetitionTabs() {
+  [
+    { el: dom.compTab24h, hours: 24 },
+    { el: dom.compTab7d, hours: 168 },
+    { el: dom.compTab30d, hours: 720 },
+  ].forEach(({ el, hours }) => {
+    if (!el) return;
+    el.addEventListener("click", () => {
+      [dom.compTab24h, dom.compTab7d, dom.compTab30d].forEach((tab) => tab?.classList.remove("is-active"));
+      el.classList.add("is-active");
+      refreshCompetitionScorecard(hours);
+    });
+  });
 }
 
 function renderTradezComparison() {
@@ -4742,7 +4922,11 @@ function updateWorkspaceMode() {
   if (dom.workspaceNote) {
     dom.workspaceNote.textContent = isLiveMode
       ? "Live Desk keeps the signal stream front and center while the heavier benchmarking workspace stays tucked away until needed."
-      : "System Compare brings the benchmark cards, Auto Trade 2 controls, and execution workspace forward when you want to review system performance.";
+      : "System Compare shows the live competition arena, runtime snapshots, and Auto Trade 2 controls.";
+  }
+
+  if (!isLiveMode && !competitionReport) {
+    refreshCompetitionScorecard(competitionLookbackHours);
   }
 }
 
@@ -4943,7 +5127,7 @@ async function scanUniverse(manual = false) {
     await syncTradezDemoStatuses(analyzedCandidates);
     refreshTradezPaperTrades(analyzedCandidates);
     const openedTrades = tradezPaper.autoEnabled ? openTradezQualifiedTrades(state.candidates) : [];
-    maybeSendTradezDailyBriefing();
+    maybeSendTradezDailyBriefing().catch(() => {});
     renderSignalFeed();
     renderAlertFeed();
     updateMetrics();
@@ -5080,8 +5264,13 @@ function bindEvents() {
       state.workspaceMode = "compare";
       persistState();
       updateWorkspaceMode();
+      if (!competitionReport) {
+        refreshCompetitionScorecard(competitionLookbackHours);
+      }
     });
   }
+
+  setupCompetitionTabs();
 
   if (dom.auto2Toggle) {
     dom.auto2Toggle.addEventListener("click", async () => {

@@ -1653,6 +1653,167 @@ body.paper-trader-page .panel-monitor-large .monitor-symbol {
   grid-row: auto;
 }
 
+/* ── Competition Arena ─────────────────────────────── */
+.competition-arena-panel {
+  grid-column: 1 / -1;
+}
+
+.competition-scorecard {
+  margin-top: 1rem;
+}
+
+.competition-loading,
+.competition-unavailable {
+  padding: 1.5rem;
+  color: var(--text-soft);
+  font-size: 0.85rem;
+  text-align: center;
+  border: 1px dashed rgba(124, 58, 237, 0.18);
+  border-radius: 10px;
+}
+
+.comp-leader-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding: 0.6rem 1rem;
+  background: rgba(124, 58, 237, 0.07);
+  border: 1px solid rgba(124, 58, 237, 0.18);
+  border-radius: 8px;
+  flex-wrap: wrap;
+}
+
+.comp-badge {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.25rem 0.65rem;
+  border-radius: 6px;
+  font-family: var(--font-stack);
+}
+
+.comp-badge-house {
+  background: rgba(59, 130, 246, 0.14);
+  color: #93c5fd;
+  border: 1px solid rgba(59, 130, 246, 0.25);
+}
+
+.comp-badge-ema {
+  background: rgba(124, 58, 237, 0.14);
+  color: #c4b5fd;
+  border: 1px solid rgba(124, 58, 237, 0.25);
+}
+
+.comp-badge-tied {
+  background: rgba(148, 163, 184, 0.1);
+  color: var(--text-soft);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.comp-window-label {
+  font-size: 0.75rem;
+  color: var(--text-soft);
+  margin-left: auto;
+}
+
+.comp-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.comp-card {
+  background: rgba(11, 12, 22, 0.85);
+  border-radius: 12px;
+  padding: 1.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  transition: border-color 0.2s;
+}
+
+.comp-card-house {
+  border-color: rgba(59, 130, 246, 0.22);
+}
+
+.comp-card-ema {
+  border-color: rgba(124, 58, 237, 0.22);
+}
+
+.comp-card:hover {
+  border-color: rgba(124, 58, 237, 0.32);
+}
+
+.comp-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.comp-strategy-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 0.3rem;
+}
+
+.dot-house { background: #3b82f6; box-shadow: 0 0 6px rgba(59,130,246,0.5); }
+.dot-ema   { background: #7c3aed; box-shadow: 0 0 6px rgba(124,58,237,0.5); }
+
+.comp-strategy-label {
+  margin: 0 0 0.15rem !important;
+  font-size: 0.7rem !important;
+  letter-spacing: 0.08em !important;
+}
+
+.comp-strategy-trades {
+  font-size: 0.75rem;
+  color: var(--text-soft);
+}
+
+.comp-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.65rem;
+}
+
+.comp-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.comp-stat-wide {
+  grid-column: span 2;
+}
+
+.comp-stat-value {
+  font-size: 1rem;
+  font-weight: 600;
+  font-family: var(--font-stack);
+  line-height: 1.2;
+}
+
+.comp-stat-value.up    { color: #4ade80; }
+.comp-stat-value.down  { color: #f87171; }
+.comp-stat-value.neutral { color: var(--text-main); }
+
+.comp-stat-label {
+  font-size: 0.68rem;
+  color: var(--text-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.competition-time-tabs {
+  display: flex;
+  gap: 0.4rem;
+  align-self: flex-start;
+}
+
+/* ── End Competition Arena ─────────────────────────── */
+
 .tradez-compare-panel,
 .tradez-auto2-panel {
   grid-column: 1 / -1;
@@ -2446,6 +2607,14 @@ body.signals-page .quality-chip {
 
   .tradez-compare-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .comp-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .comp-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
 
   .tradez-feed-summary-row,

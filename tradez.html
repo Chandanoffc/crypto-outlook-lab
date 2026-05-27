@@ -408,14 +408,33 @@
             </div>
 
             <div id="tradez-workspace-panel-compare" class="tradez-workspace-stack" hidden>
+
+              <section class="panel competition-arena-panel">
+                <div class="panel-head-inline">
+                  <div>
+                    <p class="panel-label">Competition Arena</p>
+                    <h2>Auto Trade vs Auto Trade 2</h2>
+                    <p class="subtitle-inline">Live head-to-head across all resolved trades. Refreshes from the database every few minutes.</p>
+                  </div>
+                  <div class="competition-time-tabs feed-tabs">
+                    <button id="comp-tab-24h" class="mini-button feed-tab is-active" type="button">24H</button>
+                    <button id="comp-tab-7d"  class="mini-button feed-tab" type="button">7D</button>
+                    <button id="comp-tab-30d" class="mini-button feed-tab" type="button">30D</button>
+                  </div>
+                </div>
+                <div id="competition-scorecard" class="competition-scorecard">
+                  <div class="competition-loading">Loading competition data…</div>
+                </div>
+              </section>
+
               <section class="panel tradez-compare-panel">
                 <div class="panel-head-inline">
                   <div>
                     <p class="panel-label">Strategy Compare</p>
-                    <h3>Auto Trade vs Auto Trade 2</h3>
+                    <h3>Runtime Snapshot</h3>
                   </div>
                   <p class="subsection-meta">
-                    House strategy benchmark versus the EMA Signals Binance-synced execution engine.
+                    Live in-memory state of both engines — balances, open trades, and unrealized P&amp;L.
                   </p>
                 </div>
 
