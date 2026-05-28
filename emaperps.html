@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>EMA Perps · Soloris Signals</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+    <script src="./emaperps.js" defer></script>
+  </head>
+  <body class="shell-page strategy-page">
+    <div class="page-shell shell-layout">
+
+      <header class="app-header shell-app-header">
+        <div class="app-bar">
+          <a class="brand-block app-brand" href="./claudeperps.html">
+            <span class="brand-mark" aria-hidden="true">
+              <img src="./hyperdrive-mark.svg" alt="" />
+            </span>
+            <span class="brand-copy">
+              <strong>Soloris</strong>
+              <small>Signals</small>
+            </span>
+          </a>
+
+          <nav class="page-tabs shell-page-tabs" aria-label="Primary pages">
+            <a class="page-tab" href="./claudeperps.html">Claudeperps</a>
+            <a class="page-tab is-current" href="./emaperps.html">EMA Perps</a>
+          </nav>
+
+          <div class="header-actions">
+            <span class="header-feed">
+              <span class="header-feed-dot" aria-hidden="true"></span>
+              Live Scan
+            </span>
+            <span class="app-pill">Strategy</span>
+          </div>
+        </div>
+      </header>
+
+      <div class="shell-main strategy-main">
+
+        <header class="strategy-page-header">
+          <div class="strategy-title-block">
+            <div class="strategy-badge strategy-badge--ema">EMA Perps</div>
+            <h1>EMA Signals Strategy</h1>
+            <p class="strategy-desc">
+              1H EMA20/50 with Support & Resistance confluence. Price touching EMA + key level = entry signal.
+              Strong signals at S2/R2. Good signals at S1/R1. Discord alerts on every qualified setup.
+            </p>
+          </div>
+          <div class="strategy-header-status">
+            <div id="ep-status-dot" class="status-dot"></div>
+            <span id="ep-status-msg" class="status-msg">Initializing…</span>
+            <span id="ep-last-scan" class="status-scan"></span>
+          </div>
+        </header>
+
+        <section class="panel strategy-search-panel">
+          <div class="search-row">
+            <div class="search-field-wrap">
+              <input id="ep-search-input" class="search-input" type="text" placeholder="Enter token pair (BTCUSDT, SOLUSDT…)" autocomplete="off" spellcheck="false" />
+              <button id="ep-search-btn" class="search-btn" type="button">Analyze</button>
+            </div>
+            <button id="ep-scan-btn" class="mini-button scan-trigger-btn" type="button">Run Scanner</button>
+          </div>
+          <div id="ep-search-result" class="search-result-area"></div>
+        </section>
+
+        <section class="metric-strip strategy-metric-strip">
+          <article class="metric-card">
+            <span class="metric-label">Active Signals</span>
+            <strong id="ep-metric-active">–</strong>
+            <small>EMA + level confluence</small>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">Strong Signals</span>
+            <strong id="ep-metric-strong">–</strong>
+            <small>Q80+ (S2/R2 touch)</small>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">Longs</span>
+            <strong id="ep-metric-longs" class="tone-up">–</strong>
+            <small>EMA20 &gt; EMA50 setups</small>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">Shorts</span>
+            <strong id="ep-metric-shorts" class="tone-down">–</strong>
+            <small>EMA50 &gt; EMA20 setups</small>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">Avg Quality</span>
+            <strong id="ep-metric-avgq">–</strong>
+            <small>Active signal average</small>
+          </article>
+          <article class="metric-card">
+            <span class="metric-label">Last Scan</span>
+            <strong id="ep-metric-scan">–</strong>
+            <small>Auto every 5 min</small>
+          </article>
+        </section>
+
+        <main class="strategy-grid">
+
+          <section class="panel strategy-signal-panel">
+            <div class="panel-head">
+              <div>
+                <p class="panel-label">Signal Feed</p>
+                <h2>EMA + Support/Resistance signals</h2>
+              </div>
+              <div class="feed-tabs">
+                <button class="mini-button feed-tab is-active" data-ep-tab="active" type="button">Active</button>
+                <button class="mini-button feed-tab" data-ep-tab="strong" type="button">Strong Only</button>
+                <button class="mini-button feed-tab" data-ep-tab="all" type="button">All Today</button>
+              </div>
+            </div>
+            <div id="ep-signal-feed" class="signal-feed"></div>
+          </section>
+
+          <aside class="strategy-aside">
+
+            <section class="panel strategy-chart-panel" id="ep-chart-panel">
+              <div class="panel-head-inline">
+                <p class="panel-label">Chart</p>
+                <span id="ep-chart-symbol" class="subsection-meta">Select a signal or search a token</span>
+              </div>
+              <div id="ep-chart-container" class="strategy-chart-frame"></div>
+              <div id="ep-chart-levels" class="chart-levels-row"></div>
+            </section>
+
+            <section class="panel discord-settings-panel">
+              <div class="panel-head-inline">
+                <p class="panel-label">Discord Alerts</p>
+                <span class="subsection-meta">Enter webhook for live signals</span>
+              </div>
+              <div class="discord-form">
+                <input id="ep-discord-input" class="discord-input" type="url" placeholder="https://discord.com/api/webhooks/…" autocomplete="off" />
+                <div class="discord-row">
+                  <label class="toggle-label">
+                    <input id="ep-discord-notify" type="checkbox" checked />
+                    Alert on new signals
+                  </label>
+                  <button id="ep-discord-save" class="mini-button" type="button">Save</button>
+                </div>
+                <span id="ep-discord-note" class="subsection-meta">Strong signals (Q80+) fire instantly via Discord.</span>
+              </div>
+            </section>
+
+            <section class="panel strategy-rules-panel">
+              <div class="panel-head-inline">
+                <p class="panel-label">Signal Rules</p>
+              </div>
+              <div class="rules-table">
+                <div class="rules-section">
+                  <div class="rules-section-title tone-up">Long Signals (EMA20 &gt; EMA50)</div>
+                  <div class="rules-row"><span class="rules-badge strong">Q85</span><span>EMA50 + Support 2</span></div>
+                  <div class="rules-row"><span class="rules-badge strong">Q80</span><span>EMA20 + Support 2</span></div>
+                  <div class="rules-row"><span class="rules-badge good">Q75</span><span>EMA50 + Support 1</span></div>
+                  <div class="rules-row"><span class="rules-badge good">Q70</span><span>EMA20 + Support 1</span></div>
+                  <div class="rules-row"><span class="rules-badge good">Q70</span><span>Support 2 only</span></div>
+                  <div class="rules-row"><span class="rules-badge mod">Q60</span><span>Support 1 only</span></div>
+                </div>
+                <div class="rules-section">
+                  <div class="rules-section-title tone-down">Short Signals (EMA50 &gt; EMA20)</div>
+                  <div class="rules-row"><span class="rules-badge strong">Q85</span><span>EMA50 + Resistance 2</span></div>
+                  <div class="rules-row"><span class="rules-badge strong">Q80</span><span>EMA20 + Resistance 2</span></div>
+                  <div class="rules-row"><span class="rules-badge good">Q75</span><span>EMA50 + Resistance 1</span></div>
+                  <div class="rules-row"><span class="rules-badge good">Q70</span><span>EMA20 + Resistance 1</span></div>
+                  <div class="rules-row"><span class="rules-badge good">Q70</span><span>Resistance 2 only</span></div>
+                  <div class="rules-row"><span class="rules-badge mod">Q60</span><span>Resistance 1 only</span></div>
+                </div>
+                <p class="rules-note">TP1 at first opposite level · TP2 at second · SL below S2 / above R2 + 0.5 ATR buffer</p>
+              </div>
+            </section>
+
+          </aside>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>
