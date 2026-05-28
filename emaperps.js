@@ -95,60 +95,61 @@ function sigLevels(signal) {
 
 // ─── Signal feed ─────────────────────────────────────────────────────────────
 function renderSignalCard(signal) {
-  const isLong   = signal.side === "Long";
-  const toneClass = isLong ? "tone-up" : "tone-down";
-  const sideIcon  = isLong ? "▲" : "▼";
-  const prec      = signal.pricePrecision || 2;
-  const reason    = signal.signalLabel || signal.reasonLabels?.[0] || "";
-  const lvls      = sigLevels(signal);
+  const isLong = signal.side === "Long";
+  const dir    = isLong ? "long" : "short";
+  const prec   = signal.pricePrecision || 2;
+  const lvls   = sigLevels(signal);
+  const reason = signal.signalLabel || signal.reasonLabels?.[0] || "";
 
   return `
-    <article class="signal-card signal-card--${isLong ? "long" : "short"}" data-symbol="${signal.symbol}" data-signal-id="${signal.id}" role="button" tabindex="0">
-      <div class="signal-card-head">
-        <div class="signal-card-symbol">
-          <span class="signal-side-icon ${toneClass}">${sideIcon}</span>
-          <strong>${signal.symbol}</strong>
-          <span class="signal-interval">${signal.interval || "1h"}</span>
+    <article class="signal-card signal-card--${dir}" data-symbol="${signal.symbol}" data-signal-id="${signal.id}" role="button" tabindex="0">
+      <div class="sc-inner">
+        <div class="sc-head">
+          <div class="sc-symbol">
+            <span class="sc-symbol-name">${signal.symbol}</span>
+            <span class="sc-side">${signal.side.toUpperCase()}</span>
+            <span class="sc-interval">${signal.interval || "1h"}</span>
+          </div>
+          <div class="sc-quality ${qualityClass(signal.quality)}">
+            <span class="quality-score">Q${signal.quality}</span>
+            <span class="quality-label">${qualityLabel(signal.quality)}</span>
+          </div>
         </div>
-        <div class="signal-card-quality ${qualityClass(signal.quality)}">
-          <span class="quality-score">Q${signal.quality}</span>
-          <span class="quality-label">${qualityLabel(signal.quality)}</span>
-        </div>
-      </div>
 
-      <div class="signal-card-levels">
-        <div class="level-row">
-          <span class="level-label">Entry</span>
-          <span class="level-value">${fp(signal.entryPrice, prec)}</span>
-          <span class="level-meta">${reason}</span>
+        <div class="sc-levels">
+          <div class="level-row">
+            <span class="level-label">Entry</span>
+            <span class="level-value">${fp(signal.entryPrice, prec)}</span>
+            <span class="level-meta">${reason}</span>
+          </div>
+          <div class="level-row">
+            <span class="level-label">SL</span>
+            <span class="level-value tone-down">${fp(signal.sl, prec)}</span>
+          </div>
+          <div class="level-row">
+            <span class="level-label">TP1</span>
+            <span class="level-value tone-up">${fp(signal.tp1, prec)}</span>
+            <span class="level-meta">${isLong ? "→ R1" : "→ S1"}</span>
+          </div>
+          <div class="level-row">
+            <span class="level-label">TP2</span>
+            <span class="level-value tone-up">${fp(signal.tp2, prec)}</span>
+            <span class="level-meta">${isLong ? "→ R2" : "→ S2"}</span>
+          </div>
         </div>
-        <div class="level-row">
-          <span class="level-label">TP1</span>
-          <span class="level-value tone-up">${fp(signal.tp1, prec)}</span>
-          <span class="level-meta">${isLong ? "R1" : "S1"}</span>
-        </div>
-        <div class="level-row">
-          <span class="level-label">TP2</span>
-          <span class="level-value tone-up">${fp(signal.tp2, prec)}</span>
-          <span class="level-meta">${isLong ? "R2" : "S2"}</span>
-        </div>
-        <div class="level-row">
-          <span class="level-label">SL</span>
-          <span class="level-value tone-down">${fp(signal.sl, prec)}</span>
-        </div>
-      </div>
 
-      ${(lvls.s1 || lvls.r1) ? `
-      <div class="signal-card-sr">
-        ${lvls.s2 != null ? `<span class="sr-chip sr-s">S2 ${fp(lvls.s2, prec)}</span>` : ""}
-        ${lvls.s1 != null ? `<span class="sr-chip sr-s">S1 ${fp(lvls.s1, prec)}</span>` : ""}
-        ${lvls.r1 != null ? `<span class="sr-chip sr-r">R1 ${fp(lvls.r1, prec)}</span>` : ""}
-        ${lvls.r2 != null ? `<span class="sr-chip sr-r">R2 ${fp(lvls.r2, prec)}</span>` : ""}
-      </div>` : ""}
+        ${(lvls.s1 || lvls.r1) ? `
+        <div class="sc-sr">
+          ${lvls.s2 != null ? `<span class="sr-chip sr-s">S2 ${fp(lvls.s2, prec)}</span>` : ""}
+          ${lvls.s1 != null ? `<span class="sr-chip sr-s">S1 ${fp(lvls.s1, prec)}</span>` : ""}
+          ${lvls.r1 != null ? `<span class="sr-chip sr-r">R1 ${fp(lvls.r1, prec)}</span>` : ""}
+          ${lvls.r2 != null ? `<span class="sr-chip sr-r">R2 ${fp(lvls.r2, prec)}</span>` : ""}
+        </div>` : ""}
 
-      <div class="signal-card-footer">
-        <span class="signal-reasons">${(signal.reasonLabels || []).slice(0, 3).join(" · ")}</span>
-        <span class="signal-time">${timeAgo(signal.detectedAt)}</span>
+        <div class="sc-footer">
+          <span class="sc-reasons">${(signal.reasonLabels || []).slice(0,3).join(" · ")}</span>
+          <span class="sc-time">${timeAgo(signal.detectedAt)}</span>
+        </div>
       </div>
     </article>`;
 }
@@ -166,7 +167,7 @@ function renderFeed() {
 
   if (!filtered.length) {
     const msgs = {
-      active: "No active signals right now. Scanner runs every 5 minutes.",
+      active: "No active signals right now. Scanner runs every 5 min.",
       strong: "No strong signals (Q80+) active right now.",
       all:    "No signals in the last 24 hours.",
     };
@@ -287,8 +288,8 @@ function renderLevelsRow(signal, data) {
   dom.chartLevels.innerHTML = `
     <div class="levels-row">
       <span class="level-chip">Price <strong>${fp(price, prec)}</strong></span>
-      <span class="level-chip">EMA20 <strong class="tone-cyan">${fp(data?.ema20, prec)}</strong></span>
-      <span class="level-chip">EMA50 <strong class="tone-violet">${fp(data?.ema50, prec)}</strong></span>
+      <span class="level-chip tone-cyan">EMA20 <strong>${fp(data?.ema20, prec)}</strong></span>
+      <span class="level-chip tone-violet">EMA50 <strong>${fp(data?.ema50, prec)}</strong></span>
       ${lvls.s2 != null ? `<span class="level-chip sr-s">S2 <strong>${fp(lvls.s2, prec)}</strong></span>` : ""}
       ${lvls.s1 != null ? `<span class="level-chip sr-s">S1 <strong>${fp(lvls.s1, prec)}</strong></span>` : ""}
       ${lvls.r1 != null ? `<span class="level-chip sr-r">R1 <strong>${fp(lvls.r1, prec)}</strong></span>` : ""}
@@ -321,61 +322,57 @@ function renderAnalysisResult(data) {
     return;
   }
 
-  const prec     = data.pricePrecision || 2;
-  const isUp     = data.trend === "up";
-  const trendIcon  = isUp ? "▲" : "▼";
+  const prec   = data.pricePrecision || 2;
+  const isUp   = data.trend === "up";
   const trendClass = isUp ? "tone-up" : "tone-down";
-  const trendLabel = isUp ? "Uptrend (EMA20 > EMA50)" : "Downtrend (EMA50 > EMA20)";
-  const signal   = data.signal;
-  const lvls     = data.levels || sigLevels(signal);
+  const trendLabel = isUp ? "▲ Uptrend" : "▼ Downtrend";
+  const signal = data.signal;
+  const lvls   = data.levels || sigLevels(signal);
 
   const qualChip = signal
-    ? `<span class="analysis-quality ${qualityClass(signal.quality)}">Q${signal.quality} — ${qualityLabel(signal.quality)}</span>`
-    : `<span class="analysis-quality quality-none">No active signal</span>`;
+    ? `<span class="analysis-quality ${qualityClass(signal.quality)}">Q${signal.quality} · ${qualityLabel(signal.quality)}</span>`
+    : `<span class="analysis-quality quality-none">No signal</span>`;
 
   dom.searchResult.innerHTML = `
     <div class="analysis-card">
-      <div class="analysis-head">
-        <div class="analysis-symbol">
+      <div class="analysis-hd">
+        <div class="analysis-symbol-row">
           <strong>${data.symbol}</strong>
-          <span class="${trendClass}">${trendIcon} ${trendLabel}</span>
+          <span class="${trendClass}" style="font-size:13px;font-weight:600">${trendLabel}</span>
           ${qualChip}
         </div>
         <div class="analysis-price">${fp(data.currentPrice, prec)}</div>
       </div>
-
-      <div class="analysis-indicators">
-        <div class="analysis-ind"><span>1H EMA20</span><strong class="tone-cyan">${fp(data.ema20, prec)}</strong></div>
-        <div class="analysis-ind"><span>1H EMA50</span><strong class="tone-violet">${fp(data.ema50, prec)}</strong></div>
+      <div class="analysis-inds">
+        <div class="analysis-ind"><span>EMA20</span><strong class="tone-cyan">${fp(data.ema20, prec)}</strong></div>
+        <div class="analysis-ind"><span>EMA50</span><strong class="tone-violet">${fp(data.ema50, prec)}</strong></div>
+        <div class="analysis-ind"><span>Support 1</span><strong class="tone-s1">${fp(lvls?.s1, prec)}</strong></div>
+        <div class="analysis-ind"><span>Resistance 1</span><strong class="tone-r1">${fp(lvls?.r1, prec)}</strong></div>
+        <div class="analysis-ind"><span>Support 2</span><strong class="tone-s2">${fp(lvls?.s2, prec)}</strong></div>
+        <div class="analysis-ind"><span>Resistance 2</span><strong class="tone-r2">${fp(lvls?.r2, prec)}</strong></div>
         <div class="analysis-ind"><span>RSI (14)</span><strong>${data.rsi ? Number(data.rsi).toFixed(1) : "–"}</strong></div>
         <div class="analysis-ind"><span>ATR</span><strong>${fp(data.atr, prec)}</strong></div>
-        <div class="analysis-ind"><span>Support 1</span><strong class="tone-s1">${fp(lvls.s1, prec)}</strong></div>
-        <div class="analysis-ind"><span>Support 2</span><strong class="tone-s2">${fp(lvls.s2, prec)}</strong></div>
-        <div class="analysis-ind"><span>Resistance 1</span><strong class="tone-r1">${fp(lvls.r1, prec)}</strong></div>
-        <div class="analysis-ind"><span>Resistance 2</span><strong class="tone-r2">${fp(lvls.r2, prec)}</strong></div>
         <div class="analysis-ind"><span>24H Change</span><strong class="${data.change24h >= 0 ? "tone-up" : "tone-down"}">${fPct(data.change24h)}</strong></div>
         <div class="analysis-ind"><span>Volume 24H</span><strong>$${data.volume24h ? (data.volume24h / 1_000_000).toFixed(0) + "M" : "–"}</strong></div>
       </div>
-
       ${signal ? `
-        <div class="analysis-signal-block">
-          <div class="analysis-signal-title">Signal: ${signal.side} · ${signal.signalLabel || signal.reasonLabels?.[0] || ""}</div>
-          <div class="analysis-levels-row">
-            <div class="level-chip-sm">Entry <strong>${fp(signal.entryPrice, prec)}</strong></div>
-            <div class="level-chip-sm tp">TP1 ${fp(signal.tp1, prec)} <span class="level-meta">(${isUp ? "R1" : "S1"})</span></div>
-            <div class="level-chip-sm tp">TP2 ${fp(signal.tp2, prec)} <span class="level-meta">(${isUp ? "R2" : "S2"})</span></div>
-            <div class="level-chip-sm sl">SL ${fp(signal.sl, prec)}</div>
+        <div class="analysis-signal">
+          <div class="analysis-signal-title">${signal.side} · ${signal.signalLabel || signal.reasonLabels?.[0] || ""}</div>
+          <div class="analysis-levels">
+            <span class="level-chip-sm">Entry ${fp(signal.entryPrice, prec)}</span>
+            <span class="level-chip-sm tp">TP1 ${fp(signal.tp1, prec)} <small>${isUp ? "R1" : "S1"}</small></span>
+            <span class="level-chip-sm tp">TP2 ${fp(signal.tp2, prec)} <small>${isUp ? "R2" : "S2"}</small></span>
+            <span class="level-chip-sm sl">SL ${fp(signal.sl, prec)}</span>
           </div>
         </div>` : `
         <div class="analysis-note">
           ${isUp
-            ? `Price is in an uptrend. Looking for a pullback to EMA20/EMA50 or Support levels for a Long entry.`
-            : `Price is in a downtrend. Looking for a bounce to EMA20/EMA50 or Resistance levels for a Short entry.`}
+            ? "Uptrend confirmed. Watching for pullback to EMA20/EMA50 or S1/S2 for a Long entry."
+            : "Downtrend confirmed. Watching for bounce to EMA20/EMA50 or R1/R2 for a Short entry."}
         </div>`}
     </div>`;
 
-  // Render chart
-  dom.chartSymbol.textContent = `${data.symbol} · EMA Perps Analysis`;
+  dom.chartSymbol.textContent = `${data.symbol} · EMA Analysis`;
   renderChart(data, signal || null);
 }
 

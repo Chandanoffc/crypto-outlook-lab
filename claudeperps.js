@@ -92,48 +92,57 @@ function renderMetrics() {
 // ─── Signal feed ─────────────────────────────────────────────────────────────
 function renderSignalCard(signal) {
   const isLong = signal.side === "Long";
-  const toneClass = isLong ? "tone-up" : "tone-down";
-  const sideIcon = isLong ? "▲" : "▼";
-  const prec = signal.pricePrecision || 2;
-  const reasons = (signal.reasonLabels || []).slice(0, 4).join(" · ");
+  const dir    = isLong ? "long" : "short";
+  const prec   = signal.pricePrecision || 2;
+  const reasons = (signal.reasonLabels || []).slice(0, 3).join(" · ");
+
+  const pctEntry = (v) => {
+    if (!signal.entryPrice || !v) return "";
+    const p = ((v - signal.entryPrice) / signal.entryPrice) * 100;
+    return `<span class="level-meta">${p >= 0 ? "+" : ""}${p.toFixed(1)}%</span>`;
+  };
+
   return `
-    <article class="signal-card signal-card--${isLong ? "long" : "short"}" data-symbol="${signal.symbol}" data-signal-id="${signal.id}" role="button" tabindex="0">
-      <div class="signal-card-head">
-        <div class="signal-card-symbol">
-          <span class="signal-side-icon ${toneClass}">${sideIcon}</span>
-          <strong>${signal.symbol}</strong>
-          <span class="signal-interval">${signal.interval}</span>
+    <article class="signal-card signal-card--${dir}" data-symbol="${signal.symbol}" data-signal-id="${signal.id}" role="button" tabindex="0">
+      <div class="sc-inner">
+        <div class="sc-head">
+          <div class="sc-symbol">
+            <span class="sc-symbol-name">${signal.symbol}</span>
+            <span class="sc-side">${signal.side.toUpperCase()}</span>
+            <span class="sc-interval">${signal.interval || "1h"}</span>
+          </div>
+          <div class="sc-quality ${qualityClass(signal.quality)}">
+            <span class="quality-score">Q${signal.quality}</span>
+            <span class="quality-label">${qualityLabel(signal.quality)}</span>
+          </div>
         </div>
-        <div class="signal-card-quality ${qualityClass(signal.quality)}">
-          <span class="quality-score">Q${signal.quality}</span>
-          <span class="quality-label">${qualityLabel(signal.quality)}</span>
-        </div>
-      </div>
 
-      <div class="signal-card-levels">
-        <div class="level-row">
-          <span class="level-label">Entry</span>
-          <span class="level-value">${fp(signal.entryPrice, prec)}</span>
+        <div class="sc-levels">
+          <div class="level-row">
+            <span class="level-label">Entry</span>
+            <span class="level-value">${fp(signal.entryPrice, prec)}</span>
+          </div>
+          <div class="level-row">
+            <span class="level-label">SL</span>
+            <span class="level-value tone-down">${fp(signal.sl, prec)}</span>
+            ${pctEntry(signal.sl)}
+          </div>
+          <div class="level-row">
+            <span class="level-label">TP1</span>
+            <span class="level-value tone-up">${fp(signal.tp1, prec)}</span>
+            <span class="level-rr">1.5R</span>
+          </div>
+          <div class="level-row">
+            <span class="level-label">TP2</span>
+            <span class="level-value tone-up">${fp(signal.tp2, prec)}</span>
+            <span class="level-rr">2.5R</span>
+          </div>
         </div>
-        <div class="level-row">
-          <span class="level-label">TP1</span>
-          <span class="level-value tone-up">${fp(signal.tp1, prec)}</span>
-          <span class="level-rr">1.5:1</span>
-        </div>
-        <div class="level-row">
-          <span class="level-label">TP2</span>
-          <span class="level-value tone-up">${fp(signal.tp2, prec)}</span>
-          <span class="level-rr">2.5:1</span>
-        </div>
-        <div class="level-row">
-          <span class="level-label">SL</span>
-          <span class="level-value tone-down">${fp(signal.sl, prec)}</span>
-        </div>
-      </div>
 
-      <div class="signal-card-footer">
-        <span class="signal-reasons">${reasons}</span>
-        <span class="signal-time">${timeAgo(signal.detectedAt)}</span>
+        <div class="sc-footer">
+          <span class="sc-reasons">${reasons}</span>
+          <span class="sc-time">${timeAgo(signal.detectedAt)}</span>
+        </div>
       </div>
     </article>`;
 }
@@ -146,26 +155,19 @@ function renderFeed() {
 
   if (!filtered.length) {
     dom.signalFeed.innerHTML = `<div class="feed-empty">
-      <p>${currentTab === "active" ? "No active signals right now. Scanner runs every 5 minutes." : "No signals in the last 24 hours."}</p>
+      <p>${currentTab === "active" ? "No active signals right now. Scanner runs every 5 min." : "No signals in the last 24 hours."}</p>
     </div>`;
     return;
   }
   dom.signalFeed.innerHTML = filtered.map(renderSignalCard).join("");
 
-  // Click to chart
   dom.signalFeed.querySelectorAll(".signal-card").forEach(card => {
-    card.addEventListener("click", () => {
-      const signalId = card.dataset.signalId;
-      const signal = state.signals.find(s => s.id === signalId);
+    const open = () => {
+      const signal = state.signals.find(s => s.id === card.dataset.signalId);
       if (signal) openChartForSignal(signal);
-    });
-    card.addEventListener("keydown", e => {
-      if (e.key === "Enter" || e.key === " ") {
-        const signalId = card.dataset.signalId;
-        const signal = state.signals.find(s => s.id === signalId);
-        if (signal) openChartForSignal(signal);
-      }
-    });
+    };
+    card.addEventListener("click", open);
+    card.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") open(); });
   });
 }
 
@@ -254,17 +256,16 @@ function renderChart(data, signal) {
 }
 
 function renderLevelsRow(signal, data) {
-  const prec = signal?.pricePrecision || 2;
+  const prec = signal?.pricePrecision || data?.pricePrecision || 2;
   const price = data?.currentPrice || signal?.entryPrice;
   dom.chartLevels.innerHTML = `
     <div class="levels-row">
       <span class="level-chip">Price <strong>${fp(price, prec)}</strong></span>
-      <span class="level-chip">EMA20 <strong class="tone-cyan">${fp(data?.ema20, prec)}</strong></span>
-      <span class="level-chip">EMA50 <strong class="tone-violet">${fp(data?.ema50, prec)}</strong></span>
-      ${signal ? `<span class="level-chip">TP1 <strong class="tone-up">${fp(signal.tp1, prec)}</strong></span>` : ""}
-      ${signal ? `<span class="level-chip">TP2 <strong class="tone-up">${fp(signal.tp2, prec)}</strong></span>` : ""}
-      ${signal ? `<span class="level-chip">SL <strong class="tone-down">${fp(signal.sl, prec)}</strong></span>` : ""}
-      ${signal ? `<span class="level-chip">ATR <strong>${fp(signal.atr, prec)}</strong></span>` : ""}
+      <span class="level-chip tone-cyan">EMA20 <strong>${fp(data?.ema20, prec)}</strong></span>
+      <span class="level-chip tone-violet">EMA50 <strong>${fp(data?.ema50, prec)}</strong></span>
+      ${signal ? `<span class="level-chip tone-up">TP1 <strong>${fp(signal.tp1, prec)}</strong></span>` : ""}
+      ${signal ? `<span class="level-chip tone-up">TP2 <strong>${fp(signal.tp2, prec)}</strong></span>` : ""}
+      ${signal ? `<span class="level-chip tone-down">SL <strong>${fp(signal.sl, prec)}</strong></span>` : ""}
     </div>`;
 }
 
@@ -294,52 +295,50 @@ function renderAnalysisResult(data) {
   }
 
   const prec = data.pricePrecision || 2;
-  const trendIcon = data.structureBias === "up" ? "▲" : "▼";
-  const trendClass = data.structureBias === "up" ? "tone-up" : "tone-down";
-  const trendLabel = data.structureBias === "up" ? "Bullish" : "Bearish";
+  const isUp = data.structureBias === "up";
+  const trendClass = isUp ? "tone-up" : "tone-down";
+  const trendLabel = isUp ? "▲ Bullish" : "▼ Bearish";
   const signal = data.signal;
+
   const qualChip = signal
-    ? `<span class="analysis-quality ${qualityClass(signal.quality)}">Q${signal.quality} — ${qualityLabel(signal.quality)}</span>`
-    : `<span class="analysis-quality quality-none">No active signal (Q${data.analysisQuality})</span>`;
+    ? `<span class="analysis-quality ${qualityClass(signal.quality)}">Q${signal.quality} · ${qualityLabel(signal.quality)}</span>`
+    : `<span class="analysis-quality quality-none">No signal</span>`;
 
   dom.searchResult.innerHTML = `
     <div class="analysis-card">
-      <div class="analysis-head">
-        <div class="analysis-symbol">
+      <div class="analysis-hd">
+        <div class="analysis-symbol-row">
           <strong>${data.symbol}</strong>
-          <span class="${trendClass}">${trendIcon} ${trendLabel}</span>
+          <span class="${trendClass}" style="font-size:13px;font-weight:600">${trendLabel}</span>
           ${qualChip}
         </div>
         <div class="analysis-price">${fp(data.currentPrice, prec)}</div>
       </div>
-
-      <div class="analysis-indicators">
+      <div class="analysis-inds">
         <div class="analysis-ind"><span>1H EMA20</span><strong class="tone-cyan">${fp(data.ema20, prec)}</strong></div>
         <div class="analysis-ind"><span>1H EMA50</span><strong class="tone-violet">${fp(data.ema50, prec)}</strong></div>
         <div class="analysis-ind"><span>4H EMA20</span><strong>${data.ema20_4h ? fp(data.ema20_4h, prec) : "–"}</strong></div>
         <div class="analysis-ind"><span>4H EMA50</span><strong>${data.ema50_4h ? fp(data.ema50_4h, prec) : "–"}</strong></div>
         <div class="analysis-ind"><span>RSI (14)</span><strong>${data.rsi ? Number(data.rsi).toFixed(1) : "–"}</strong></div>
-        <div class="analysis-ind"><span>MACD hist</span><strong>${data.macd?.hist != null ? Number(data.macd.hist).toFixed(4) : "–"}</strong></div>
+        <div class="analysis-ind"><span>MACD hist</span><strong>${data.macd?.hist != null ? Number(data.macd.hist).toFixed(5) : "–"}</strong></div>
         <div class="analysis-ind"><span>ATR</span><strong>${fp(data.atr, prec)}</strong></div>
         <div class="analysis-ind"><span>Funding</span><strong>${data.fundingRate != null ? fPct(data.fundingRate, 4) : "–"}</strong></div>
         <div class="analysis-ind"><span>24H Change</span><strong class="${data.change24h >= 0 ? "tone-up" : "tone-down"}">${fPct(data.change24h)}</strong></div>
         <div class="analysis-ind"><span>Volume 24H</span><strong>$${data.volume24h ? (data.volume24h / 1_000_000).toFixed(0) + "M" : "–"}</strong></div>
       </div>
-
       ${signal ? `
-        <div class="analysis-signal-block">
-          <div class="analysis-signal-title">Active Signal: ${signal.side} · ${signal.reasonLabels?.slice(0,3).join(" · ")}</div>
-          <div class="analysis-levels-row">
-            <div class="level-chip-sm">Entry <strong>${fp(signal.entryPrice, prec)}</strong></div>
-            <div class="level-chip-sm tp">TP1 ${fp(signal.tp1, prec)}</div>
-            <div class="level-chip-sm tp">TP2 ${fp(signal.tp2, prec)}</div>
-            <div class="level-chip-sm sl">SL ${fp(signal.sl, prec)}</div>
+        <div class="analysis-signal">
+          <div class="analysis-signal-title">${signal.side} · ${(signal.reasonLabels || []).slice(0,3).join(" · ")}</div>
+          <div class="analysis-levels">
+            <span class="level-chip-sm">Entry ${fp(signal.entryPrice, prec)}</span>
+            <span class="level-chip-sm tp">TP1 ${fp(signal.tp1, prec)}</span>
+            <span class="level-chip-sm tp">TP2 ${fp(signal.tp2, prec)}</span>
+            <span class="level-chip-sm sl">SL ${fp(signal.sl, prec)}</span>
           </div>
         </div>` : ""}
     </div>`;
 
-  // Render chart inline with analysis
-  dom.chartSymbol.textContent = `${data.symbol} · Claudeperps Analysis`;
+  dom.chartSymbol.textContent = `${data.symbol} · Analysis`;
   renderChart(data, signal || null);
 }
 
