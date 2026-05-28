@@ -19,7 +19,8 @@ function readAuthToken(req) {
 function requireAuthorized(req) {
   const expected =
     String(process.env.HOUSE_CRON_SECRET || "").trim() ||
-    String(process.env.UPBIT_CRON_SECRET || "").trim();
+    String(process.env.UPBIT_CRON_SECRET || "").trim() ||
+    String(process.env.CRON_SECRET || "").trim();
   if (!expected) {
     throw new Error("Missing HOUSE_CRON_SECRET");
   }

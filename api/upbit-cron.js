@@ -30,9 +30,12 @@ function readAuthToken(req) {
 }
 
 function requireAuthorized(req) {
-  const expected = String(process.env.UPBIT_CRON_SECRET || "").trim();
+  const expected =
+    String(process.env.UPBIT_CRON_SECRET || "").trim() ||
+    String(process.env.HOUSE_CRON_SECRET || "").trim() ||
+    String(process.env.CRON_SECRET || "").trim();
   if (!expected) {
-    throw new Error("Missing UPBIT_CRON_SECRET");
+    throw new Error("Missing UPBIT_CRON_SECRET or CRON_SECRET");
   }
   const actual = readAuthToken(req);
   if (!actual || actual !== expected) {
