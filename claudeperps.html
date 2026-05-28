@@ -110,84 +110,185 @@
         </div>
       </div>
 
-      <!-- Main grid -->
-      <div class="main-grid">
+      <!-- Page-level tabs -->
+      <div class="page-tabs-bar">
+        <button class="page-tab is-active" data-cp-page="signals" type="button">Signals</button>
+        <button class="page-tab" data-cp-page="scanner" type="button">Scanner</button>
+        <button class="page-tab" data-cp-page="paper" type="button">Paper Trade</button>
+      </div>
 
-        <!-- Signal feed -->
-        <section class="panel feed-panel">
-          <div class="panel-hd">
-            <div>
-              <p class="panel-label">Signal Feed</p>
-              <h2>Active momentum signals</h2>
-            </div>
-            <div class="tab-group">
-              <button class="tab is-active" data-cp-tab="active" type="button">Active</button>
-              <button class="tab" data-cp-tab="all" type="button">All Today</button>
-            </div>
-          </div>
-          <div id="cp-signal-feed" class="feed"></div>
-        </section>
+      <!-- ── Tab: Signals ──────────────────────────────────── -->
+      <div id="cp-page-signals" class="page-content">
+        <div class="main-grid">
 
-        <!-- Sidebar -->
-        <div class="sidebar">
-
-          <!-- Chart -->
-          <section class="panel chart-panel">
-            <div class="panel-hd-simple">
-              <p class="panel-label">Chart</p>
-              <span id="cp-chart-symbol" class="chart-symbol">Select a signal or search a token</span>
-            </div>
-            <div id="cp-chart-container" class="chart-frame"></div>
-            <div id="cp-chart-levels" class="chart-levels"></div>
-          </section>
-
-          <!-- Discord -->
-          <section class="panel discord-panel">
+          <!-- Signal feed -->
+          <section class="panel feed-panel">
             <div class="panel-hd">
               <div>
-                <p class="panel-label">Discord Alerts</p>
+                <p class="panel-label">Signal Feed</p>
+                <h2>Active momentum signals</h2>
               </div>
-              <span class="panel-sub">Webhook for live signals</span>
-            </div>
-            <div class="discord-body">
-              <input
-                id="cp-discord-input"
-                class="discord-input"
-                type="url"
-                placeholder="https://discord.com/api/webhooks/…"
-                autocomplete="off"
-              />
-              <div class="discord-row">
-                <label class="toggle-label">
-                  <input id="cp-discord-notify" type="checkbox" checked />
-                  Alert on new signals
-                </label>
-                <button id="cp-discord-save" class="btn btn-ghost" style="height:32px;padding:0 14px;font-size:12px" type="button">Save</button>
+              <div class="tab-group">
+                <button class="tab is-active" data-cp-tab="active" type="button">Active</button>
+                <button class="tab" data-cp-tab="all" type="button">All Today</button>
               </div>
-              <span id="cp-discord-note" class="discord-note">Strong signals (Q80+) fire instantly via Discord.</span>
             </div>
+            <div id="cp-signal-feed" class="feed"></div>
           </section>
 
-          <!-- Strategy rules -->
-          <section class="panel rules-panel">
+          <!-- Sidebar -->
+          <div class="sidebar">
+
+            <!-- Chart -->
+            <section class="panel chart-panel">
+              <div class="panel-hd-simple">
+                <p class="panel-label">Chart</p>
+                <span id="cp-chart-symbol" class="chart-symbol">Select a signal or search a token</span>
+              </div>
+              <div id="cp-chart-container" class="chart-frame"></div>
+              <div id="cp-chart-levels" class="chart-levels"></div>
+            </section>
+
+            <!-- Discord -->
+            <section class="panel discord-panel">
+              <div class="panel-hd">
+                <div>
+                  <p class="panel-label">Discord Alerts</p>
+                </div>
+                <span class="panel-sub">Webhook for live signals</span>
+              </div>
+              <div class="discord-body">
+                <input
+                  id="cp-discord-input"
+                  class="discord-input"
+                  type="url"
+                  placeholder="https://discord.com/api/webhooks/…"
+                  autocomplete="off"
+                />
+                <div class="discord-row">
+                  <label class="toggle-label">
+                    <input id="cp-discord-notify" type="checkbox" checked />
+                    Alert on new signals
+                  </label>
+                  <button id="cp-discord-save" class="btn btn-ghost" style="height:32px;padding:0 14px;font-size:12px" type="button">Save</button>
+                </div>
+                <span id="cp-discord-note" class="discord-note">Strong signals (Q80+) fire instantly via Discord.</span>
+              </div>
+            </section>
+
+            <!-- Strategy rules -->
+            <section class="panel rules-panel">
+              <div class="panel-hd">
+                <p class="panel-label">Strategy Rules</p>
+              </div>
+              <div class="rules-body">
+                <ul class="rules-list">
+                  <li><strong>Trend</strong> — 4H EMA20 above EMA50 for Long, below for Short</li>
+                  <li><strong>Momentum</strong> — 1H RSI between 38–68, mid-zone with room to run</li>
+                  <li><strong>Catalyst</strong> — MACD fresh crossover or histogram flip on 1H</li>
+                  <li><strong>Structure</strong> — Price pulling back to 1H EMA20</li>
+                  <li><strong>Wick</strong> — Demand / supply wick rejection at EMA level</li>
+                  <li><strong>Volume</strong> — Above 20-bar moving average</li>
+                  <li><strong>Funding</strong> — Not crowded (&lt;0.08%)</li>
+                  <li><strong>TP1</strong> = 1.5× risk &nbsp;·&nbsp; <strong>TP2</strong> = 2.5× risk &nbsp;·&nbsp; <strong>SL</strong> = 1× ATR</li>
+                </ul>
+              </div>
+            </section>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Tab: Scanner ──────────────────────────────────── -->
+      <div id="cp-page-scanner" class="page-content" hidden>
+        <section class="panel">
+          <div class="panel-hd">
+            <div>
+              <p class="panel-label">Full Scanner</p>
+              <h2 id="cp-scanner-title">Scanner results</h2>
+            </div>
+            <span id="cp-scanner-meta" class="panel-sub">Run scanner to see all matching tokens</span>
+          </div>
+          <div id="cp-scanner-feed" class="scanner-grid"></div>
+        </section>
+      </div>
+
+      <!-- ── Tab: Paper Trade ──────────────────────────────── -->
+      <div id="cp-page-paper" class="page-content" hidden>
+
+        <!-- Paper stats -->
+        <div class="paper-stats-row">
+          <div class="paper-stat">
+            <span class="stat-label">Balance</span>
+            <strong id="cp-paper-balance" class="stat-value">$100.00</strong>
+            <span class="stat-sub">Paper USD</span>
+          </div>
+          <div class="paper-stat">
+            <span class="stat-label">Starting</span>
+            <strong id="cp-paper-starting" class="stat-value">$100.00</strong>
+            <span class="stat-sub">Initial balance</span>
+          </div>
+          <div class="paper-stat">
+            <span class="stat-label">Total P&amp;L</span>
+            <strong id="cp-paper-pnl" class="stat-value">$0.00</strong>
+            <span class="stat-sub">All closed trades</span>
+          </div>
+          <div class="paper-stat">
+            <span class="stat-label">Win Rate</span>
+            <strong id="cp-paper-winrate" class="stat-value">–</strong>
+            <span class="stat-sub">Closed trade wins</span>
+          </div>
+          <div class="paper-stat">
+            <span class="stat-label">Open Positions</span>
+            <strong id="cp-paper-open-count" class="stat-value">0</strong>
+            <span class="stat-sub">Live paper trades</span>
+          </div>
+          <div class="paper-stat">
+            <span class="stat-label">Closed Trades</span>
+            <strong id="cp-paper-closed-count" class="stat-value">0</strong>
+            <span class="stat-sub">Completed trades</span>
+          </div>
+        </div>
+
+        <div class="paper-grid">
+
+          <!-- Open positions -->
+          <section class="panel">
             <div class="panel-hd">
-              <p class="panel-label">Strategy Rules</p>
+              <div>
+                <p class="panel-label">Open Positions</p>
+                <h2>Live paper trades</h2>
+              </div>
+              <button id="cp-paper-reset" class="btn btn-ghost" style="height:32px;padding:0 14px;font-size:12px" type="button">Reset $100</button>
             </div>
-            <div class="rules-body">
-              <ul class="rules-list">
-                <li><strong>Trend</strong> — 4H EMA20 above EMA50 for Long, below for Short</li>
-                <li><strong>Momentum</strong> — 1H RSI between 38–68, mid-zone with room to run</li>
-                <li><strong>Catalyst</strong> — MACD fresh crossover or histogram flip on 1H</li>
-                <li><strong>Structure</strong> — Price pulling back to 1H EMA20</li>
-                <li><strong>Wick</strong> — Demand / supply wick rejection at EMA level</li>
-                <li><strong>Volume</strong> — Above 20-bar moving average</li>
-                <li><strong>Funding</strong> — Not crowded (&lt;0.08%)</li>
-                <li><strong>TP1</strong> = 1.5× risk &nbsp;·&nbsp; <strong>TP2</strong> = 2.5× risk &nbsp;·&nbsp; <strong>SL</strong> = 1× ATR</li>
-              </ul>
+            <div id="cp-paper-open" class="paper-positions"></div>
+          </section>
+
+          <!-- Closed trades -->
+          <section class="panel">
+            <div class="panel-hd">
+              <div>
+                <p class="panel-label">Trade History</p>
+                <h2>Closed paper trades</h2>
+              </div>
             </div>
+            <div id="cp-paper-closed" class="paper-positions"></div>
           </section>
 
         </div>
+
+        <!-- 24H Comparison -->
+        <section class="panel comparison-panel">
+          <div class="panel-hd">
+            <div>
+              <p class="panel-label">24H Strategy Comparison</p>
+              <h2>Claudeperps vs EMA Perps</h2>
+            </div>
+            <span id="cp-compare-meta" class="panel-sub">Last updated: –</span>
+          </div>
+          <div id="cp-comparison" class="comparison-grid"></div>
+        </section>
+
       </div>
 
     </main>

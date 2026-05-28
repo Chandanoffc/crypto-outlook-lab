@@ -79,6 +79,17 @@ module.exports = async function handler(req, res) {
       return buildJsonResponse(res, 200, { ok: true, state: fresh });
     }
 
+    if (action === "paper-reset") {
+      if (hasDatabase()) {
+        const { state: old } = await loadState();
+        old.paper = { balance: 100, startingBalance: 100, openPositions: [], closedTrades: [], lastMarkAt: 0 };
+        old.lastScanResults = [];
+        const saved = await upsertRuntimeState("emaperps", old);
+        return buildJsonResponse(res, 200, { ok: true, state: sanitizeRuntimeState(saved.state || old) });
+      }
+      return buildJsonResponse(res, 200, { ok: true });
+    }
+
     return buildJsonResponse(res, 400, { error: "Unknown action." });
   } catch (err) {
     buildJsonResponse(res, 500, { error: err.message || "Internal error." });

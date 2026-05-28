@@ -2,10 +2,16 @@
 // EMA Perps frontend — EMA Signals Strategy
 
 // ─── State ───────────────────────────────────────────────────────────────────
-let state = { signals: [], lastScanAt: 0, alertDelivery: { discordWebhook: "", notifyOnNew: true } };
-let currentTab = "active";
+let state = {
+  signals: [], lastScanAt: 0,
+  alertDelivery: { discordWebhook: "", notifyOnNew: true },
+  paper: { balance: 100, startingBalance: 100, openPositions: [], closedTrades: [], lastMarkAt: 0 },
+  lastScanResults: [],
+};
+let currentTab  = "active";
+let currentPage = "signals";
 let activeChart = null;
-let pollTimer = null;
+let pollTimer   = null;
 const POLL_INTERVAL_MS = 30_000;
 
 // ─── DOM refs ─────────────────────────────────────────────────────────────────
@@ -31,6 +37,29 @@ const dom = {
   metricShorts:   document.getElementById("ep-metric-shorts"),
   metricAvgQ:     document.getElementById("ep-metric-avgq"),
   metricScan:     document.getElementById("ep-metric-scan"),
+  // Page tabs
+  pageSections: {
+    signals: document.getElementById("ep-page-signals"),
+    scanner: document.getElementById("ep-page-scanner"),
+    paper:   document.getElementById("ep-page-paper"),
+  },
+  // Scanner
+  scannerFeed:  document.getElementById("ep-scanner-feed"),
+  scannerTitle: document.getElementById("ep-scanner-title"),
+  scannerMeta:  document.getElementById("ep-scanner-meta"),
+  // Paper
+  paperBalance:     document.getElementById("ep-paper-balance"),
+  paperStarting:    document.getElementById("ep-paper-starting"),
+  paperPnl:         document.getElementById("ep-paper-pnl"),
+  paperWinrate:     document.getElementById("ep-paper-winrate"),
+  paperOpenCount:   document.getElementById("ep-paper-open-count"),
+  paperClosedCount: document.getElementById("ep-paper-closed-count"),
+  paperOpen:        document.getElementById("ep-paper-open"),
+  paperClosed:      document.getElementById("ep-paper-closed"),
+  paperReset:       document.getElementById("ep-paper-reset"),
+  // Comparison
+  comparison:   document.getElementById("ep-comparison"),
+  compareMeta:  document.getElementById("ep-compare-meta"),
 };
 
 // ─── Formatters ──────────────────────────────────────────────────────────────
@@ -65,6 +94,26 @@ function qualityLabel(q) {
   return "Valid Signal";
 }
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+/** Normalise S/R levels from either flat signal fields or nested levels object */
+function sigLevels(signal) {
+  if (!signal) return {};
+  return signal.levels || { s1: signal.s1, s2: signal.s2, r1: signal.r1, r2: signal.r2 };
+}
+
+// ─── Page tabs ───────────────────────────────────────────────────────────────
+function switchPage(page) {
+  currentPage = page;
+  Object.entries(dom.pageSections).forEach(([key, el]) => {
+    if (el) el.hidden = key !== page;
+  });
+  document.querySelectorAll("[data-ep-page]").forEach(btn => {
+    btn.classList.toggle("is-active", btn.dataset.epPage === page);
+  });
+  if (page === "scanner") renderScannerTab();
+  if (page === "paper")   { renderPaperTab(); loadComparison(); }
+}
+
 // ─── Metrics ─────────────────────────────────────────────────────────────────
 function renderMetrics() {
   const active = state.signals.filter(s => s.status === "active");
@@ -75,22 +124,12 @@ function renderMetrics() {
     ? Math.round(active.reduce((a, s) => a + s.quality, 0) / active.length)
     : null;
 
-  dom.metricActive.textContent = active.length  || "–";
-  dom.metricStrong.textContent = strong.length  || "–";
+  dom.metricActive.textContent = active.length || "–";
+  dom.metricStrong.textContent = strong.length || "–";
   dom.metricLongs.textContent  = longs  || "–";
   dom.metricShorts.textContent = shorts || "–";
   dom.metricAvgQ.textContent   = avgQ != null ? `Q${avgQ}` : "–";
-
-  if (state.lastScanAt) {
-    dom.metricScan.textContent = timeAgo(state.lastScanAt);
-  }
-}
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-/** Normalise S/R levels from either flat signal fields or nested levels object */
-function sigLevels(signal) {
-  if (!signal) return {};
-  return signal.levels || { s1: signal.s1, s2: signal.s2, r1: signal.r1, r2: signal.r2 };
+  if (state.lastScanAt) dom.metricScan.textContent = timeAgo(state.lastScanAt);
 }
 
 // ─── Signal feed ─────────────────────────────────────────────────────────────
@@ -186,6 +225,231 @@ function renderFeed() {
   });
 }
 
+// ─── Scanner tab ─────────────────────────────────────────────────────────────
+function renderScannerCard(signal) {
+  const isLong = signal.side === "Long";
+  const dir    = isLong ? "long" : "short";
+  const prec   = signal.pricePrecision || 2;
+  const lvls   = sigLevels(signal);
+
+  return `
+    <div class="scanner-card scanner-card--${dir}">
+      <div class="scanner-card-head">
+        <span class="scanner-symbol">${signal.symbol}</span>
+        <span class="scanner-side scanner-side--${dir}">${signal.side}</span>
+      </div>
+      <div class="scanner-quality">Q${signal.quality} · ${signal.signalLabel || qualityLabel(signal.quality)}</div>
+      <div class="scanner-levels">
+        <div class="scanner-level-row"><span>Entry</span><span>${fp(signal.entryPrice, prec)}</span></div>
+        <div class="scanner-level-row"><span>TP1</span><span class="tone-up">${fp(signal.tp1, prec)}</span></div>
+        <div class="scanner-level-row"><span>TP2</span><span class="tone-up">${fp(signal.tp2, prec)}</span></div>
+        <div class="scanner-level-row"><span>SL</span><span class="tone-down">${fp(signal.sl, prec)}</span></div>
+      </div>
+      ${(lvls.s1 || lvls.r1) ? `
+      <div class="scanner-reasons">
+        ${lvls.s2 != null ? `<span class="scanner-reason-chip sr-s">S2 ${fp(lvls.s2, prec)}</span>` : ""}
+        ${lvls.s1 != null ? `<span class="scanner-reason-chip sr-s">S1 ${fp(lvls.s1, prec)}</span>` : ""}
+        ${lvls.r1 != null ? `<span class="scanner-reason-chip sr-r">R1 ${fp(lvls.r1, prec)}</span>` : ""}
+        ${lvls.r2 != null ? `<span class="scanner-reason-chip sr-r">R2 ${fp(lvls.r2, prec)}</span>` : ""}
+      </div>` : ""}
+    </div>`;
+}
+
+function renderScannerTab() {
+  const results = state.lastScanResults || [];
+  if (!dom.scannerFeed) return;
+  if (!results.length) {
+    dom.scannerFeed.innerHTML = `<div class="scanner-empty">No scan results yet. Click "Run Scanner" to scan all tokens.</div>`;
+    if (dom.scannerTitle) dom.scannerTitle.textContent = "Scanner results";
+    if (dom.scannerMeta)  dom.scannerMeta.textContent  = "Run scanner to see all matching tokens";
+    return;
+  }
+  const longs  = results.filter(s => s.side === "Long");
+  const shorts = results.filter(s => s.side === "Short");
+  const sorted = [...longs, ...shorts].sort((a, b) => b.quality - a.quality);
+  if (dom.scannerTitle) dom.scannerTitle.textContent = `${results.length} token${results.length !== 1 ? "s" : ""} matched`;
+  if (dom.scannerMeta)  dom.scannerMeta.textContent  = `${longs.length} longs · ${shorts.length} shorts · Last scan: ${timeAgo(state.lastScanAt)}`;
+  dom.scannerFeed.innerHTML = sorted.map(renderScannerCard).join("");
+}
+
+// ─── Paper trading tab ───────────────────────────────────────────────────────
+function fmt$(v) {
+  if (v == null || !isFinite(v)) return "–";
+  const n = Number(v);
+  return (n >= 0 ? "$" : "-$") + Math.abs(n).toFixed(2);
+}
+
+function renderPaperPositionCard(pos, isClosed = false) {
+  const isLong  = pos.side === "Long";
+  const dir     = isLong ? "long" : "short";
+  const prec    = pos.pricePrecision || 2;
+  const pnl     = pos.pnl;
+
+  let cardClass = `paper-pos-card paper-pos-card--${dir}`;
+  let reasonHtml = "";
+
+  if (isClosed) {
+    const reason = pos.closeReason || "";
+    if (reason === "TP2" || reason === "TP1") cardClass = "paper-pos-card paper-pos-card--win";
+    else if (reason === "SL") cardClass = "paper-pos-card paper-pos-card--loss";
+    else cardClass = "paper-pos-card paper-pos-card--expired";
+
+    const reasonClass = reason === "TP2" ? "tp2" : reason === "TP1" ? "tp1" : reason === "SL" ? "sl" : "exp";
+    reasonHtml = `<span class="paper-pos-reason paper-pos-reason--${reasonClass}">${reason || "CLOSED"}</span>`;
+  }
+
+  const pnlClass = pnl == null ? "paper-pos-pnl--zero" : pnl > 0 ? "paper-pos-pnl--pos" : pnl < 0 ? "paper-pos-pnl--neg" : "paper-pos-pnl--zero";
+  const pnlStr   = pnl != null ? `${pnl >= 0 ? "+" : ""}${fmt$(pnl)} (${fPct(pos.pnlPct)})` : "live";
+  const tp1Badge = pos.tp1Reached && !isClosed ? `<span class="paper-pos-tp1-badge">TP1 ✓ SL→BE</span>` : "";
+
+  return `
+    <div class="${cardClass}">
+      <div class="paper-pos-head">
+        <span class="paper-pos-symbol">${pos.symbol}</span>
+        <span class="paper-pos-side paper-pos-side--${dir}">${pos.side}</span>
+        <span class="paper-pos-pnl ${pnlClass}">${pnlStr}</span>
+        ${reasonHtml}
+      </div>
+      ${tp1Badge}
+      <div class="paper-pos-meta">
+        <span>Entry ${fp(pos.entryPrice, prec)} · Size ${fmt$(pos.size)} · Q${pos.quality}</span>
+        <span>${isClosed ? timeAgo(pos.closedAt) : "Opened " + timeAgo(pos.openedAt)}</span>
+      </div>
+      <div class="paper-pos-meta">
+        <span>TP1 ${fp(pos.tp1, prec)} · TP2 ${fp(pos.tp2, prec)} · SL ${fp(pos.sl, prec)}</span>
+        ${isClosed && pos.closedPrice ? `<span>Close ${fp(pos.closedPrice, prec)}</span>` : ""}
+      </div>
+    </div>`;
+}
+
+function renderPaperTab() {
+  const paper   = state.paper || {};
+  const balance = paper.balance ?? 100;
+  const starting = paper.startingBalance ?? 100;
+  const openPos = paper.openPositions || [];
+  const closed  = paper.closedTrades  || [];
+
+  const totalPnl = balance - starting;
+  const wins     = closed.filter(t => t.pnl != null && t.pnl > 0).length;
+  const winrate  = closed.length ? Math.round((wins / closed.length) * 100) : null;
+
+  if (dom.paperBalance)     dom.paperBalance.textContent     = fmt$(balance);
+  if (dom.paperStarting)    dom.paperStarting.textContent    = fmt$(starting);
+  if (dom.paperPnl) {
+    dom.paperPnl.textContent = (totalPnl >= 0 ? "+" : "") + fmt$(totalPnl);
+    dom.paperPnl.className = `stat-value ${totalPnl > 0 ? "tone-up" : totalPnl < 0 ? "tone-down" : ""}`;
+  }
+  if (dom.paperWinrate)     dom.paperWinrate.textContent     = winrate != null ? `${winrate}%` : "–";
+  if (dom.paperOpenCount)   dom.paperOpenCount.textContent   = openPos.length;
+  if (dom.paperClosedCount) dom.paperClosedCount.textContent = closed.length;
+
+  if (dom.paperOpen) {
+    dom.paperOpen.innerHTML = openPos.length
+      ? openPos.map(p => renderPaperPositionCard(p, false)).join("")
+      : `<div class="paper-empty">No open positions. Trades open automatically when signals fire.</div>`;
+  }
+
+  if (dom.paperClosed) {
+    dom.paperClosed.innerHTML = closed.length
+      ? closed.slice(0, 50).map(p => renderPaperPositionCard(p, true)).join("")
+      : `<div class="paper-empty">No closed trades yet.</div>`;
+  }
+}
+
+// ─── 24H Comparison ──────────────────────────────────────────────────────────
+async function loadComparison() {
+  if (!dom.comparison) return;
+  dom.comparison.innerHTML = `<div class="compare-loading">Loading comparison data…</div>`;
+  if (dom.compareMeta) dom.compareMeta.textContent = "Fetching both strategies…";
+
+  try {
+    const [cpRes, epRes] = await Promise.all([
+      fetch("/api/claudeperps").then(r => r.json()),
+      fetch("/api/emaperps").then(r => r.json()),
+    ]);
+
+    const cpPaper = cpRes.state?.paper || {};
+    const epPaper = epRes.state?.paper || {};
+
+    function stratStats(paper) {
+      const balance  = paper.balance ?? 100;
+      const starting = paper.startingBalance ?? 100;
+      const closed   = paper.closedTrades || [];
+      const open     = paper.openPositions || [];
+      const pnl      = balance - starting;
+      const pnlPct   = starting > 0 ? ((balance - starting) / starting) * 100 : 0;
+      const wins     = closed.filter(t => t.pnl != null && t.pnl > 0).length;
+      const losses   = closed.filter(t => t.pnl != null && t.pnl <= 0).length;
+      const winrate  = closed.length ? Math.round((wins / closed.length) * 100) : null;
+      const avgPnl   = closed.length && closed.some(t => t.pnl != null)
+        ? closed.reduce((s, t) => s + (t.pnl ?? 0), 0) / closed.length
+        : null;
+      return { balance, starting, pnl, pnlPct, wins, losses, winrate, avgPnl, totalTrades: closed.length, openCount: open.length };
+    }
+
+    const cp = stratStats(cpPaper);
+    const ep = stratStats(epPaper);
+
+    const cpWinner = cp.pnlPct > ep.pnlPct;
+    const epWinner = ep.pnlPct > cp.pnlPct;
+    const tie      = cp.pnlPct === ep.pnlPct;
+
+    const fmtPnl = (v) => v == null ? "–" : (v >= 0 ? "+" : "") + fmt$(v);
+    const fmtPct = (v) => (v >= 0 ? "+" : "") + v.toFixed(2) + "%";
+    const fmtWr  = (v) => v != null ? `${v}%` : "–";
+    const fmtAvg = (v) => v == null ? "–" : (v >= 0 ? "+" : "") + fmt$(v);
+
+    let bannerText, bannerClass;
+    if (tie) {
+      bannerText = "🤝 Tied — both strategies are performing equally";
+      bannerClass = "compare-winner-banner--tie";
+    } else if (cpWinner) {
+      bannerText = `🏆 Claudeperps is leading with ${fmtPct(cp.pnlPct - ep.pnlPct)} more return`;
+      bannerClass = "compare-winner-banner--claude";
+    } else {
+      bannerText = `🏆 EMA Perps is leading with ${fmtPct(ep.pnlPct - cp.pnlPct)} more return`;
+      bannerClass = "compare-winner-banner--ema";
+    }
+
+    dom.comparison.innerHTML = `
+      <div class="compare-card">
+        <div class="compare-card-title">
+          <span class="compare-badge compare-badge--claude">Claudeperps</span>
+          ${cpWinner ? `<span class="compare-badge compare-badge--winner">Leading</span>` : ""}
+        </div>
+        <div class="compare-rows">
+          <div class="compare-row"><span class="compare-row-label">Balance</span><span class="compare-row-value">${fmt$(cp.balance)}</span></div>
+          <div class="compare-row"><span class="compare-row-label">Total P&L</span><span class="compare-row-value ${cp.pnl >= 0 ? "compare-row-value--pos" : "compare-row-value--neg"}">${fmtPnl(cp.pnl)} (${fmtPct(cp.pnlPct)})</span></div>
+          <div class="compare-row"><span class="compare-row-label">Win Rate</span><span class="compare-row-value">${fmtWr(cp.winrate)}</span></div>
+          <div class="compare-row"><span class="compare-row-label">Trades</span><span class="compare-row-value">${cp.totalTrades} closed · ${cp.openCount} open</span></div>
+          <div class="compare-row"><span class="compare-row-label">Avg Trade</span><span class="compare-row-value ${cp.avgPnl != null && cp.avgPnl >= 0 ? "compare-row-value--pos" : "compare-row-value--neg"}">${fmtAvg(cp.avgPnl)}</span></div>
+          <div class="compare-row"><span class="compare-row-label">W / L</span><span class="compare-row-value">${cp.wins} / ${cp.losses}</span></div>
+        </div>
+      </div>
+
+      <div class="compare-card">
+        <div class="compare-card-title">
+          <span class="compare-badge compare-badge--ema">EMA Perps</span>
+          ${epWinner ? `<span class="compare-badge compare-badge--winner">Leading</span>` : ""}
+        </div>
+        <div class="compare-rows">
+          <div class="compare-row"><span class="compare-row-label">Balance</span><span class="compare-row-value">${fmt$(ep.balance)}</span></div>
+          <div class="compare-row"><span class="compare-row-label">Total P&L</span><span class="compare-row-value ${ep.pnl >= 0 ? "compare-row-value--pos" : "compare-row-value--neg"}">${fmtPnl(ep.pnl)} (${fmtPct(ep.pnlPct)})</span></div>
+          <div class="compare-row"><span class="compare-row-label">Win Rate</span><span class="compare-row-value">${fmtWr(ep.winrate)}</span></div>
+          <div class="compare-row"><span class="compare-row-label">Trades</span><span class="compare-row-value">${ep.totalTrades} closed · ${ep.openCount} open</span></div>
+          <div class="compare-row"><span class="compare-row-label">Avg Trade</span><span class="compare-row-value ${ep.avgPnl != null && ep.avgPnl >= 0 ? "compare-row-value--pos" : "compare-row-value--neg"}">${fmtAvg(ep.avgPnl)}</span></div>
+          <div class="compare-row"><span class="compare-row-label">W / L</span><span class="compare-row-value">${ep.wins} / ${ep.losses}</span></div>
+        </div>
+      </div>
+
+      <div class="compare-winner-banner ${bannerClass}">${bannerText}</div>`;
+
+    if (dom.compareMeta) dom.compareMeta.textContent = `Updated: ${timeAgo(Date.now())}`;
+  } catch (err) {
+    if (dom.comparison) dom.comparison.innerHTML = `<div class="compare-loading">Failed to load comparison: ${err.message}</div>`;
+  }
+}
+
 // ─── Status ──────────────────────────────────────────────────────────────────
 function setStatus(msg, tone = "neutral") {
   dom.statusMsg.textContent = msg;
@@ -228,7 +492,6 @@ function renderChart(data, signal) {
       crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
     });
 
-    // Candlestick
     const candles = chart.addCandlestickSeries({
       upColor: "#22c55e", downColor: "#ef4444",
       borderUpColor: "#22c55e", borderDownColor: "#ef4444",
@@ -236,19 +499,16 @@ function renderChart(data, signal) {
     });
     candles.setData(data.candles);
 
-    // EMA20 — cyan
     if (data.ema20Series?.length > 1) {
       const l = chart.addLineSeries({ color: "#38bdf8", lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false });
       l.setData(data.ema20Series);
     }
 
-    // EMA50 — violet
     if (data.ema50Series?.length > 1) {
       const l = chart.addLineSeries({ color: "#a78bfa", lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false });
       l.setData(data.ema50Series);
     }
 
-    // S/R levels as horizontal price lines
     const lvls = sigLevels(signal) || data?.levels || {};
     const addSRLine = (price, color, title) => {
       if (!price || !isFinite(price)) return;
@@ -259,7 +519,6 @@ function renderChart(data, signal) {
     addSRLine(lvls.r1, "#34d399", "R1");
     addSRLine(lvls.r2, "#22c55e", "R2");
 
-    // Signal levels
     if (signal) {
       const addLine = (price, color, title) => {
         if (!price || !isFinite(price)) return;
@@ -281,7 +540,7 @@ function renderChart(data, signal) {
 }
 
 function renderLevelsRow(signal, data) {
-  const prec = signal?.pricePrecision || data?.pricePrecision || 2;
+  const prec  = signal?.pricePrecision || data?.pricePrecision || 2;
   const price = data?.currentPrice || signal?.entryPrice;
   const lvls  = sigLevels(signal) || data?.levels || {};
 
@@ -405,9 +664,11 @@ async function fetchState() {
     updateLastScanLabel();
     setStatus(state.lastStatusMessage || "Ready.", state.lastStatusTone || "neutral");
     if (state.alertDelivery?.discordWebhook) {
-      dom.discordInput.value = state.alertDelivery.discordWebhook;
+      dom.discordInput.value    = state.alertDelivery.discordWebhook;
       dom.discordNotify.checked = state.alertDelivery.notifyOnNew !== false;
     }
+    if (currentPage === "scanner") renderScannerTab();
+    if (currentPage === "paper")   renderPaperTab();
   }
 }
 
@@ -434,6 +695,8 @@ async function triggerScan() {
         : `Scan complete — ${data.summary?.activeCount ?? 0} active signals.`,
       data.summary?.newSignals > 0 ? "up" : "neutral"
     );
+    // Auto-switch to scanner tab + refresh it
+    switchPage("scanner");
   } catch (err) {
     setStatus(`Scan failed: ${err.message}`, "down");
   } finally {
@@ -443,7 +706,7 @@ async function triggerScan() {
 }
 
 async function saveDiscord() {
-  const webhook    = dom.discordInput.value.trim();
+  const webhook     = dom.discordInput.value.trim();
   const notifyOnNew = dom.discordNotify.checked;
   dom.discordNote.textContent = "Saving…";
   try {
@@ -464,12 +727,32 @@ async function saveDiscord() {
   }
 }
 
+async function resetPaper() {
+  if (!confirm("Reset paper trading? This clears all positions and resets balance to $100.")) return;
+  try {
+    const res = await fetch("/api/emaperps", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "paper-reset" }),
+    });
+    const data = await res.json();
+    if (data.ok && data.state) {
+      state = data.state;
+      renderPaperTab();
+    }
+  } catch (err) {
+    alert(`Reset failed: ${err.message}`);
+  }
+}
+
 // ─── Event wiring ────────────────────────────────────────────────────────────
 dom.searchBtn.addEventListener("click", doSearch);
 dom.searchInput.addEventListener("keydown", e => { if (e.key === "Enter") doSearch(); });
 dom.scanBtn.addEventListener("click", triggerScan);
 dom.discordSave.addEventListener("click", saveDiscord);
+if (dom.paperReset) dom.paperReset.addEventListener("click", resetPaper);
 
+// Signal feed tabs
 document.querySelectorAll("[data-ep-tab]").forEach(btn => {
   btn.addEventListener("click", () => {
     document.querySelectorAll("[data-ep-tab]").forEach(b => b.classList.remove("is-active"));
@@ -477,6 +760,11 @@ document.querySelectorAll("[data-ep-tab]").forEach(btn => {
     currentTab = btn.dataset.epTab;
     renderFeed();
   });
+});
+
+// Page-level tabs
+document.querySelectorAll("[data-ep-page]").forEach(btn => {
+  btn.addEventListener("click", () => switchPage(btn.dataset.epPage));
 });
 
 // ─── Auto-refresh ────────────────────────────────────────────────────────────

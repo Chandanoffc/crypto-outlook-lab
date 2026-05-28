@@ -2,37 +2,65 @@
 // Claudeperps frontend — Multi-Timeframe Momentum Confluence strategy
 
 // ─── State ───────────────────────────────────────────────────────────────────
-let state = { signals: [], lastScanAt: 0, alertDelivery: { discordWebhook: "", notifyOnNew: true } };
-let currentTab = "active";
-let activeChart = null;
-let activeChartSymbol = null;
-let pollTimer = null;
+let state = {
+  signals: [], lastScanAt: 0,
+  alertDelivery: { discordWebhook: "", notifyOnNew: true },
+  paper: { balance: 100, startingBalance: 100, openPositions: [], closedTrades: [], lastMarkAt: 0 },
+  lastScanResults: [],
+};
+let currentTab    = "active";
+let currentPage   = "signals";
+let activeChart   = null;
+let pollTimer     = null;
 const POLL_INTERVAL_MS = 30_000;
 
 // ─── DOM refs ─────────────────────────────────────────────────────────────────
 const dom = {
-  statusDot:     document.getElementById("cp-status-dot"),
-  statusMsg:     document.getElementById("cp-status-msg"),
-  lastScan:      document.getElementById("cp-last-scan"),
-  searchInput:   document.getElementById("cp-search-input"),
-  searchBtn:     document.getElementById("cp-search-btn"),
-  scanBtn:       document.getElementById("cp-scan-btn"),
-  searchResult:  document.getElementById("cp-search-result"),
-  signalFeed:    document.getElementById("cp-signal-feed"),
+  statusDot:      document.getElementById("cp-status-dot"),
+  statusMsg:      document.getElementById("cp-status-msg"),
+  lastScan:       document.getElementById("cp-last-scan"),
+  searchInput:    document.getElementById("cp-search-input"),
+  searchBtn:      document.getElementById("cp-search-btn"),
+  scanBtn:        document.getElementById("cp-scan-btn"),
+  searchResult:   document.getElementById("cp-search-result"),
+  signalFeed:     document.getElementById("cp-signal-feed"),
   chartContainer: document.getElementById("cp-chart-container"),
-  chartSymbol:   document.getElementById("cp-chart-symbol"),
-  chartLevels:   document.getElementById("cp-chart-levels"),
-  discordInput:  document.getElementById("cp-discord-input"),
-  discordNotify: document.getElementById("cp-discord-notify"),
-  discordSave:   document.getElementById("cp-discord-save"),
-  discordNote:   document.getElementById("cp-discord-note"),
-  metricActive:  document.getElementById("cp-metric-active"),
-  metricToday:   document.getElementById("cp-metric-today"),
-  metricLongs:   document.getElementById("cp-metric-longs"),
-  metricShorts:  document.getElementById("cp-metric-shorts"),
-  metricAvgQ:    document.getElementById("cp-metric-avgq"),
-  metricScan:    document.getElementById("cp-metric-scan"),
+  chartSymbol:    document.getElementById("cp-chart-symbol"),
+  chartLevels:    document.getElementById("cp-chart-levels"),
+  discordInput:   document.getElementById("cp-discord-input"),
+  discordNotify:  document.getElementById("cp-discord-notify"),
+  discordSave:    document.getElementById("cp-discord-save"),
+  discordNote:    document.getElementById("cp-discord-note"),
+  metricActive:   document.getElementById("cp-metric-active"),
+  metricToday:    document.getElementById("cp-metric-today"),
+  metricLongs:    document.getElementById("cp-metric-longs"),
+  metricShorts:   document.getElementById("cp-metric-shorts"),
+  metricAvgQ:     document.getElementById("cp-metric-avgq"),
+  metricScan:     document.getElementById("cp-metric-scan"),
   metricScanNote: document.getElementById("cp-metric-scan-note"),
+  // Page tabs
+  pageSections: {
+    signals: document.getElementById("cp-page-signals"),
+    scanner: document.getElementById("cp-page-scanner"),
+    paper:   document.getElementById("cp-page-paper"),
+  },
+  // Scanner
+  scannerFeed:   document.getElementById("cp-scanner-feed"),
+  scannerTitle:  document.getElementById("cp-scanner-title"),
+  scannerMeta:   document.getElementById("cp-scanner-meta"),
+  // Paper
+  paperBalance:    document.getElementById("cp-paper-balance"),
+  paperStarting:   document.getElementById("cp-paper-starting"),
+  paperPnl:        document.getElementById("cp-paper-pnl"),
+  paperWinrate:    document.getElementById("cp-paper-winrate"),
+  paperOpenCount:  document.getElementById("cp-paper-open-count"),
+  paperClosedCount:document.getElementById("cp-paper-closed-count"),
+  paperOpen:       document.getElementById("cp-paper-open"),
+  paperClosed:     document.getElementById("cp-paper-closed"),
+  paperReset:      document.getElementById("cp-paper-reset"),
+  // Comparison
+  comparison:      document.getElementById("cp-comparison"),
+  compareMeta:     document.getElementById("cp-compare-meta"),
 };
 
 // ─── Formatters ──────────────────────────────────────────────────────────────
@@ -67,6 +95,19 @@ function qualityLabel(q) {
   return "Valid Signal";
 }
 
+// ─── Page tabs ───────────────────────────────────────────────────────────────
+function switchPage(page) {
+  currentPage = page;
+  Object.entries(dom.pageSections).forEach(([key, el]) => {
+    if (el) el.hidden = key !== page;
+  });
+  document.querySelectorAll("[data-cp-page]").forEach(btn => {
+    btn.classList.toggle("is-active", btn.dataset.cpPage === page);
+  });
+  if (page === "scanner") renderScannerTab();
+  if (page === "paper") { renderPaperTab(); loadComparison(); }
+}
+
 // ─── Metrics ─────────────────────────────────────────────────────────────────
 function renderMetrics() {
   const active = state.signals.filter(s => s.status === "active");
@@ -78,15 +119,12 @@ function renderMetrics() {
     ? Math.round(active.reduce((a, s) => a + s.quality, 0) / active.length)
     : null;
 
-  dom.metricActive.textContent = active.length || "–";
-  dom.metricToday.textContent = today.length || "–";
-  dom.metricLongs.textContent = longs || "–";
-  dom.metricShorts.textContent = shorts || "–";
-  dom.metricAvgQ.textContent = avgQ != null ? `Q${avgQ}` : "–";
-
-  if (state.lastScanAt) {
-    dom.metricScan.textContent = timeAgo(state.lastScanAt);
-  }
+  dom.metricActive.textContent  = active.length || "–";
+  dom.metricToday.textContent   = today.length || "–";
+  dom.metricLongs.textContent   = longs || "–";
+  dom.metricShorts.textContent  = shorts || "–";
+  dom.metricAvgQ.textContent    = avgQ != null ? `Q${avgQ}` : "–";
+  if (state.lastScanAt) dom.metricScan.textContent = timeAgo(state.lastScanAt);
 }
 
 // ─── Signal feed ─────────────────────────────────────────────────────────────
@@ -171,6 +209,237 @@ function renderFeed() {
   });
 }
 
+// ─── Scanner tab ─────────────────────────────────────────────────────────────
+function renderScannerCard(signal) {
+  const isLong = signal.side === "Long";
+  const dir    = isLong ? "long" : "short";
+  const prec   = signal.pricePrecision || 2;
+  const reasons = (signal.reasonLabels || []).slice(0, 4);
+
+  return `
+    <div class="scanner-card scanner-card--${dir}">
+      <div class="scanner-card-head">
+        <span class="scanner-symbol">${signal.symbol}</span>
+        <span class="scanner-side scanner-side--${dir}">${signal.side}</span>
+      </div>
+      <div class="scanner-quality">Q${signal.quality} · ${qualityLabel(signal.quality)}</div>
+      <div class="scanner-levels">
+        <div class="scanner-level-row"><span>Entry</span><span>${fp(signal.entryPrice, prec)}</span></div>
+        <div class="scanner-level-row"><span>TP1</span><span class="tone-up">${fp(signal.tp1, prec)}</span></div>
+        <div class="scanner-level-row"><span>TP2</span><span class="tone-up">${fp(signal.tp2, prec)}</span></div>
+        <div class="scanner-level-row"><span>SL</span><span class="tone-down">${fp(signal.sl, prec)}</span></div>
+      </div>
+      ${reasons.length ? `<div class="scanner-reasons">${reasons.map(r => `<span class="scanner-reason-chip">${r}</span>`).join("")}</div>` : ""}
+    </div>`;
+}
+
+function renderScannerTab() {
+  const results = state.lastScanResults || [];
+  if (!dom.scannerFeed) return;
+  if (!results.length) {
+    dom.scannerFeed.innerHTML = `<div class="scanner-empty">No scan results yet. Click "Run Scanner" to scan all tokens.</div>`;
+    if (dom.scannerTitle) dom.scannerTitle.textContent = "Scanner results";
+    if (dom.scannerMeta) dom.scannerMeta.textContent = "Run scanner to see all matching tokens";
+    return;
+  }
+  const longs  = results.filter(s => s.side === "Long");
+  const shorts = results.filter(s => s.side === "Short");
+  const sorted = [...longs, ...shorts].sort((a, b) => b.quality - a.quality);
+  if (dom.scannerTitle) dom.scannerTitle.textContent = `${results.length} token${results.length !== 1 ? "s" : ""} matched`;
+  if (dom.scannerMeta)  dom.scannerMeta.textContent  = `${longs.length} longs · ${shorts.length} shorts · Last scan: ${timeAgo(state.lastScanAt)}`;
+  dom.scannerFeed.innerHTML = sorted.map(renderScannerCard).join("");
+}
+
+// ─── Paper trading tab ───────────────────────────────────────────────────────
+function fmt$(v) {
+  if (v == null || !isFinite(v)) return "–";
+  const n = Number(v);
+  return (n >= 0 ? "$" : "-$") + Math.abs(n).toFixed(2);
+}
+
+function renderPaperPositionCard(pos, isClosed = false) {
+  const isLong  = pos.side === "Long";
+  const dir     = isLong ? "long" : "short";
+  const prec    = pos.pricePrecision || 2;
+  const pnl     = pos.pnl;
+
+  let cardClass = `paper-pos-card paper-pos-card--${dir}`;
+  let reasonHtml = "";
+
+  if (isClosed) {
+    const reason = pos.closeReason || "";
+    if (reason === "TP2" || reason === "TP1") cardClass = "paper-pos-card paper-pos-card--win";
+    else if (reason === "SL") cardClass = "paper-pos-card paper-pos-card--loss";
+    else cardClass = "paper-pos-card paper-pos-card--expired";
+
+    const reasonClass = reason === "TP2" ? "tp2" : reason === "TP1" ? "tp1" : reason === "SL" ? "sl" : "exp";
+    reasonHtml = `<span class="paper-pos-reason paper-pos-reason--${reasonClass}">${reason || "CLOSED"}</span>`;
+  }
+
+  const pnlClass = pnl == null ? "paper-pos-pnl--zero" : pnl > 0 ? "paper-pos-pnl--pos" : pnl < 0 ? "paper-pos-pnl--neg" : "paper-pos-pnl--zero";
+  const pnlStr = pnl != null ? `${pnl >= 0 ? "+" : ""}${fmt$(pnl)} (${fPct(pos.pnlPct)})` : "live";
+
+  const tp1Badge = pos.tp1Reached && !isClosed ? `<span class="paper-pos-tp1-badge">TP1 ✓ SL→BE</span>` : "";
+
+  return `
+    <div class="${cardClass}">
+      <div class="paper-pos-head">
+        <span class="paper-pos-symbol">${pos.symbol}</span>
+        <span class="paper-pos-side paper-pos-side--${dir}">${pos.side}</span>
+        <span class="paper-pos-pnl ${pnlClass}">${pnlStr}</span>
+        ${reasonHtml}
+      </div>
+      ${tp1Badge}
+      <div class="paper-pos-meta">
+        <span>Entry ${fp(pos.entryPrice, prec)} · Size ${fmt$(pos.size)} · Q${pos.quality}</span>
+        <span>${isClosed ? timeAgo(pos.closedAt) : "Opened " + timeAgo(pos.openedAt)}</span>
+      </div>
+      <div class="paper-pos-meta">
+        <span>TP1 ${fp(pos.tp1, prec)} · TP2 ${fp(pos.tp2, prec)} · SL ${fp(pos.sl, prec)}</span>
+        ${isClosed && pos.closedPrice ? `<span>Close ${fp(pos.closedPrice, prec)}</span>` : ""}
+      </div>
+    </div>`;
+}
+
+function renderPaperTab() {
+  const paper = state.paper || {};
+  const balance   = paper.balance ?? 100;
+  const starting  = paper.startingBalance ?? 100;
+  const openPos   = paper.openPositions || [];
+  const closed    = paper.closedTrades  || [];
+
+  const totalPnl  = balance - starting;
+  const wins      = closed.filter(t => t.pnl != null && t.pnl > 0).length;
+  const winrate   = closed.length ? Math.round((wins / closed.length) * 100) : null;
+
+  if (dom.paperBalance)     dom.paperBalance.textContent    = fmt$(balance);
+  if (dom.paperStarting)    dom.paperStarting.textContent   = fmt$(starting);
+  if (dom.paperPnl) {
+    dom.paperPnl.textContent = (totalPnl >= 0 ? "+" : "") + fmt$(totalPnl);
+    dom.paperPnl.className = `stat-value ${totalPnl > 0 ? "tone-up" : totalPnl < 0 ? "tone-down" : ""}`;
+  }
+  if (dom.paperWinrate)     dom.paperWinrate.textContent    = winrate != null ? `${winrate}%` : "–";
+  if (dom.paperOpenCount)   dom.paperOpenCount.textContent  = openPos.length;
+  if (dom.paperClosedCount) dom.paperClosedCount.textContent = closed.length;
+
+  if (dom.paperOpen) {
+    dom.paperOpen.innerHTML = openPos.length
+      ? openPos.map(p => renderPaperPositionCard(p, false)).join("")
+      : `<div class="paper-empty">No open positions. Trades open automatically when signals fire.</div>`;
+  }
+
+  if (dom.paperClosed) {
+    dom.paperClosed.innerHTML = closed.length
+      ? closed.slice(0, 50).map(p => renderPaperPositionCard(p, true)).join("")
+      : `<div class="paper-empty">No closed trades yet.</div>`;
+  }
+}
+
+// ─── 24H Comparison ──────────────────────────────────────────────────────────
+async function loadComparison() {
+  if (!dom.comparison) return;
+  dom.comparison.innerHTML = `<div class="compare-loading">Loading comparison data…</div>`;
+  if (dom.compareMeta) dom.compareMeta.textContent = "Fetching both strategies…";
+
+  try {
+    const [cpRes, epRes] = await Promise.all([
+      fetch("/api/claudeperps").then(r => r.json()),
+      fetch("/api/emaperps").then(r => r.json()),
+    ]);
+
+    const cpState = cpRes.state || {};
+    const epState = epRes.state || {};
+
+    const cpPaper = cpState.paper || {};
+    const epPaper = epState.paper || {};
+
+    function stratStats(paper) {
+      const balance  = paper.balance ?? 100;
+      const starting = paper.startingBalance ?? 100;
+      const closed   = paper.closedTrades || [];
+      const open     = paper.openPositions || [];
+      const pnl      = balance - starting;
+      const pnlPct   = starting > 0 ? ((balance - starting) / starting) * 100 : 0;
+      const wins     = closed.filter(t => t.pnl != null && t.pnl > 0).length;
+      const losses   = closed.filter(t => t.pnl != null && t.pnl <= 0).length;
+      const winrate  = closed.length ? Math.round((wins / closed.length) * 100) : null;
+      const avgPnl   = closed.length && closed.some(t => t.pnl != null)
+        ? closed.reduce((s, t) => s + (t.pnl ?? 0), 0) / closed.length
+        : null;
+      return { balance, starting, pnl, pnlPct, wins, losses, winrate, avgPnl, totalTrades: closed.length, openCount: open.length };
+    }
+
+    const cp = stratStats(cpPaper);
+    const ep = stratStats(epPaper);
+
+    const cpWinner = cp.pnlPct > ep.pnlPct;
+    const epWinner = ep.pnlPct > cp.pnlPct;
+    const tie      = cp.pnlPct === ep.pnlPct;
+
+    function row(label, cpVal, epVal, isPositive = null) {
+      return `<div class="compare-row">
+        <span class="compare-row-label">${label}</span>
+        <span class="compare-row-value ${cpVal > 0 && isPositive === true ? "compare-row-value--pos" : cpVal < 0 && isPositive === true ? "compare-row-value--neg" : ""}">${cpVal}</span>
+        <span class="compare-row-value ${epVal > 0 && isPositive === true ? "compare-row-value--pos" : epVal < 0 && isPositive === true ? "compare-row-value--neg" : ""}">${epVal}</span>
+      </div>`;
+    }
+
+    const fmtPnl = (v) => v == null ? "–" : (v >= 0 ? "+" : "") + fmt$(v);
+    const fmtPct = (v) => (v >= 0 ? "+" : "") + v.toFixed(2) + "%";
+    const fmtWr  = (v) => v != null ? `${v}%` : "–";
+    const fmtAvg = (v) => v == null ? "–" : (v >= 0 ? "+" : "") + fmt$(v);
+
+    let bannerText, bannerClass;
+    if (tie) {
+      bannerText = "🤝 Tied — both strategies are performing equally";
+      bannerClass = "compare-winner-banner--tie";
+    } else if (cpWinner) {
+      bannerText = `🏆 Claudeperps is leading with ${fmtPct(cp.pnlPct - ep.pnlPct)} more return`;
+      bannerClass = "compare-winner-banner--claude";
+    } else {
+      bannerText = `🏆 EMA Perps is leading with ${fmtPct(ep.pnlPct - cp.pnlPct)} more return`;
+      bannerClass = "compare-winner-banner--ema";
+    }
+
+    dom.comparison.innerHTML = `
+      <div class="compare-card">
+        <div class="compare-card-title">
+          <span class="compare-badge compare-badge--claude">Claudeperps</span>
+          ${cpWinner ? `<span class="compare-badge compare-badge--winner">Leading</span>` : ""}
+        </div>
+        <div class="compare-rows">
+          <div class="compare-row"><span class="compare-row-label">Balance</span><span class="compare-row-value">${fmt$(cp.balance)}</span></div>
+          <div class="compare-row"><span class="compare-row-label">Total P&L</span><span class="compare-row-value ${cp.pnl >= 0 ? "compare-row-value--pos" : "compare-row-value--neg"}">${fmtPnl(cp.pnl)} (${fmtPct(cp.pnlPct)})</span></div>
+          <div class="compare-row"><span class="compare-row-label">Win Rate</span><span class="compare-row-value">${fmtWr(cp.winrate)}</span></div>
+          <div class="compare-row"><span class="compare-row-label">Trades</span><span class="compare-row-value">${cp.totalTrades} closed · ${cp.openCount} open</span></div>
+          <div class="compare-row"><span class="compare-row-label">Avg Trade</span><span class="compare-row-value ${cp.avgPnl != null && cp.avgPnl >= 0 ? "compare-row-value--pos" : "compare-row-value--neg"}">${fmtAvg(cp.avgPnl)}</span></div>
+          <div class="compare-row"><span class="compare-row-label">W / L</span><span class="compare-row-value">${cp.wins} / ${cp.losses}</span></div>
+        </div>
+      </div>
+
+      <div class="compare-card">
+        <div class="compare-card-title">
+          <span class="compare-badge compare-badge--ema">EMA Perps</span>
+          ${epWinner ? `<span class="compare-badge compare-badge--winner">Leading</span>` : ""}
+        </div>
+        <div class="compare-rows">
+          <div class="compare-row"><span class="compare-row-label">Balance</span><span class="compare-row-value">${fmt$(ep.balance)}</span></div>
+          <div class="compare-row"><span class="compare-row-label">Total P&L</span><span class="compare-row-value ${ep.pnl >= 0 ? "compare-row-value--pos" : "compare-row-value--neg"}">${fmtPnl(ep.pnl)} (${fmtPct(ep.pnlPct)})</span></div>
+          <div class="compare-row"><span class="compare-row-label">Win Rate</span><span class="compare-row-value">${fmtWr(ep.winrate)}</span></div>
+          <div class="compare-row"><span class="compare-row-label">Trades</span><span class="compare-row-value">${ep.totalTrades} closed · ${ep.openCount} open</span></div>
+          <div class="compare-row"><span class="compare-row-label">Avg Trade</span><span class="compare-row-value ${ep.avgPnl != null && ep.avgPnl >= 0 ? "compare-row-value--pos" : "compare-row-value--neg"}">${fmtAvg(ep.avgPnl)}</span></div>
+          <div class="compare-row"><span class="compare-row-label">W / L</span><span class="compare-row-value">${ep.wins} / ${ep.losses}</span></div>
+        </div>
+      </div>
+
+      <div class="compare-winner-banner ${bannerClass}">${bannerText}</div>`;
+
+    if (dom.compareMeta) dom.compareMeta.textContent = `Updated: ${timeAgo(Date.now())}`;
+  } catch (err) {
+    if (dom.comparison) dom.comparison.innerHTML = `<div class="compare-loading">Failed to load comparison: ${err.message}</div>`;
+  }
+}
+
 // ─── Status ──────────────────────────────────────────────────────────────────
 function setStatus(msg, tone = "neutral") {
   dom.statusMsg.textContent = msg;
@@ -213,7 +482,6 @@ function renderChart(data, signal) {
       crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
     });
 
-    // Candlestick series
     const candles = chart.addCandlestickSeries({
       upColor: "#22c55e", downColor: "#ef4444",
       borderUpColor: "#22c55e", borderDownColor: "#ef4444",
@@ -221,19 +489,16 @@ function renderChart(data, signal) {
     });
     candles.setData(data.candles);
 
-    // EMA20
     if (data.ema20Series?.length > 1) {
       const ema20 = chart.addLineSeries({ color: "#38bdf8", lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false });
       ema20.setData(data.ema20Series);
     }
 
-    // EMA50
     if (data.ema50Series?.length > 1) {
       const ema50 = chart.addLineSeries({ color: "#a78bfa", lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false });
       ema50.setData(data.ema50Series);
     }
 
-    // Signal levels as price lines
     if (signal) {
       const addLine = (price, color, title) => {
         if (!price || !isFinite(price)) return;
@@ -248,7 +513,6 @@ function renderChart(data, signal) {
     chart.timeScale().fitContent();
     activeChart = chart;
 
-    // Levels row
     if (signal) renderLevelsRow(signal, data);
   } catch (err) {
     container.innerHTML = `<p class="chart-empty">Chart error: ${err.message}</p>`;
@@ -256,7 +520,7 @@ function renderChart(data, signal) {
 }
 
 function renderLevelsRow(signal, data) {
-  const prec = signal?.pricePrecision || data?.pricePrecision || 2;
+  const prec  = signal?.pricePrecision || data?.pricePrecision || 2;
   const price = data?.currentPrice || signal?.entryPrice;
   dom.chartLevels.innerHTML = `
     <div class="levels-row">
@@ -371,9 +635,12 @@ async function fetchState() {
     updateLastScanLabel();
     setStatus(state.lastStatusMessage || "Ready.", state.lastStatusTone || "neutral");
     if (state.alertDelivery?.discordWebhook) {
-      dom.discordInput.value = state.alertDelivery.discordWebhook;
+      dom.discordInput.value  = state.alertDelivery.discordWebhook;
       dom.discordNotify.checked = state.alertDelivery.notifyOnNew !== false;
     }
+    // Refresh whichever page-tab is visible
+    if (currentPage === "scanner") renderScannerTab();
+    if (currentPage === "paper")   { renderPaperTab(); }
   }
 }
 
@@ -400,6 +667,8 @@ async function triggerScan() {
         : `Scan complete — ${data.summary?.activeCount ?? 0} active signals.`,
       data.summary?.newSignals > 0 ? "up" : "neutral"
     );
+    // Auto-switch to scanner tab + refresh it
+    switchPage("scanner");
   } catch (err) {
     setStatus(`Scan failed: ${err.message}`, "down");
   } finally {
@@ -409,7 +678,7 @@ async function triggerScan() {
 }
 
 async function saveDiscord() {
-  const webhook = dom.discordInput.value.trim();
+  const webhook    = dom.discordInput.value.trim();
   const notifyOnNew = dom.discordNotify.checked;
   dom.discordNote.textContent = "Saving…";
   try {
@@ -430,12 +699,32 @@ async function saveDiscord() {
   }
 }
 
+async function resetPaper() {
+  if (!confirm("Reset paper trading? This clears all positions and resets balance to $100.")) return;
+  try {
+    const res = await fetch("/api/claudeperps", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "paper-reset" }),
+    });
+    const data = await res.json();
+    if (data.ok && data.state) {
+      state = data.state;
+      renderPaperTab();
+    }
+  } catch (err) {
+    alert(`Reset failed: ${err.message}`);
+  }
+}
+
 // ─── Event wiring ────────────────────────────────────────────────────────────
 dom.searchBtn.addEventListener("click", doSearch);
 dom.searchInput.addEventListener("keydown", e => { if (e.key === "Enter") doSearch(); });
 dom.scanBtn.addEventListener("click", triggerScan);
 dom.discordSave.addEventListener("click", saveDiscord);
+if (dom.paperReset) dom.paperReset.addEventListener("click", resetPaper);
 
+// Signal feed tabs
 document.querySelectorAll("[data-cp-tab]").forEach(btn => {
   btn.addEventListener("click", () => {
     document.querySelectorAll("[data-cp-tab]").forEach(b => b.classList.remove("is-active"));
@@ -443,6 +732,11 @@ document.querySelectorAll("[data-cp-tab]").forEach(btn => {
     currentTab = btn.dataset.cpTab;
     renderFeed();
   });
+});
+
+// Page-level tabs
+document.querySelectorAll("[data-cp-page]").forEach(btn => {
+  btn.addEventListener("click", () => switchPage(btn.dataset.cpPage));
 });
 
 // ─── Auto-refresh ────────────────────────────────────────────────────────────

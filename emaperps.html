@@ -111,100 +111,201 @@
         </div>
       </div>
 
-      <!-- Main grid -->
-      <div class="main-grid">
+      <!-- Page-level tabs -->
+      <div class="page-tabs-bar">
+        <button class="page-tab is-active" data-ep-page="signals" type="button">Signals</button>
+        <button class="page-tab" data-ep-page="scanner" type="button">Scanner</button>
+        <button class="page-tab" data-ep-page="paper" type="button">Paper Trade</button>
+      </div>
 
-        <!-- Signal feed -->
-        <section class="panel feed-panel">
-          <div class="panel-hd">
-            <div>
-              <p class="panel-label">Signal Feed</p>
-              <h2>EMA + Support/Resistance signals</h2>
-            </div>
-            <div class="tab-group">
-              <button class="tab is-active" data-ep-tab="active" type="button">Active</button>
-              <button class="tab" data-ep-tab="strong" type="button">Strong</button>
-              <button class="tab" data-ep-tab="all" type="button">All Today</button>
-            </div>
-          </div>
-          <div id="ep-signal-feed" class="feed"></div>
-        </section>
+      <!-- ── Tab: Signals ──────────────────────────────────── -->
+      <div id="ep-page-signals" class="page-content">
+        <div class="main-grid">
 
-        <!-- Sidebar -->
-        <div class="sidebar">
-
-          <!-- Chart -->
-          <section class="panel chart-panel">
-            <div class="panel-hd-simple">
-              <p class="panel-label">Chart</p>
-              <span id="ep-chart-symbol" class="chart-symbol">Select a signal or search a token</span>
-            </div>
-            <div id="ep-chart-container" class="chart-frame"></div>
-            <div id="ep-chart-levels" class="chart-levels"></div>
-          </section>
-
-          <!-- Discord -->
-          <section class="panel discord-panel">
+          <!-- Signal feed -->
+          <section class="panel feed-panel">
             <div class="panel-hd">
               <div>
-                <p class="panel-label">Discord Alerts</p>
+                <p class="panel-label">Signal Feed</p>
+                <h2>EMA + Support/Resistance signals</h2>
               </div>
-              <span class="panel-sub">Webhook for live signals</span>
-            </div>
-            <div class="discord-body">
-              <input
-                id="ep-discord-input"
-                class="discord-input"
-                type="url"
-                placeholder="https://discord.com/api/webhooks/…"
-                autocomplete="off"
-              />
-              <div class="discord-row">
-                <label class="toggle-label">
-                  <input id="ep-discord-notify" type="checkbox" checked />
-                  Alert on new signals
-                </label>
-                <button id="ep-discord-save" class="btn btn-ghost" style="height:32px;padding:0 14px;font-size:12px" type="button">Save</button>
+              <div class="tab-group">
+                <button class="tab is-active" data-ep-tab="active" type="button">Active</button>
+                <button class="tab" data-ep-tab="strong" type="button">Strong</button>
+                <button class="tab" data-ep-tab="all" type="button">All Today</button>
               </div>
-              <span id="ep-discord-note" class="discord-note">Strong signals (Q80+) fire instantly via Discord.</span>
             </div>
+            <div id="ep-signal-feed" class="feed"></div>
           </section>
 
-          <!-- Strategy rules -->
-          <section class="panel rules-panel">
-            <div class="panel-hd">
-              <p class="panel-label">Signal Rules</p>
+          <!-- Sidebar -->
+          <div class="sidebar">
+
+            <!-- Chart -->
+            <section class="panel chart-panel">
+              <div class="panel-hd-simple">
+                <p class="panel-label">Chart</p>
+                <span id="ep-chart-symbol" class="chart-symbol">Select a signal or search a token</span>
+              </div>
+              <div id="ep-chart-container" class="chart-frame"></div>
+              <div id="ep-chart-levels" class="chart-levels"></div>
+            </section>
+
+            <!-- Discord -->
+            <section class="panel discord-panel">
+              <div class="panel-hd">
+                <div>
+                  <p class="panel-label">Discord Alerts</p>
+                </div>
+                <span class="panel-sub">Webhook for live signals</span>
+              </div>
+              <div class="discord-body">
+                <input
+                  id="ep-discord-input"
+                  class="discord-input"
+                  type="url"
+                  placeholder="https://discord.com/api/webhooks/…"
+                  autocomplete="off"
+                />
+                <div class="discord-row">
+                  <label class="toggle-label">
+                    <input id="ep-discord-notify" type="checkbox" checked />
+                    Alert on new signals
+                  </label>
+                  <button id="ep-discord-save" class="btn btn-ghost" style="height:32px;padding:0 14px;font-size:12px" type="button">Save</button>
+                </div>
+                <span id="ep-discord-note" class="discord-note">Strong signals (Q80+) fire instantly via Discord.</span>
+              </div>
+            </section>
+
+            <!-- Strategy rules -->
+            <section class="panel rules-panel">
+              <div class="panel-hd">
+                <p class="panel-label">Signal Rules</p>
+              </div>
+              <div class="rules-body">
+                <div class="rules-grid">
+
+                  <div class="rules-section">
+                    <div class="rules-section-title tone-up">Long — EMA20 &gt; EMA50</div>
+                    <div class="rules-row"><span class="rules-badge strong">Q85</span><span>EMA50 + Support 2</span></div>
+                    <div class="rules-row"><span class="rules-badge strong">Q80</span><span>EMA20 + Support 2</span></div>
+                    <div class="rules-row"><span class="rules-badge good">Q75</span><span>EMA50 + Support 1</span></div>
+                    <div class="rules-row"><span class="rules-badge good">Q70</span><span>EMA20 + Support 1</span></div>
+                    <div class="rules-row"><span class="rules-badge good">Q70</span><span>Support 2 only</span></div>
+                    <div class="rules-row"><span class="rules-badge mod">Q60</span><span>Support 1 only</span></div>
+                  </div>
+
+                  <div class="rules-section">
+                    <div class="rules-section-title tone-down">Short — EMA50 &gt; EMA20</div>
+                    <div class="rules-row"><span class="rules-badge strong">Q85</span><span>EMA50 + Resistance 2</span></div>
+                    <div class="rules-row"><span class="rules-badge strong">Q80</span><span>EMA20 + Resistance 2</span></div>
+                    <div class="rules-row"><span class="rules-badge good">Q75</span><span>EMA50 + Resistance 1</span></div>
+                    <div class="rules-row"><span class="rules-badge good">Q70</span><span>EMA20 + Resistance 1</span></div>
+                    <div class="rules-row"><span class="rules-badge good">Q70</span><span>Resistance 2 only</span></div>
+                    <div class="rules-row"><span class="rules-badge mod">Q60</span><span>Resistance 1 only</span></div>
+                  </div>
+
+                  <p class="rules-note">TP1 at first opposite level · TP2 at second opposite level · SL below S2 (long) / above R2 (short) + 0.5 ATR buffer</p>
+
+                </div>
+              </div>
+            </section>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Tab: Scanner ──────────────────────────────────── -->
+      <div id="ep-page-scanner" class="page-content" hidden>
+        <section class="panel">
+          <div class="panel-hd">
+            <div>
+              <p class="panel-label">Full Scanner</p>
+              <h2 id="ep-scanner-title">Scanner results</h2>
             </div>
-            <div class="rules-body">
-              <div class="rules-grid">
+            <span id="ep-scanner-meta" class="panel-sub">Run scanner to see all matching tokens</span>
+          </div>
+          <div id="ep-scanner-feed" class="scanner-grid"></div>
+        </section>
+      </div>
 
-                <div class="rules-section">
-                  <div class="rules-section-title tone-up">Long — EMA20 &gt; EMA50</div>
-                  <div class="rules-row"><span class="rules-badge strong">Q85</span><span>EMA50 + Support 2</span></div>
-                  <div class="rules-row"><span class="rules-badge strong">Q80</span><span>EMA20 + Support 2</span></div>
-                  <div class="rules-row"><span class="rules-badge good">Q75</span><span>EMA50 + Support 1</span></div>
-                  <div class="rules-row"><span class="rules-badge good">Q70</span><span>EMA20 + Support 1</span></div>
-                  <div class="rules-row"><span class="rules-badge good">Q70</span><span>Support 2 only</span></div>
-                  <div class="rules-row"><span class="rules-badge mod">Q60</span><span>Support 1 only</span></div>
-                </div>
+      <!-- ── Tab: Paper Trade ──────────────────────────────── -->
+      <div id="ep-page-paper" class="page-content" hidden>
 
-                <div class="rules-section">
-                  <div class="rules-section-title tone-down">Short — EMA50 &gt; EMA20</div>
-                  <div class="rules-row"><span class="rules-badge strong">Q85</span><span>EMA50 + Resistance 2</span></div>
-                  <div class="rules-row"><span class="rules-badge strong">Q80</span><span>EMA20 + Resistance 2</span></div>
-                  <div class="rules-row"><span class="rules-badge good">Q75</span><span>EMA50 + Resistance 1</span></div>
-                  <div class="rules-row"><span class="rules-badge good">Q70</span><span>EMA20 + Resistance 1</span></div>
-                  <div class="rules-row"><span class="rules-badge good">Q70</span><span>Resistance 2 only</span></div>
-                  <div class="rules-row"><span class="rules-badge mod">Q60</span><span>Resistance 1 only</span></div>
-                </div>
+        <!-- Paper stats -->
+        <div class="paper-stats-row">
+          <div class="paper-stat">
+            <span class="stat-label">Balance</span>
+            <strong id="ep-paper-balance" class="stat-value">$100.00</strong>
+            <span class="stat-sub">Paper USD</span>
+          </div>
+          <div class="paper-stat">
+            <span class="stat-label">Starting</span>
+            <strong id="ep-paper-starting" class="stat-value">$100.00</strong>
+            <span class="stat-sub">Initial balance</span>
+          </div>
+          <div class="paper-stat">
+            <span class="stat-label">Total P&amp;L</span>
+            <strong id="ep-paper-pnl" class="stat-value">$0.00</strong>
+            <span class="stat-sub">All closed trades</span>
+          </div>
+          <div class="paper-stat">
+            <span class="stat-label">Win Rate</span>
+            <strong id="ep-paper-winrate" class="stat-value">–</strong>
+            <span class="stat-sub">Closed trade wins</span>
+          </div>
+          <div class="paper-stat">
+            <span class="stat-label">Open Positions</span>
+            <strong id="ep-paper-open-count" class="stat-value">0</strong>
+            <span class="stat-sub">Live paper trades</span>
+          </div>
+          <div class="paper-stat">
+            <span class="stat-label">Closed Trades</span>
+            <strong id="ep-paper-closed-count" class="stat-value">0</strong>
+            <span class="stat-sub">Completed trades</span>
+          </div>
+        </div>
 
-                <p class="rules-note">TP1 at first opposite level · TP2 at second opposite level · SL below S2 (long) / above R2 (short) + 0.5 ATR buffer</p>
+        <div class="paper-grid">
 
+          <!-- Open positions -->
+          <section class="panel">
+            <div class="panel-hd">
+              <div>
+                <p class="panel-label">Open Positions</p>
+                <h2>Live paper trades</h2>
+              </div>
+              <button id="ep-paper-reset" class="btn btn-ghost" style="height:32px;padding:0 14px;font-size:12px" type="button">Reset $100</button>
+            </div>
+            <div id="ep-paper-open" class="paper-positions"></div>
+          </section>
+
+          <!-- Closed trades -->
+          <section class="panel">
+            <div class="panel-hd">
+              <div>
+                <p class="panel-label">Trade History</p>
+                <h2>Closed paper trades</h2>
               </div>
             </div>
+            <div id="ep-paper-closed" class="paper-positions"></div>
           </section>
 
         </div>
+
+        <!-- 24H Comparison -->
+        <section class="panel comparison-panel">
+          <div class="panel-hd">
+            <div>
+              <p class="panel-label">24H Strategy Comparison</p>
+              <h2>Claudeperps vs EMA Perps</h2>
+            </div>
+            <span id="ep-compare-meta" class="panel-sub">Last updated: –</span>
+          </div>
+          <div id="ep-comparison" class="comparison-grid"></div>
+        </section>
+
       </div>
 
     </main>
