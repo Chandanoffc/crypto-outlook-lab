@@ -3099,6 +3099,7 @@ function renderTradezPaperDashboard() {
   renderTradezAutoTabs();
   renderTradezComparison();
   renderEquityCurve("tradez-equity-chart", tradezPaper.startingBalance, tradezPaper.closedTrades || []);
+  renderFunnel(tradezPaper.lastFunnel || null);
 }
 
 function mapKlineEntry(entry) {
@@ -4856,6 +4857,49 @@ function renderEquityCurve(containerId, startingBalance, closedTrades) {
   } catch (_) {
     container.innerHTML = '<p class="subsection-meta" style="padding:10px 0">Chart unavailable.</p>';
   }
+}
+
+function renderFunnel(funnel) {
+  const panel = document.getElementById("tradez-funnel-panel");
+  const steps = document.getElementById("tradez-funnel-steps");
+  const note = document.getElementById("tradez-funnel-note");
+  if (!panel || !steps) return;
+
+  if (!funnel || typeof funnel !== "object") {
+    steps.innerHTML = '<p class="funnel-empty">No scan data yet — trigger a scan to see filter results.</p>';
+    return;
+  }
+
+  const stages = [
+    { label: "Has active signal",   count: funnel.withSignal,    base: funnel.withSignal },
+    { label: `Quality ≥ ${funnel.threshold}`,  count: funnel.passedQuality,  base: funnel.withSignal },
+    { label: "R/R ≥ 1.0",           count: funnel.passedRR,       base: funnel.withSignal },
+    { label: "Signal fresh (≤12 bars)", count: funnel.passedFresh, base: funnel.withSignal },
+    { label: "Flow confirmed",       count: funnel.passedFlow,    base: funnel.withSignal },
+    { label: "Funding ok",           count: funnel.passedFunding, base: funnel.withSignal },
+    { label: "Retest ≤ 4",          count: funnel.passedRetest,  base: funnel.withSignal },
+    { label: "Volume factor ≥ 0.6", count: funnel.passedVolume,  base: funnel.withSignal },
+    { label: "Not overextended",     count: funnel.passedExtension, base: funnel.withSignal },
+    { label: "In entry zone",        count: funnel.passedExecutable, base: funnel.withSignal },
+  ];
+
+  if (note) {
+    const ts = funnel.recordedAt ? new Date(funnel.recordedAt).toLocaleTimeString() : "";
+    note.textContent = ts ? `Last scan · ${ts}` : "Last scan filter results";
+  }
+
+  steps.innerHTML = stages.map((stage) => {
+    const pct = stage.base > 0 ? Math.round((stage.count / stage.base) * 100) : 0;
+    const barClass = stage.count === 0 ? "is-zero" : pct < 50 ? "is-partial" : "";
+    const countClass = stage.count === 0 ? "is-zero" : "";
+    return `<div class="funnel-step">
+      <span class="funnel-step-label">${stage.label}</span>
+      <div class="funnel-step-bar-wrap">
+        <div class="funnel-step-bar ${barClass}" style="width:${pct}%"></div>
+      </div>
+      <span class="funnel-step-count ${countClass}">${stage.count}</span>
+    </div>`;
+  }).join("");
 }
 
 function renderAlertFeed() {

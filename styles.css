@@ -8303,3 +8303,71 @@ body.tradez-page .metric-card small {
     flex: 1;
   }
 }
+
+/* ─────────────────────────────────────────────
+   AT2 Entry Gate Funnel
+   ───────────────────────────────────────────── */
+.tradez-funnel-panel {
+  padding: 14px 16px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.funnel-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 10px;
+}
+
+.funnel-step {
+  display: grid;
+  grid-template-columns: 160px 1fr 36px;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.76rem;
+}
+
+.funnel-step-label {
+  color: var(--text-muted, #5e6f82);
+  white-space: nowrap;
+}
+
+.funnel-step-bar-wrap {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.funnel-step-bar {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent, #22d3ee);
+  transition: width 0.35s ease;
+}
+
+.funnel-step-bar.is-zero {
+  background: rgba(239, 68, 68, 0.7);
+}
+
+.funnel-step-bar.is-partial {
+  background: rgba(251, 191, 36, 0.8);
+}
+
+.funnel-step-count {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-base, #cdd6e0);
+  font-weight: 600;
+  font-size: 0.72rem;
+}
+
+.funnel-step-count.is-zero {
+  color: rgba(239, 68, 68, 0.8);
+}
+
+.funnel-empty {
+  font-size: 0.76rem;
+  color: var(--text-muted, #5e6f82);
+  padding: 4px 0;
+}
