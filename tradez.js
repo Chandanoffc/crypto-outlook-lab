@@ -5345,6 +5345,7 @@ async function init() {
   updateAlertPermissionButton();
   updateTabs();
   renderAlertFeed();
+  refreshCompetitionScorecard(competitionLookbackHours);
   renderTradezPaperDashboard();
   initChart();
   bindEvents();
