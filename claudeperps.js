@@ -43,7 +43,11 @@ const dom = {
     signals: document.getElementById("cp-page-signals"),
     scanner: document.getElementById("cp-page-scanner"),
     paper:   document.getElementById("cp-page-paper"),
+    test:    document.getElementById("cp-page-test"),
   },
+  // Test alerts
+  testWebhook:  document.getElementById("cp-test-webhook"),
+  testResult:   document.getElementById("cp-test-result"),
   // Scanner
   scannerFeed:   document.getElementById("cp-scanner-feed"),
   scannerTitle:  document.getElementById("cp-scanner-title"),
@@ -106,6 +110,7 @@ function switchPage(page) {
   });
   if (page === "scanner") renderScannerTab();
   if (page === "paper") { renderPaperTab(); loadComparison(); }
+  if (page === "test") initTestTab();
 }
 
 // ─── Metrics ─────────────────────────────────────────────────────────────────
@@ -737,6 +742,87 @@ document.querySelectorAll("[data-cp-tab]").forEach(btn => {
 // Page-level tabs
 document.querySelectorAll("[data-cp-page]").forEach(btn => {
   btn.addEventListener("click", () => switchPage(btn.dataset.cpPage));
+});
+
+// ─── Test Alerts ─────────────────────────────────────────────────────────────
+const CP_TEST_FAKE_EVENT = {
+  type: "perps",
+  pair: "BTCUSDT",
+  symbol: "BTCUSDT",
+  direction: "LONG",
+  side: "Long",
+  entryPrice: 98500,
+  stopLoss: 96800,
+  tp1: 101000,
+  tp2: 104500,
+  qualityScore: 88,
+  qualificationReason: "EMA20 > EMA50 · RSI 55 · Bullish MACD cross · Strong volume · 4H uptrend",
+  strategy: "CLAUDEPERPS",
+};
+
+const CP_TEST_EVENT_OVERRIDES = {
+  entry_opened: {},
+  tp1_hit:  { closedPrice: 101000, pnlPct: 2.54, pnl:  2.54 },
+  tp2_hit:  { closedPrice: 104500, pnlPct: 6.09, pnl:  6.09 },
+  sl_hit:   { closedPrice:  96800, pnlPct: -1.73, pnl: -1.73 },
+};
+
+const CP_TEST_TITLES = {
+  entry_opened: "📡 BTCUSDT Q88 — Claudeperps · Test Entry",
+  tp1_hit:      "✅ BTCUSDT — TP1 Hit — Claudeperps · Test",
+  tp2_hit:      "🏆 BTCUSDT — TP2 Hit — Claudeperps · Test",
+  sl_hit:       "🔴 BTCUSDT — SL Hit — Claudeperps · Test",
+};
+
+function setTestResult(msg, type = "ok") {
+  if (!dom.testResult) return;
+  dom.testResult.textContent = msg;
+  dom.testResult.className = `test-result test-result--${type}`;
+}
+
+function initTestTab() {
+  // Pre-fill webhook from saved state
+  if (dom.testWebhook && state?.alertDelivery?.discordWebhook && !dom.testWebhook.value) {
+    dom.testWebhook.value = state.alertDelivery.discordWebhook;
+  }
+}
+
+async function runCpTestAlert(eventType) {
+  const webhook = dom.testWebhook?.value?.trim();
+  if (!webhook || !/^https:\/\/discord(app)?\.com\/api\/webhooks\//.test(webhook)) {
+    setTestResult("⚠ Enter a valid Discord webhook URL first.", "err");
+    return;
+  }
+  const allBtns = document.querySelectorAll("[data-cp-test]");
+  allBtns.forEach(b => { b.disabled = true; });
+  setTestResult("Sending…", "busy");
+  try {
+    const event = { ...CP_TEST_FAKE_EVENT, ...(CP_TEST_EVENT_OVERRIDES[eventType] || {}) };
+    const res = await fetch("/api/notify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: CP_TEST_TITLES[eventType] || "Soloris Test Alert",
+        event,
+        meta: { eventType },
+        destinations: { discordWebhook: webhook },
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data?.results?.discord === "sent") {
+      setTestResult("✓ Alert sent — check your Discord channel.", "ok");
+    } else {
+      setTestResult(`✗ ${data?.error || data?.results?.discord || "Delivery failed"}`, "err");
+    }
+  } catch (err) {
+    setTestResult(`✗ ${err.message}`, "err");
+  } finally {
+    allBtns.forEach(b => { b.disabled = false; });
+  }
+}
+
+document.querySelectorAll("[data-cp-test]").forEach(btn => {
+  btn.addEventListener("click", () => runCpTestAlert(btn.dataset.cpTest));
 });
 
 // ─── Auto-refresh ────────────────────────────────────────────────────────────

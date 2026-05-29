@@ -116,6 +116,7 @@
         <button class="page-tab is-active" data-ep-page="signals" type="button">Signals</button>
         <button class="page-tab" data-ep-page="scanner" type="button">Scanner</button>
         <button class="page-tab" data-ep-page="paper" type="button">Paper Trade</button>
+        <button class="page-tab page-tab--test" data-ep-page="test" type="button">Test Alerts</button>
       </div>
 
       <!-- ── Tab: Signals ──────────────────────────────────── -->
@@ -306,6 +307,49 @@
           <div id="ep-comparison" class="comparison-grid"></div>
         </section>
 
+      </div>
+
+      <!-- ── Tab: Test Alerts ─────────────────────────────── -->
+      <div id="ep-page-test" class="page-content" hidden>
+        <section class="panel test-alerts-panel">
+          <div class="panel-hd">
+            <div>
+              <p class="panel-label">Discord Test</p>
+              <h2>Send test alerts to Discord</h2>
+            </div>
+            <span class="panel-sub">Uses your saved webhook · EMA Perps strategy</span>
+          </div>
+          <div class="test-alerts-body">
+            <div class="test-webhook-row">
+              <label class="test-label">Discord Webhook</label>
+              <input id="ep-test-webhook" class="discord-input" type="url"
+                placeholder="https://discord.com/api/webhooks/…" autocomplete="off" />
+            </div>
+            <div class="test-buttons-grid">
+              <button class="test-alert-btn test-alert-btn--entry" data-ep-test="entry_opened" type="button">
+                <span class="test-btn-icon">📡</span>
+                <span class="test-btn-label">New Signal</span>
+                <span class="test-btn-sub">Entry banner · pair + levels</span>
+              </button>
+              <button class="test-alert-btn test-alert-btn--tp1" data-ep-test="tp1_hit" type="button">
+                <span class="test-btn-icon">✅</span>
+                <span class="test-btn-label">TP1 Hit — Success</span>
+                <span class="test-btn-sub">Green SUCCESS banner · SL → BE</span>
+              </button>
+              <button class="test-alert-btn test-alert-btn--tp2" data-ep-test="tp2_hit" type="button">
+                <span class="test-btn-icon">🏆</span>
+                <span class="test-btn-label">TP2 Hit — Valhalla</span>
+                <span class="test-btn-sub">Gold VALHALLA banner · full target</span>
+              </button>
+              <button class="test-alert-btn test-alert-btn--sl" data-ep-test="sl_hit" type="button">
+                <span class="test-btn-icon">😢</span>
+                <span class="test-btn-label">SL Hit — Stopped Out</span>
+                <span class="test-btn-sub">Red banner · pixel-art sad face</span>
+              </button>
+            </div>
+            <div id="ep-test-result" class="test-result"></div>
+          </div>
+        </section>
       </div>
 
     </main>

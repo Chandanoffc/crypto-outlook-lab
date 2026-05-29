@@ -42,7 +42,11 @@ const dom = {
     signals: document.getElementById("ep-page-signals"),
     scanner: document.getElementById("ep-page-scanner"),
     paper:   document.getElementById("ep-page-paper"),
+    test:    document.getElementById("ep-page-test"),
   },
+  // Test alerts
+  testWebhook: document.getElementById("ep-test-webhook"),
+  testResult:  document.getElementById("ep-test-result"),
   // Scanner
   scannerFeed:  document.getElementById("ep-scanner-feed"),
   scannerTitle: document.getElementById("ep-scanner-title"),
@@ -112,6 +116,7 @@ function switchPage(page) {
   });
   if (page === "scanner") renderScannerTab();
   if (page === "paper")   { renderPaperTab(); loadComparison(); }
+  if (page === "test")    initTestTab();
 }
 
 // ─── Metrics ─────────────────────────────────────────────────────────────────
@@ -765,6 +770,86 @@ document.querySelectorAll("[data-ep-tab]").forEach(btn => {
 // Page-level tabs
 document.querySelectorAll("[data-ep-page]").forEach(btn => {
   btn.addEventListener("click", () => switchPage(btn.dataset.epPage));
+});
+
+// ─── Test Alerts ─────────────────────────────────────────────────────────────
+const EP_TEST_FAKE_EVENT = {
+  type: "perps",
+  pair: "ETHUSDT",
+  symbol: "ETHUSDT",
+  direction: "LONG",
+  side: "Long",
+  entryPrice: 3750,
+  stopLoss: 3620,
+  tp1: 3920,
+  tp2: 4100,
+  qualityScore: 80,
+  qualificationReason: "EMA50 + Support 2 · Q85 strong signal · RSI 52 · HTF uptrend",
+  strategy: "EMA PERPS",
+};
+
+const EP_TEST_EVENT_OVERRIDES = {
+  entry_opened: {},
+  tp1_hit:  { closedPrice: 3920, pnlPct: 4.53, pnl:  4.53 },
+  tp2_hit:  { closedPrice: 4100, pnlPct: 9.33, pnl:  9.33 },
+  sl_hit:   { closedPrice: 3620, pnlPct: -3.47, pnl: -3.47 },
+};
+
+const EP_TEST_TITLES = {
+  entry_opened: "📡 ETHUSDT Q80 — EMA Perps · Test Entry",
+  tp1_hit:      "✅ ETHUSDT — TP1 Hit — EMA Perps · Test",
+  tp2_hit:      "🏆 ETHUSDT — TP2 Hit — EMA Perps · Test",
+  sl_hit:       "🔴 ETHUSDT — SL Hit — EMA Perps · Test",
+};
+
+function setTestResult(msg, type = "ok") {
+  if (!dom.testResult) return;
+  dom.testResult.textContent = msg;
+  dom.testResult.className = `test-result test-result--${type}`;
+}
+
+function initTestTab() {
+  if (dom.testWebhook && state?.alertDelivery?.discordWebhook && !dom.testWebhook.value) {
+    dom.testWebhook.value = state.alertDelivery.discordWebhook;
+  }
+}
+
+async function runEpTestAlert(eventType) {
+  const webhook = dom.testWebhook?.value?.trim();
+  if (!webhook || !/^https:\/\/discord(app)?\.com\/api\/webhooks\//.test(webhook)) {
+    setTestResult("⚠ Enter a valid Discord webhook URL first.", "err");
+    return;
+  }
+  const allBtns = document.querySelectorAll("[data-ep-test]");
+  allBtns.forEach(b => { b.disabled = true; });
+  setTestResult("Sending…", "busy");
+  try {
+    const event = { ...EP_TEST_FAKE_EVENT, ...(EP_TEST_EVENT_OVERRIDES[eventType] || {}) };
+    const res = await fetch("/api/notify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: EP_TEST_TITLES[eventType] || "Soloris Test Alert",
+        event,
+        meta: { eventType },
+        destinations: { discordWebhook: webhook },
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data?.results?.discord === "sent") {
+      setTestResult("✓ Alert sent — check your Discord channel.", "ok");
+    } else {
+      setTestResult(`✗ ${data?.error || data?.results?.discord || "Delivery failed"}`, "err");
+    }
+  } catch (err) {
+    setTestResult(`✗ ${err.message}`, "err");
+  } finally {
+    allBtns.forEach(b => { b.disabled = false; });
+  }
+}
+
+document.querySelectorAll("[data-ep-test]").forEach(btn => {
+  btn.addEventListener("click", () => runEpTestAlert(btn.dataset.epTest));
 });
 
 // ─── Auto-refresh ────────────────────────────────────────────────────────────
