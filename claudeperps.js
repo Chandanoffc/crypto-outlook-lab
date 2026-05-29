@@ -281,8 +281,24 @@ function renderPaperPositionCard(pos, isClosed = false) {
     reasonHtml = `<span class="paper-pos-reason paper-pos-reason--${reasonClass}">${reason || "CLOSED"}</span>`;
   }
 
-  const pnlClass = pnl == null ? "paper-pos-pnl--zero" : pnl > 0 ? "paper-pos-pnl--pos" : pnl < 0 ? "paper-pos-pnl--neg" : "paper-pos-pnl--zero";
-  const pnlStr = pnl != null ? `${pnl >= 0 ? "+" : ""}${fmt$(pnl)} (${fPct(pos.pnlPct)})` : "live";
+  // Closed P&L (from server) or live unrealized P&L from last mark price
+  let pnlClass, pnlStr, currentPriceHtml = "";
+  if (isClosed) {
+    pnlClass = pnl == null ? "paper-pos-pnl--zero" : pnl > 0 ? "paper-pos-pnl--pos" : pnl < 0 ? "paper-pos-pnl--neg" : "paper-pos-pnl--zero";
+    pnlStr = pnl != null ? `${pnl >= 0 ? "+" : ""}${fmt$(pnl)} (${fPct(pos.pnlPct)})` : "–";
+  } else if (pos.lastMarkPrice && pos.entryPrice) {
+    const markDiff = isLong
+      ? pos.lastMarkPrice - pos.entryPrice
+      : pos.entryPrice - pos.lastMarkPrice;
+    const unrealizedPct = (markDiff / pos.entryPrice) * 100;
+    const unrealizedUsd = (markDiff / pos.entryPrice) * (pos.size || 0);
+    pnlClass = unrealizedPct > 0 ? "paper-pos-pnl--pos" : unrealizedPct < 0 ? "paper-pos-pnl--neg" : "paper-pos-pnl--zero";
+    pnlStr = `${unrealizedPct >= 0 ? "+" : ""}${fmt$(unrealizedUsd)} (${fPct(unrealizedPct)})`;
+    currentPriceHtml = `<span class="paper-pos-current">Now ${fp(pos.lastMarkPrice, prec)}</span>`;
+  } else {
+    pnlClass = "paper-pos-pnl--zero";
+    pnlStr = "live";
+  }
 
   const tp1Badge = pos.tp1Reached && !isClosed ? `<span class="paper-pos-tp1-badge">TP1 ✓ SL→BE</span>` : "";
 
@@ -301,7 +317,7 @@ function renderPaperPositionCard(pos, isClosed = false) {
       </div>
       <div class="paper-pos-meta">
         <span>TP1 ${fp(pos.tp1, prec)} · TP2 ${fp(pos.tp2, prec)} · SL ${fp(pos.sl, prec)}</span>
-        ${isClosed && pos.closedPrice ? `<span>Close ${fp(pos.closedPrice, prec)}</span>` : ""}
+        ${isClosed && pos.closedPrice ? `<span>Close ${fp(pos.closedPrice, prec)}</span>` : currentPriceHtml}
       </div>
     </div>`;
 }

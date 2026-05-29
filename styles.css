@@ -1596,6 +1596,12 @@ body > * { position: relative; z-index: 1; }
 .paper-pos-pnl--neg { color: var(--short); }
 .paper-pos-pnl--zero { color: var(--tx-3); }
 
+.paper-pos-current {
+  font-size: 11px;
+  color: var(--tx-4);
+  font-variant-numeric: tabular-nums;
+}
+
 .paper-pos-meta {
   display: flex;
   justify-content: space-between;
