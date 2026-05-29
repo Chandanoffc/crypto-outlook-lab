@@ -808,11 +808,15 @@ async function runCpTestAlert(eventType) {
         destinations: { discordWebhook: webhook },
       }),
     });
-    const data = await res.json().catch(() => ({}));
-    if (res.ok && data?.results?.discord === "sent") {
+    const rawText = await res.text().catch(() => "");
+    let data = {};
+    try { data = JSON.parse(rawText); } catch (_) {}
+    const discordResult = data?.results?.discord;
+    if (res.ok && discordResult === "sent") {
       setTestResult("✓ Alert sent — check your Discord channel.", "ok");
     } else {
-      setTestResult(`✗ ${data?.error || data?.results?.discord || "Delivery failed"}`, "err");
+      const detail = data?.error || discordResult || rawText.slice(0, 120) || `HTTP ${res.status}`;
+      setTestResult(`✗ ${detail}`, "err");
     }
   } catch (err) {
     setTestResult(`✗ ${err.message}`, "err");
