@@ -546,6 +546,268 @@ function compactBannerMetric(value) {
   return `${Math.round(numeric)}`;
 }
 
+// ─── Enhanced banner helpers ─────────────────────────────────────────────────
+
+/** Format a price value without "$" for banner text */
+function bannerFmtPrice(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0) return "";
+  if (n >= 100000) return String(Math.round(n));
+  if (n >= 1000)   return n.toFixed(1);
+  if (n >= 10)     return n.toFixed(2);
+  if (n >= 0.01)   return n.toFixed(4);
+  return n.toFixed(6);
+}
+
+/** Draw background layers, grid, header bar, SS badge bg, footer bar */
+function drawBannerBase(frame, accentColor) {
+  fillRect(frame, 0, 0, BANNER_WIDTH, BANNER_HEIGHT, 0);
+  fillRect(frame, 18, 18, BANNER_WIDTH - 36, BANNER_HEIGHT - 36, 11);
+  fillRect(frame, 28, 28, BANNER_WIDTH - 56, BANNER_HEIGHT - 56, 1);
+  for (let x = 42; x < BANNER_WIDTH - 42; x += 28) fillRect(frame, x, 82, 1, BANNER_HEIGHT - 134, 12);
+  for (let y = 82; y < BANNER_HEIGHT - 52; y += 28) fillRect(frame, 42, y, BANNER_WIDTH - 84, 1, 12);
+  fillRect(frame, 56, 42, BANNER_WIDTH - 112, 34, 2);           // header bar
+  fillRect(frame, 60, 46, 72, 26, accentColor);                  // SS badge bg
+  fillRect(frame, 84, BANNER_HEIGHT - 58, BANNER_WIDTH - 168, 24, 2); // footer bar
+  drawText(frame, "SS", 79, 52, 3, 6);
+  drawText(frame, "SOLORIS-SIGNALS.VERCEL.APP", 96, BANNER_HEIGHT - 51, 1, 7);
+}
+
+/**
+ * Draw the header bar text: centred label + right-side badge with coloured text.
+ * Must be called AFTER fillRect for the right badge bg.
+ */
+function drawBannerHeaderText(frame, centerLabel, rightText, rightColor) {
+  drawCenteredText(frame, sanitizeBannerText(centerLabel, "SIGNAL"), 52, 2, 6);
+  const badgeLeft = BANNER_WIDTH - 182;
+  const badgeWidth = 102;
+  const rw = measureTextWidth(sanitizeBannerText(rightText, ""), 2);
+  const rx = badgeLeft + Math.max(4, Math.floor((badgeWidth - rw) / 2));
+  drawText(frame, sanitizeBannerText(rightText, ""), rx, 52, 2, rightColor || 6);
+}
+
+/** Redesigned "NEW SIGNAL" perps banner showing pair + levels + reason */
+function createPerpsEntryFrame(event) {
+  const frame = createBannerFrameBuffer();
+  const pair      = formatBannerPair(event?.pair || event?.symbol) || "SIGNAL";
+  const side      = String(event?.direction || event?.side || "").toUpperCase();
+  const isLong    = side === "LONG";
+  const quality   = Number(event?.qualityScore) || 0;
+  const strategy  = sanitizeBannerText(event?.strategy || "SOLORIS", "SOLORIS");
+  const dirColor  = isLong ? 14 : 9;   // 14=green, 9=red
+
+  drawBannerBase(frame, 4);  // cyan SS badge
+  fillRect(frame, BANNER_WIDTH - 182, 48, 102, 22, isLong ? 2 : 3); // direction badge bg
+  drawBannerHeaderText(frame, "NEW SIGNAL", side || "SIGNAL", dirColor);
+
+  // Large pair text — auto-scale down for long symbols
+  const pairClean = sanitizeBannerText(pair);
+  let pairScale = 6;
+  while (pairScale > 3 && measureTextWidth(pairClean, pairScale) > BANNER_WIDTH - 80) pairScale--;
+  const pairY = 96 + Math.max(0, (6 - pairScale) * 6);
+  drawCenteredText(frame, pairClean, pairY, pairScale, 6);
+
+  // Direction / Quality / Strategy row
+  const qual = quality > 0 ? `Q${Math.round(quality)}` : "";
+  drawCenteredText(frame, sanitizeBannerText([side, qual, strategy].filter(Boolean).join("   ")), 164, 2, dirColor);
+
+  // Separator line
+  fillRect(frame, 80, 187, BANNER_WIDTH - 160, 3, 4);
+
+  // Levels: Entry (white), SL (red), TP1 (green), TP2 (green)
+  const ep  = bannerFmtPrice(event?.entryPrice);
+  const slp = bannerFmtPrice(event?.stopLoss || event?.sl);
+  const t1p = bannerFmtPrice(event?.tp1);
+  const t2p = bannerFmtPrice(event?.tp2);
+
+  const LX = 80, LV = 168;   // left-col label / value x
+  const RX = 400, RV = 456;  // right-col label / value x
+  const R1 = 202, R2 = 226;  // row y positions
+
+  if (ep)  { drawText(frame, "ENTRY", LX, R1, 2, 7); drawText(frame, sanitizeBannerText(ep),  LV, R1, 2, 6); }
+  if (slp) { drawText(frame, "SL",    RX, R1, 2, 9); drawText(frame, sanitizeBannerText(slp), RV, R1, 2, 9); }
+  if (t1p) { drawText(frame, "TP1",   LX, R2, 2, 14); drawText(frame, sanitizeBannerText(t1p), LV, R2, 2, 14); }
+  if (t2p) { drawText(frame, "TP2",   RX, R2, 2, 14); drawText(frame, sanitizeBannerText(t2p), RV, R2, 2, 14); }
+
+  // Reason text (scale 1)
+  const reasonRaw = String(event?.qualificationReason || "").replace(/[·\n]/g, " ").trim().slice(0, 80);
+  if (reasonRaw) drawCenteredText(frame, sanitizeBannerText(reasonRaw), 258, 1, 7);
+
+  // Footer right: strategy label
+  const ftLabel = sanitizeBannerText(event?.strategy || "CLAUDEPERPS", "CLAUDEPERPS");
+  const ftw = measureTextWidth(ftLabel, 1);
+  drawText(frame, ftLabel, BANNER_WIDTH - 92 - ftw, BANNER_HEIGHT - 51, 1, 4);
+
+  return frame;
+}
+
+/** "TP1 HIT — ✓ SUCCESS" green banner (position still running, SL moved to BE) */
+function createTp1Frame(event) {
+  const frame = createBannerFrameBuffer();
+  const pair      = sanitizeBannerText(formatBannerPair(event?.pair || event?.symbol) || "SIGNAL");
+  const side      = sanitizeBannerText(String(event?.direction || event?.side || "").toUpperCase());
+  const pnlPct    = Number(event?.pnlPct);
+  const entryPrice = Number(event?.entryPrice);
+  const closePrice = Number(event?.closedPrice || event?.tp1);
+
+  drawBannerBase(frame, 14);  // green SS badge
+  fillRect(frame, BANNER_WIDTH - 182, 48, 102, 22, 2);
+  drawBannerHeaderText(frame, "TP1 HIT", pair, 14);
+
+  // Big SUCCESS text (scale 5)
+  drawCenteredText(frame, "SUCCESS", 100, 5, 14);
+
+  // Pair / side / pnl row
+  const pnlStr = Number.isFinite(pnlPct) && pnlPct > 0 ? `+${pnlPct.toFixed(1)}PCT` : "";
+  drawCenteredText(frame, sanitizeBannerText([pair, side, pnlStr].filter(Boolean).join("   ")), 168, 2, 14);
+
+  fillRect(frame, 80, 190, BANNER_WIDTH - 160, 3, 14);
+
+  drawCenteredText(frame, "SL MOVED TO BREAKEVEN", 208, 2, 7);
+  drawCenteredText(frame, "POSITION STILL RUNNING", 232, 2, 7);
+
+  if (entryPrice > 0 && closePrice > 0) {
+    const priceStr = sanitizeBannerText(`ENTRY ${bannerFmtPrice(entryPrice)}   TP1 ${bannerFmtPrice(closePrice)}`);
+    drawCenteredText(frame, priceStr, 264, 1, 7);
+  }
+
+  const ftLabel = sanitizeBannerText(event?.strategy || "CLAUDEPERPS", "CLAUDEPERPS");
+  drawText(frame, ftLabel, BANNER_WIDTH - 92 - measureTextWidth(ftLabel, 1), BANNER_HEIGHT - 51, 1, 14);
+  return frame;
+}
+
+/** "TP2 HIT — VALHALLA" gold banner (full target reached) */
+function createTp2Frame(event) {
+  const frame = createBannerFrameBuffer();
+  const pair      = sanitizeBannerText(formatBannerPair(event?.pair || event?.symbol) || "SIGNAL");
+  const side      = sanitizeBannerText(String(event?.direction || event?.side || "").toUpperCase());
+  const pnlPct    = Number(event?.pnlPct);
+  const pnl       = Number(event?.pnl);
+  const entryPrice = Number(event?.entryPrice);
+  const closePrice = Number(event?.closedPrice || event?.tp2);
+
+  drawBannerBase(frame, 8);  // gold SS badge
+  fillRect(frame, BANNER_WIDTH - 182, 48, 102, 22, 2);
+  drawBannerHeaderText(frame, "TP2 HIT", pair, 8);
+
+  // Big VALHALLA text (scale 5, gold)
+  drawCenteredText(frame, "VALHALLA", 100, 5, 8);
+
+  const pnlStr = Number.isFinite(pnlPct) && pnlPct > 0 ? `+${pnlPct.toFixed(1)}PCT` : "";
+  drawCenteredText(frame, sanitizeBannerText([pair, side, pnlStr].filter(Boolean).join("   ")), 168, 2, 8);
+
+  fillRect(frame, 80, 190, BANNER_WIDTH - 160, 3, 8);
+
+  drawCenteredText(frame, "FULL TARGET REACHED", 208, 2, 7);
+
+  if (entryPrice > 0 && closePrice > 0) {
+    const priceStr = sanitizeBannerText(`ENTRY ${bannerFmtPrice(entryPrice)}   TP2 ${bannerFmtPrice(closePrice)}`);
+    drawCenteredText(frame, priceStr, 236, 1, 7);
+  }
+
+  if (Number.isFinite(pnl) && pnl !== 0) {
+    const sign = pnl >= 0 ? "+" : "";
+    const pnlDisp = sanitizeBannerText(`${sign}${Math.abs(pnl).toFixed(2)} PAPER USD`);
+    drawCenteredText(frame, pnlDisp, 258, 1, 8);
+  }
+
+  const ftLabel = sanitizeBannerText(event?.strategy || "CLAUDEPERPS", "CLAUDEPERPS");
+  drawText(frame, ftLabel, BANNER_WIDTH - 92 - measureTextWidth(ftLabel, 1), BANNER_HEIGHT - 51, 1, 8);
+  return frame;
+}
+
+/** Draw a pixel-art sad face centred at (cx, cy), 8px block size */
+function drawSadFace(frame, cx, cy) {
+  const B = 8, FACE = 8, DARK = 0;
+  // Face body (circle approximation)
+  [
+    [-24, -40, 48], [-36, -32, 72], [-44, -24, 88], [-48, -16, 96],
+    [-48, -8, 96],  [-48, 0, 96],   [-48, 8, 96],   [-48, 16, 96],
+    [-44, 24, 88],  [-36, 32, 72],  [-24, 40, 48],
+  ].forEach(([dx, dy, w]) => fillRect(frame, cx + dx, cy + dy, w, B, FACE));
+  // Eyes
+  fillRect(frame, cx - 28, cy - 16, 14, 14, DARK);
+  fillRect(frame, cx + 14,  cy - 16, 14, 14, DARK);
+  // Frown — corners high, centre dips down
+  fillRect(frame, cx - 32, cy + 20, B, B * 2, DARK);  // left corner
+  fillRect(frame, cx - 24, cy + 28, B, B,     DARK);  // left-inner
+  fillRect(frame, cx - 16, cy + 32, 32, B,    DARK);  // centre dip
+  fillRect(frame, cx + 16, cy + 28, B, B,     DARK);  // right-inner
+  fillRect(frame, cx + 24, cy + 20, B, B * 2, DARK);  // right corner
+}
+
+/** "SL HIT — STOPPED OUT" red banner with pixel-art sad face */
+function createSlFrame(event) {
+  const frame = createBannerFrameBuffer();
+  const pair      = sanitizeBannerText(formatBannerPair(event?.pair || event?.symbol) || "SIGNAL");
+  const side      = sanitizeBannerText(String(event?.direction || event?.side || "").toUpperCase());
+  const pnlPct    = Number(event?.pnlPct);
+  const entryPrice = Number(event?.entryPrice);
+  const closePrice = Number(event?.closedPrice || event?.stopLoss || event?.sl);
+
+  drawBannerBase(frame, 9);  // red SS badge
+  fillRect(frame, BANNER_WIDTH - 182, 48, 102, 22, 2);
+  drawBannerHeaderText(frame, "SL HIT", pair, 9);
+
+  // Sad face centred
+  drawSadFace(frame, 360, 130);
+
+  // "STOPPED OUT" below face
+  drawCenteredText(frame, "STOPPED OUT", 190, 2, 9);
+
+  const pnlStr = Number.isFinite(pnlPct) && pnlPct < 0 ? `${pnlPct.toFixed(1)}PCT` : "";
+  drawCenteredText(frame, sanitizeBannerText([pair, side, pnlStr].filter(Boolean).join("   ")), 216, 2, 9);
+
+  if (entryPrice > 0 && closePrice > 0) {
+    const priceStr = sanitizeBannerText(`ENTRY ${bannerFmtPrice(entryPrice)}   SL ${bannerFmtPrice(closePrice)}`);
+    drawCenteredText(frame, priceStr, 252, 1, 7);
+  }
+
+  const ftLabel = sanitizeBannerText(event?.strategy || "CLAUDEPERPS", "CLAUDEPERPS");
+  drawText(frame, ftLabel, BANNER_WIDTH - 92 - measureTextWidth(ftLabel, 1), BANNER_HEIGHT - 51, 1, 9);
+  return frame;
+}
+
+// ─── Banner generator wrappers ────────────────────────────────────────────────
+
+function generatePerpsEntryBanner(event = {}) {
+  const pair = formatBannerPair(event?.pair || event?.symbol) || "signal";
+  return {
+    filename: `soloris-entry-${String(pair).toLowerCase().replace(/[^a-z0-9]/g, "-")}-banner.png`,
+    buffer: encodePng(createPerpsEntryFrame(event)),
+    mimeType: "image/png",
+  };
+}
+
+function generateTp1Banner(event = {}) {
+  const pair = formatBannerPair(event?.pair || event?.symbol) || "signal";
+  return {
+    filename: `soloris-tp1-${String(pair).toLowerCase().replace(/[^a-z0-9]/g, "-")}-banner.png`,
+    buffer: encodePng(createTp1Frame(event)),
+    mimeType: "image/png",
+  };
+}
+
+function generateTp2Banner(event = {}) {
+  const pair = formatBannerPair(event?.pair || event?.symbol) || "signal";
+  return {
+    filename: `soloris-tp2-${String(pair).toLowerCase().replace(/[^a-z0-9]/g, "-")}-banner.png`,
+    buffer: encodePng(createTp2Frame(event)),
+    mimeType: "image/png",
+  };
+}
+
+function generateSlBanner(event = {}) {
+  const pair = formatBannerPair(event?.pair || event?.symbol) || "signal";
+  return {
+    filename: `soloris-sl-${String(pair).toLowerCase().replace(/[^a-z0-9]/g, "-")}-banner.png`,
+    buffer: encodePng(createSlFrame(event)),
+    mimeType: "image/png",
+  };
+}
+
+// ─── End enhanced banner helpers ──────────────────────────────────────────────
+
 function createNativeBannerFrame(event, flashText) {
   const frame = createBannerFrameBuffer();
   const type = String(event?.type || "").toLowerCase();
@@ -650,6 +912,12 @@ function encodePng(frame) {
 }
 
 function generateNativeEntryBanner(event = {}) {
+  const type = String(event?.type || "").toLowerCase();
+  // Use the redesigned perps banner for perps / house / tradez signals
+  if (type === "perps" || type === "house" || type === "tradez") {
+    return generatePerpsEntryBanner(event);
+  }
+  // DLMM and fallback use the legacy createNativeBannerFrame path
   const pair = formatBannerPair(event?.pair || event?.symbol) || resolveNativeBannerLabel(event);
   const frame = createNativeBannerFrame(event, sanitizeBannerText(pair, "SIGNAL"));
   return {
@@ -664,18 +932,26 @@ async function loadAlertBanner(event, meta = {}) {
   const type = String(event?.type || "").toLowerCase();
   const nativeSignalType =
     type === "house" || type === "tradez" || type === "perps" || type === "dlmm";
-  if (nativeSignalType && (eventType === "entry_opened" || eventType === "test_signal" || eventType === "scanner_signal")) {
-    try {
+
+  try {
+    // TP1 hit — SUCCESS green banner
+    if (eventType === "tp1_hit") return generateTp1Banner(event);
+    // TP2 hit — VALHALLA gold banner
+    if (eventType === "tp2_hit") return generateTp2Banner(event);
+    // SL hit — STOPPED OUT red banner with sad face
+    if (eventType === "sl_hit") return generateSlBanner(event);
+    // Entry / test / scanner — redesigned entry banner for perps types, legacy for DLMM
+    if (nativeSignalType && (eventType === "entry_opened" || eventType === "test_signal" || eventType === "scanner_signal")) {
       return generateNativeEntryBanner(event);
-    } catch (error) {
-      console.error("native banner generation failed", {
-        signalType: type || "unknown",
-        eventType,
-        error: error.message || String(error),
-      });
-      return null;
     }
+  } catch (error) {
+    console.error("banner generation failed", {
+      signalType: type || "unknown",
+      eventType,
+      error: error.message || String(error),
+    });
   }
+
   return null;
 }
 
