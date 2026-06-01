@@ -117,6 +117,7 @@
         <button class="page-tab" data-ep-page="scanner" type="button">Scanner</button>
         <button class="page-tab" data-ep-page="paper" type="button">Paper Trade</button>
         <button class="page-tab page-tab--test" data-ep-page="test" type="button">Test Alerts</button>
+        <button class="page-tab page-tab--stats" data-ep-page="stats" type="button">Stats</button>
       </div>
 
       <!-- ── Tab: Signals ──────────────────────────────────── -->
@@ -350,6 +351,74 @@
             <div id="ep-test-result" class="test-result"></div>
           </div>
         </section>
+      </div>
+
+      <!-- ── Tab: Stats ──────────────────────────────────────── -->
+      <div id="ep-page-stats" class="page-content" hidden>
+
+        <div class="perf-section-hd">
+          <span class="perf-section-title">Signal Outcomes</span>
+          <span class="perf-section-sub">Discord-alerted signals · TP1/TP2/SL tracking</span>
+        </div>
+        <div class="stats-row perf-stats-row">
+          <div class="stat"><span class="stat-label">Total Alerted</span><strong id="ep-stat-total" class="stat-value">–</strong><span class="stat-sub">Sent to Discord</span></div>
+          <div class="stat"><span class="stat-label">Resolved</span><strong id="ep-stat-resolved" class="stat-value">–</strong><span class="stat-sub">Hit TP or SL</span></div>
+          <div class="stat"><span class="stat-label">Win Rate</span><strong id="ep-stat-winrate" class="stat-value">–</strong><span class="stat-sub">TP1 + TP2 hits</span></div>
+          <div class="stat"><span class="stat-label">TP2 Rate</span><strong id="ep-stat-tp2rate" class="stat-value">–</strong><span class="stat-sub">Full target</span></div>
+          <div class="stat"><span class="stat-label">Avg Quality</span><strong id="ep-stat-avgq" class="stat-value">–</strong><span class="stat-sub">Of alerted signals</span></div>
+          <div class="stat"><span class="stat-label">Pending</span><strong id="ep-stat-pending" class="stat-value">–</strong><span class="stat-sub">Outcome unknown</span></div>
+        </div>
+
+        <div class="perf-section-hd" style="margin-top:28px">
+          <span class="perf-section-title">Paper Trade Performance</span>
+          <span class="perf-section-sub">Simulated entries from every generated signal</span>
+        </div>
+        <div class="stats-row perf-stats-row">
+          <div class="stat"><span class="stat-label">Total Return</span><strong id="ep-stat-return" class="stat-value">–</strong><span class="stat-sub">From $100 start</span></div>
+          <div class="stat"><span class="stat-label">Paper Win Rate</span><strong id="ep-stat-pwinrate" class="stat-value">–</strong><span class="stat-sub">Closed trades</span></div>
+          <div class="stat"><span class="stat-label">Profit Factor</span><strong id="ep-stat-pf" class="stat-value">–</strong><span class="stat-sub">Gross profit / loss</span></div>
+          <div class="stat"><span class="stat-label">Avg Win</span><strong id="ep-stat-avgwin" class="stat-value">–</strong><span class="stat-sub">Per winning trade</span></div>
+          <div class="stat"><span class="stat-label">Avg Loss</span><strong id="ep-stat-avgloss" class="stat-value">–</strong><span class="stat-sub">Per losing trade</span></div>
+          <div class="stat"><span class="stat-label">Closed Trades</span><strong id="ep-stat-trades" class="stat-value">–</strong><span class="stat-sub">Total completed</span></div>
+        </div>
+
+        <div class="perf-panels-grid" style="margin-top:28px">
+
+          <!-- Pattern breakdown (EMA signal types) -->
+          <section class="panel">
+            <div class="panel-hd">
+              <div>
+                <p class="panel-label">Pattern Breakdown</p>
+                <h2>Win rate by signal type</h2>
+              </div>
+            </div>
+            <div id="ep-stat-ptable" class="perf-breakdown"></div>
+          </section>
+
+          <!-- Quality tier breakdown -->
+          <section class="panel">
+            <div class="panel-hd">
+              <div>
+                <p class="panel-label">Quality Breakdown</p>
+                <h2>Win rate by quality tier</h2>
+              </div>
+            </div>
+            <div id="ep-stat-qtable" class="perf-breakdown"></div>
+          </section>
+
+        </div>
+
+        <!-- Recent outcomes -->
+        <section class="panel" style="margin-top:20px">
+          <div class="panel-hd">
+            <div>
+              <p class="panel-label">Recent Outcomes</p>
+              <h2>Last resolved signals</h2>
+            </div>
+          </div>
+          <div id="ep-stat-outcomes" class="perf-outcomes perf-outcomes--wide"></div>
+        </section>
+
       </div>
 
     </main>

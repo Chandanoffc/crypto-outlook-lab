@@ -44,7 +44,23 @@ const dom = {
     scanner: document.getElementById("cp-page-scanner"),
     paper:   document.getElementById("cp-page-paper"),
     test:    document.getElementById("cp-page-test"),
+    stats:   document.getElementById("cp-page-stats"),
   },
+  // Stats tab
+  statTotal:    document.getElementById("cp-stat-total"),
+  statResolved: document.getElementById("cp-stat-resolved"),
+  statWinrate:  document.getElementById("cp-stat-winrate"),
+  statTp2rate:  document.getElementById("cp-stat-tp2rate"),
+  statAvgQ:     document.getElementById("cp-stat-avgq"),
+  statPending:  document.getElementById("cp-stat-pending"),
+  statReturn:   document.getElementById("cp-stat-return"),
+  statPWinrate: document.getElementById("cp-stat-pwinrate"),
+  statPF:       document.getElementById("cp-stat-pf"),
+  statAvgWin:   document.getElementById("cp-stat-avgwin"),
+  statAvgLoss:  document.getElementById("cp-stat-avgloss"),
+  statTrades:   document.getElementById("cp-stat-trades"),
+  statQTable:   document.getElementById("cp-stat-qtable"),
+  statOutcomes: document.getElementById("cp-stat-outcomes"),
   // Test alerts
   testWebhook:  document.getElementById("cp-test-webhook"),
   testResult:   document.getElementById("cp-test-result"),
@@ -111,6 +127,7 @@ function switchPage(page) {
   if (page === "scanner") renderScannerTab();
   if (page === "paper") { renderPaperTab(); loadComparison(); }
   if (page === "test") initTestTab();
+  if (page === "stats") renderStatsTab();
 }
 
 // ─── Metrics ─────────────────────────────────────────────────────────────────
@@ -184,6 +201,10 @@ function renderSignalCard(signal) {
 
         <div class="sc-footer">
           <span class="sc-reasons">${reasons}</span>
+          ${signal.outcome ? `<span class="sc-outcome-badge sc-outcome--${signal.outcome.toLowerCase()}">${
+            signal.outcome === "TP2" ? "🏆 TP2" :
+            signal.outcome === "TP1" ? "✅ TP1" : "❌ SL"
+          }</span>` : signal.alertedAt > 0 ? `<span class="sc-outcome-badge sc-outcome--pending">⏳ Tracking</span>` : ""}
           <span class="sc-time">${timeAgo(signal.detectedAt)}</span>
         </div>
       </div>
@@ -754,6 +775,95 @@ document.querySelectorAll("[data-cp-tab]").forEach(btn => {
     renderFeed();
   });
 });
+
+// ─── Stats Tab ───────────────────────────────────────────────────────────────
+function renderStatsTab() {
+  const alertedSigs = state.signals.filter(s => s.alertedAt > 0);
+  const resolved    = alertedSigs.filter(s => s.outcome != null);
+  const wins        = resolved.filter(s => s.outcome === "TP1" || s.outcome === "TP2");
+  const tp2s        = resolved.filter(s => s.outcome === "TP2");
+  const pending     = alertedSigs.filter(s => !s.outcomeSent);
+  const avgQ        = alertedSigs.length
+    ? Math.round(alertedSigs.reduce((a, s) => a + s.quality, 0) / alertedSigs.length) : null;
+  const winRate     = resolved.length ? Math.round(wins.length / resolved.length * 100) : null;
+  const tp2Rate     = resolved.length ? Math.round(tp2s.length / resolved.length * 100) : null;
+
+  if (dom.statTotal)    dom.statTotal.textContent    = alertedSigs.length || "–";
+  if (dom.statResolved) dom.statResolved.textContent = resolved.length || "–";
+  if (dom.statWinrate)  { dom.statWinrate.textContent = winRate != null ? `${winRate}%` : "–"; dom.statWinrate.className = `stat-value ${winRate >= 50 ? "tone-up" : winRate != null ? "tone-down" : ""}`; }
+  if (dom.statTp2rate)  dom.statTp2rate.textContent  = tp2Rate != null ? `${tp2Rate}%` : "–";
+  if (dom.statAvgQ)     dom.statAvgQ.textContent     = avgQ != null ? `Q${avgQ}` : "–";
+  if (dom.statPending)  dom.statPending.textContent  = pending.length || "–";
+
+  // Paper trade stats
+  const closed       = state.paper?.closedTrades || [];
+  const closedWins   = closed.filter(t => (t.pnl ?? 0) > 0);
+  const closedLosses = closed.filter(t => (t.pnl ?? 0) <= 0);
+  const grossProfit  = closedWins.reduce((a, t) => a + (t.pnl || 0), 0);
+  const grossLoss    = Math.abs(closedLosses.reduce((a, t) => a + (t.pnl || 0), 0));
+  const pf           = grossLoss > 0 ? (grossProfit / grossLoss) : (grossProfit > 0 ? 99 : null);
+  const avgWin       = closedWins.length   ? closedWins.reduce((a, t) => a + (t.pnlPct || 0), 0) / closedWins.length   : null;
+  const avgLoss      = closedLosses.length ? closedLosses.reduce((a, t) => a + (t.pnlPct || 0), 0) / closedLosses.length : null;
+  const pWinRate     = closed.length ? Math.round(closedWins.length / closed.length * 100) : null;
+  const totalReturn  = state.paper?.startingBalance
+    ? ((state.paper.balance - state.paper.startingBalance) / state.paper.startingBalance * 100) : null;
+
+  if (dom.statReturn)  { const v = totalReturn; dom.statReturn.textContent = v != null ? fPct(v, 1) : "–"; dom.statReturn.className = `stat-value ${v >= 0 ? "tone-up" : "tone-down"}`; }
+  if (dom.statPWinrate){ dom.statPWinrate.textContent = pWinRate != null ? `${pWinRate}%` : "–"; dom.statPWinrate.className = `stat-value ${pWinRate >= 50 ? "tone-up" : pWinRate != null ? "tone-down" : ""}`; }
+  if (dom.statPF)      dom.statPF.textContent      = pf != null ? (pf >= 99 ? "∞" : pf.toFixed(2)) : "–";
+  if (dom.statAvgWin)  { dom.statAvgWin.textContent  = avgWin  != null ? `+${avgWin.toFixed(1)}%`  : "–"; if (avgWin  != null) dom.statAvgWin.className  = "stat-value tone-up";  }
+  if (dom.statAvgLoss) { dom.statAvgLoss.textContent = avgLoss != null ? `${avgLoss.toFixed(1)}%` : "–"; if (avgLoss != null) dom.statAvgLoss.className = "stat-value tone-down"; }
+  if (dom.statTrades)  dom.statTrades.textContent   = closed.length || "–";
+
+  // Quality tier table (using alerted signals with outcomes)
+  if (dom.statQTable) {
+    const tiers = [
+      { label: "Q78–84", min: 78, max: 84 },
+      { label: "Q85–89", min: 85, max: 89 },
+      { label: "Q90–94", min: 90, max: 94 },
+      { label: "Q95+",   min: 95, max: 999 },
+    ];
+    const rows = tiers.map(({ label, min, max }) => {
+      const sigs = alertedSigs.filter(s => s.quality >= min && s.quality <= max);
+      const res  = sigs.filter(s => s.outcome != null);
+      const w    = res.filter(s => s.outcome === "TP1" || s.outcome === "TP2").length;
+      const l    = res.filter(s => s.outcome === "SL").length;
+      const wr   = res.length ? Math.round(w / res.length * 100) : null;
+      return `<div class="perf-row">
+        <span class="perf-row-label">${label}</span>
+        <span class="perf-row-count">${sigs.length} alerted</span>
+        <span class="perf-row-detail"><span class="tone-up">${w}W</span> / <span class="tone-down">${l}L</span></span>
+        <span class="perf-row-wr ${wr == null ? "" : wr >= 50 ? "tone-up" : "tone-down"}">${wr != null ? `${wr}%` : "–"}</span>
+      </div>`;
+    });
+    dom.statQTable.innerHTML = rows.join("") || `<p class="perf-empty">No alerted signals yet.</p>`;
+  }
+
+  // Recent outcomes list
+  if (dom.statOutcomes) {
+    const recent = resolved.slice().sort((a, b) => (b.alertedAt || 0) - (a.alertedAt || 0)).slice(0, 12);
+    if (!recent.length) {
+      dom.statOutcomes.innerHTML = `<p class="perf-empty">No resolved signals yet. Outcomes appear after TP/SL is hit.</p>`;
+    } else {
+      dom.statOutcomes.innerHTML = recent.map(s => {
+        const badgeClass = s.outcome === "TP2" ? "outcome--tp2" : s.outcome === "TP1" ? "outcome--tp1" : "outcome--sl";
+        const badgeText  = s.outcome === "TP2" ? "🏆 TP2" : s.outcome === "TP1" ? "✅ TP1" : "❌ SL";
+        const pct = s.outcome === "TP2" ? (Math.abs((s.tp2 - s.entryPrice) / s.entryPrice * 100)).toFixed(1)
+                  : s.outcome === "TP1" ? (Math.abs((s.tp1 - s.entryPrice) / s.entryPrice * 100)).toFixed(1)
+                  : (Math.abs((s.sl  - s.entryPrice) / s.entryPrice * 100)).toFixed(1);
+        const sign = s.outcome === "SL" ? "-" : "+";
+        return `<div class="perf-outcome-row">
+          <span class="por-symbol">${s.symbol}</span>
+          <span class="por-side ${s.side === "Long" ? "tone-up" : "tone-down"}">${s.side.toUpperCase()}</span>
+          <span class="por-q">Q${s.quality}</span>
+          <span class="por-badge ${badgeClass}">${badgeText}</span>
+          <span class="por-pct ${s.outcome === "SL" ? "tone-down" : "tone-up"}">${sign}${pct}%</span>
+          <span class="por-time">${timeAgo(s.alertedAt)}</span>
+        </div>`;
+      }).join("");
+    }
+  }
+}
 
 // Page-level tabs
 document.querySelectorAll("[data-cp-page]").forEach(btn => {
