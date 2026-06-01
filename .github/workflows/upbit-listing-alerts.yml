@@ -8,6 +8,7 @@ on:
 jobs:
   ping-upbit-cron:
     runs-on: ubuntu-latest
+    timeout-minutes: 3
     steps:
       - name: Trigger Upbit alert endpoint
         env:
