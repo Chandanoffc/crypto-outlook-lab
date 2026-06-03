@@ -172,6 +172,7 @@ function renderSignalCard(signal) {
             <span class="sc-symbol-name">${signal.symbol}</span>
             <span class="sc-side">${signal.side.toUpperCase()}</span>
             <span class="sc-interval">${signal.interval || "1h"}</span>
+            ${signal.htfTrend ? `<span class="sc-htf-badge sc-htf--${signal.htfTrend}">4H ${signal.htfTrend === "up" ? "↑" : "↓"}${signal.htfLevelBonus ? " S/R" : ""}${signal.htfEmaBonus ? " EMA" : ""}</span>` : ""}
           </div>
           <div class="sc-quality ${qualityClass(signal.quality)}">
             <span class="quality-score">Q${signal.quality}</span>
@@ -210,7 +211,7 @@ function renderSignalCard(signal) {
         </div>` : ""}
 
         <div class="sc-footer">
-          <span class="sc-reasons">${(signal.reasonLabels || []).slice(0,3).join(" · ")}</span>
+          <span class="sc-reasons">${(signal.reasonLabels || []).slice(0,4).join(" · ")}</span>
           ${signal.outcome ? `<span class="sc-outcome-badge sc-outcome--${signal.outcome.toLowerCase()}">${
             signal.outcome === "TP2" ? "🏆 TP2" :
             signal.outcome === "TP1" ? "✅ TP1" : "❌ SL"
