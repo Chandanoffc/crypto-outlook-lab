@@ -61,6 +61,7 @@ const dom = {
   statPTable:   document.getElementById("ep-stat-ptable"),
   statQTable:   document.getElementById("ep-stat-qtable"),
   statOutcomes: document.getElementById("ep-stat-outcomes"),
+  equityChart:  document.getElementById("ep-equity-chart"),
   // Test alerts
   testWebhook: document.getElementById("ep-test-webhook"),
   testResult:  document.getElementById("ep-test-result"),
@@ -806,6 +807,51 @@ document.querySelectorAll("[data-ep-tab]").forEach(btn => {
   });
 });
 
+// ─── Equity Curve ────────────────────────────────────────────────────────────
+function computeEquityCurve(startingBalance, closedTrades) {
+  const sorted = [...closedTrades]
+    .filter(t => t.closedAt && t.pnl != null)
+    .sort((a, b) => a.closedAt - b.closedAt);
+  if (!sorted.length) return [];
+  let balance = startingBalance;
+  const points = [{ time: Math.floor((sorted[0].openedAt || sorted[0].closedAt) / 1000) - 1, value: balance }];
+  for (const trade of sorted) {
+    balance = Math.max(0, Math.round((balance + Number(trade.pnl || 0)) * 100) / 100);
+    points.push({ time: Math.floor(trade.closedAt / 1000), value: balance });
+  }
+  return points;
+}
+
+let epEquityChart = null;
+
+function renderEquityCurve() {
+  const container = dom.equityChart;
+  if (!container || typeof LightweightCharts === "undefined") return;
+  const closedTrades = state.paper?.closedTrades || [];
+  const startBal = state.paper?.startingBalance || 100;
+  const points = computeEquityCurve(startBal, closedTrades);
+  if (points.length < 2) {
+    container.innerHTML = `<p class="equity-empty">Not enough closed trades to plot yet.</p>`;
+    if (epEquityChart) { epEquityChart.remove(); epEquityChart = null; }
+    return;
+  }
+  container.innerHTML = "";
+  if (epEquityChart) { epEquityChart.remove(); epEquityChart = null; }
+  epEquityChart = LightweightCharts.createChart(container, {
+    height: 140,
+    layout: { background: { color: "transparent" }, textColor: "#888" },
+    grid: { vertLines: { visible: false }, horzLines: { color: "rgba(255,255,255,0.05)" } },
+    rightPriceScale: { borderVisible: false },
+    timeScale: { borderVisible: false, timeVisible: true },
+    handleScroll: false, handleScale: false,
+  });
+  const finalBalance = points[points.length - 1].value;
+  const lineColor = finalBalance >= startBal ? "#4ade80" : "#f87171";
+  const series = epEquityChart.addLineSeries({ color: lineColor, lineWidth: 2, priceLineVisible: false });
+  series.setData(points);
+  epEquityChart.timeScale().fitContent();
+}
+
 // ─── Stats Tab ───────────────────────────────────────────────────────────────
 function renderStatsTab() {
   const alertedSigs = state.signals.filter(s => s.alertedAt > 0);
@@ -922,6 +968,9 @@ function renderStatsTab() {
       }).join("");
     }
   }
+
+  // Equity curve
+  renderEquityCurve();
 }
 
 // Page-level tabs

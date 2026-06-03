@@ -365,7 +365,18 @@
           <div class="stat"><span class="stat-label">Closed Trades</span><strong id="cp-stat-trades" class="stat-value">–</strong><span class="stat-sub">Total completed</span></div>
         </div>
 
-        <div class="perf-panels-grid" style="margin-top:28px">
+        <!-- Equity curve -->
+        <section class="panel equity-curve-panel" style="margin-top:28px">
+          <div class="panel-hd">
+            <div>
+              <p class="panel-label">Equity Curve</p>
+              <h2>Balance over closed trades · 5× leveraged</h2>
+            </div>
+          </div>
+          <div id="cp-equity-chart" class="equity-chart-frame"></div>
+        </section>
+
+        <div class="perf-panels-grid" style="margin-top:20px">
 
           <!-- Quality tier breakdown -->
           <section class="panel">
