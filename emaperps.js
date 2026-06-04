@@ -327,44 +327,81 @@ function renderPaperPositionCard(pos, isClosed = false) {
     reasonHtml = `<span class="paper-pos-reason paper-pos-reason--${reasonClass}">${reason || "CLOSED"}</span>`;
   }
 
-  // Closed P&L (from server) or live unrealized P&L from last mark price
-  let pnlClass, pnlStr, currentPriceHtml = "";
+  // ── P&L calculation ──────────────────────────────────────────────────────────
+  let pnlClass, pnlStr;
+  const lev = pos.leverage || 1;
+
   if (isClosed) {
+    const leveragedPct = (pos.pnlPct || 0);   // already leveraged — stored that way
     pnlClass = pnl == null ? "paper-pos-pnl--zero" : pnl > 0 ? "paper-pos-pnl--pos" : pnl < 0 ? "paper-pos-pnl--neg" : "paper-pos-pnl--zero";
-    pnlStr = pnl != null ? `${pnl >= 0 ? "+" : ""}${fmt$(pnl)} (${fPct(pos.pnlPct)})` : "–";
+    pnlStr = pnl != null ? `${pnl >= 0 ? "+" : ""}${fmt$(pnl)} (${fPct(leveragedPct)})` : "–";
   } else if (pos.lastMarkPrice && pos.entryPrice) {
-    const markDiff = isLong
-      ? pos.lastMarkPrice - pos.entryPrice
-      : pos.entryPrice - pos.lastMarkPrice;
-    const unrealizedPct = (markDiff / pos.entryPrice) * 100;
-    const unrealizedUsd = (markDiff / pos.entryPrice) * (pos.size || 0);
-    pnlClass = unrealizedPct > 0 ? "paper-pos-pnl--pos" : unrealizedPct < 0 ? "paper-pos-pnl--neg" : "paper-pos-pnl--zero";
-    pnlStr = `${unrealizedPct >= 0 ? "+" : ""}${fmt$(unrealizedUsd)} (${fPct(unrealizedPct)})`;
-    currentPriceHtml = `<span class="paper-pos-current">Now ${fp(pos.lastMarkPrice, prec)}</span>`;
+    const markDiff     = isLong ? pos.lastMarkPrice - pos.entryPrice : pos.entryPrice - pos.lastMarkPrice;
+    const rawPct       = (markDiff / pos.entryPrice) * 100;
+    const leveragedPct = rawPct * lev;
+    const unrealizedUsd = (markDiff / pos.entryPrice) * pos.size * lev;
+    pnlClass = leveragedPct > 0 ? "paper-pos-pnl--pos" : leveragedPct < 0 ? "paper-pos-pnl--neg" : "paper-pos-pnl--zero";
+    pnlStr   = `${leveragedPct >= 0 ? "+" : ""}${fmt$(unrealizedUsd)} (${fPct(leveragedPct)})`;
   } else {
     pnlClass = "paper-pos-pnl--zero";
-    pnlStr = "live";
+    pnlStr   = "–";
   }
 
-  const tp1Badge = pos.tp1Reached && !isClosed ? `<span class="paper-pos-tp1-badge">TP1 ✓ SL→BE</span>` : "";
+  // ── Open-position live levels block ──────────────────────────────────────────
+  let liveLevelsHtml = "";
+  if (!isClosed && pos.lastMarkPrice && pos.entryPrice) {
+    const mark  = pos.lastMarkPrice;
+    const pDist = (a, b) => ((Math.abs(a - b) / pos.entryPrice) * 100).toFixed(1);
+    const movePct = ((isLong ? mark - pos.entryPrice : pos.entryPrice - mark) / pos.entryPrice * 100).toFixed(1);
+    const moveSign = Number(movePct) >= 0 ? "+" : "";
+
+    // Distance remaining to each level (from current price, not entry)
+    const toTP1  = pos.tp1 ? ((isLong ? pos.tp1 - mark : mark - pos.tp1) / mark * 100) : null;
+    const toTP2  = pos.tp2 ? ((isLong ? pos.tp2 - mark : mark - pos.tp2) / mark * 100) : null;
+    const toSL   = pos.sl  ? ((isLong ? mark - pos.sl  : pos.sl - mark ) / mark * 100) : null;
+
+    const fDist = (v, label, cls) => v != null
+      ? `<span class="pos-level-row ${cls}"><span class="pos-level-tag">${label}</span><span class="pos-level-dist">${v > 0 ? v.toFixed(1) + "% away" : "REACHED"}</span><span class="pos-level-price">${fp(label === "TP1" ? pos.tp1 : label === "TP2" ? pos.tp2 : pos.sl, prec)}</span></span>`
+      : "";
+
+    liveLevelsHtml = `
+      <div class="pos-live-row">
+        <span class="pos-live-now">Now <strong>${fp(mark, prec)}</strong></span>
+        <span class="pos-live-move ${Number(movePct) >= 0 ? "tone-up" : "tone-down"}">${moveSign}${movePct}% from entry</span>
+        ${lev > 1 ? `<span class="pos-live-lev">${lev}×</span>` : ""}
+      </div>
+      <div class="pos-levels-strip">
+        ${fDist(toSL,  "SL",  "pos-level--sl")}
+        ${fDist(toTP1, "TP1", "pos-level--tp1")}
+        ${fDist(toTP2, "TP2", "pos-level--tp2")}
+      </div>`;
+  }
+
+  const tp1Badge = pos.tp1Reached && !isClosed ? `<span class="paper-pos-tp1-badge">TP1 ✓  SL→Breakeven</span>` : "";
 
   return `
     <div class="${cardClass}">
       <div class="paper-pos-head">
-        <span class="paper-pos-symbol">${pos.symbol}</span>
-        <span class="paper-pos-side paper-pos-side--${dir}">${pos.side}</span>
-        <span class="paper-pos-pnl ${pnlClass}">${pnlStr}</span>
-        ${reasonHtml}
+        <div class="paper-pos-ident">
+          <span class="paper-pos-symbol">${pos.symbol}</span>
+          <span class="paper-pos-side paper-pos-side--${dir}">${pos.side.toUpperCase()}</span>
+          ${!isClosed ? `<span class="paper-pos-status">LIVE</span>` : ""}
+        </div>
+        <div class="paper-pos-right">
+          <span class="paper-pos-pnl ${pnlClass}">${pnlStr}</span>
+          ${reasonHtml}
+        </div>
       </div>
       ${tp1Badge}
+      ${liveLevelsHtml}
       <div class="paper-pos-meta">
-        <span>Entry ${fp(pos.entryPrice, prec)} · Size ${fmt$(pos.size)} · Q${pos.quality}</span>
+        <span>Entry ${fp(pos.entryPrice, prec)} · Size ${fmt$(pos.size)}${lev > 1 ? " · " + lev + "×" : ""} · Q${pos.quality}</span>
         <span>${isClosed ? timeAgo(pos.closedAt) : "Opened " + timeAgo(pos.openedAt)}</span>
       </div>
-      <div class="paper-pos-meta">
+      ${isClosed ? `<div class="paper-pos-meta">
         <span>TP1 ${fp(pos.tp1, prec)} · TP2 ${fp(pos.tp2, prec)} · SL ${fp(pos.sl, prec)}</span>
-        ${isClosed && pos.closedPrice ? `<span>Close ${fp(pos.closedPrice, prec)}</span>` : currentPriceHtml}
-      </div>
+        ${pos.closedPrice ? `<span>Close ${fp(pos.closedPrice, prec)}</span>` : ""}
+      </div>` : ""}
     </div>`;
 }
 
