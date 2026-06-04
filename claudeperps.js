@@ -376,6 +376,29 @@ function renderPaperPositionCard(pos, isClosed = false) {
     </div>`;
 }
 
+async function refreshMarkPrices() {
+  const openPos = state.paper?.openPositions || [];
+  if (!openPos.length) return;
+  const symbols = [...new Set(openPos.map(p => p.symbol))];
+  const priceMap = {};
+  await Promise.allSettled(symbols.map(async sym => {
+    try {
+      const r = await fetch(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${sym}`);
+      const d = await r.json();
+      if (d?.price) priceMap[sym] = parseFloat(d.price);
+    } catch (_) {}
+  }));
+  let updated = false;
+  openPos.forEach(pos => {
+    if (priceMap[pos.symbol] && priceMap[pos.symbol] !== pos.lastMarkPrice) {
+      pos.lastMarkPrice = priceMap[pos.symbol];
+      pos.lastMarkAt    = Date.now();
+      updated = true;
+    }
+  });
+  if (updated && currentPage === "paper") renderPaperTab();
+}
+
 function renderPaperTab() {
   const paper = state.paper || {};
   const balance   = paper.balance ?? 100;
@@ -408,6 +431,8 @@ function renderPaperTab() {
       ? closed.slice(0, 50).map(p => renderPaperPositionCard(p, true)).join("")
       : `<div class="paper-empty">No closed trades yet.</div>`;
   }
+
+  if (openPos.length) refreshMarkPrices();
 }
 
 // ─── 24H Comparison ──────────────────────────────────────────────────────────
