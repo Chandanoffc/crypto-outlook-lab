@@ -988,8 +988,10 @@ function renderStatsTab() {
       D1: "EMA20 + R1",  D2: "EMA20 + R2",
       E1: "EMA50 + R1",  E2: "EMA50 + R2",
       F1: "Resist 1",    F2: "Resist 2",
+      G1: "EMA20 Retest ↓", G2: "EMA50 Retest ↓",
+      H1: "EMA20 Pullback ↑", H2: "EMA50 Pullback ↑",
     };
-    const patternOrder = ["B2","B1","A2","A1","E2","E1","D2","D1","C2","C1","F2","F1"];
+    const patternOrder = ["B2","B1","A2","A1","E2","E1","D2","D1","C2","C1","F2","F1","G2","G1","H2","H1"];
     const rows = patternOrder.map(pt => {
       const sigs = alertedSigs.filter(s => s.signalType === pt);
       if (!sigs.length) return "";
