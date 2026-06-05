@@ -392,14 +392,29 @@ async function refreshMarkPrices() {
     } catch (_) {}
   }));
   let updated = false;
+  let needsServerMark = false;
   openPos.forEach(pos => {
-    if (priceMap[pos.symbol] && priceMap[pos.symbol] !== pos.lastMarkPrice) {
-      pos.lastMarkPrice = priceMap[pos.symbol];
-      pos.lastMarkAt    = Date.now();
-      updated = true;
-    }
+    const price = priceMap[pos.symbol];
+    if (!price) return;
+    if (price !== pos.lastMarkPrice) { pos.lastMarkPrice = price; pos.lastMarkAt = Date.now(); updated = true; }
+    // Detect TP1/TP2/SL hit — server must close the position officially
+    const isLong = pos.side === "Long";
+    const hitSL  = pos.sl  && (isLong ? price <= pos.sl  : price >= pos.sl);
+    const hitTP2 = pos.tp2 && (isLong ? price >= pos.tp2 : price <= pos.tp2);
+    const hitTP1 = pos.tp1 && !pos.tp1Reached && (isLong ? price >= pos.tp1 : price <= pos.tp1);
+    if (hitSL || hitTP2 || hitTP1) needsServerMark = true;
   });
   if (updated && currentPage === "paper") renderPaperTab();
+  if (needsServerMark) {
+    try {
+      const res = await fetch("/api/claudeperps", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "mark" }) });
+      const data = await res.json();
+      if (data.ok && data.state && !data.skipped) {
+        state = data.state;
+        if (currentPage === "paper") renderPaperTab();
+      }
+    } catch (_) {}
+  }
 }
 
 function renderPaperTab() {

@@ -409,7 +409,8 @@ function renderPaperPositionCard(pos, isClosed = false) {
 }
 
 // Fetch live mark prices for all open positions from Binance FAPI.
-// Runs client-side so P&L is always current regardless of scan cycle timing.
+// Also detects TP1/TP2/SL hits and fires a server-side mark to close positions
+// immediately — no manual scan needed when cron is delayed.
 async function refreshMarkPrices() {
   const openPos = state.paper?.openPositions || [];
   if (!openPos.length) return;
@@ -423,14 +424,30 @@ async function refreshMarkPrices() {
     } catch (_) {}
   }));
   let updated = false;
+  let needsServerMark = false;
   openPos.forEach(pos => {
-    if (priceMap[pos.symbol] && priceMap[pos.symbol] !== pos.lastMarkPrice) {
-      pos.lastMarkPrice = priceMap[pos.symbol];
-      pos.lastMarkAt    = Date.now();
-      updated = true;
-    }
+    const price = priceMap[pos.symbol];
+    if (!price) return;
+    if (price !== pos.lastMarkPrice) { pos.lastMarkPrice = price; pos.lastMarkAt = Date.now(); updated = true; }
+    // Detect TP1/TP2/SL hit — if any, the server needs to close the position officially
+    const isLong = pos.side === "Long";
+    const hitSL  = pos.sl  && (isLong ? price <= pos.sl  : price >= pos.sl);
+    const hitTP2 = pos.tp2 && (isLong ? price >= pos.tp2 : price <= pos.tp2);
+    const hitTP1 = pos.tp1 && !pos.tp1Reached && (isLong ? price >= pos.tp1 : price <= pos.tp1);
+    if (hitSL || hitTP2 || hitTP1) needsServerMark = true;
   });
   if (updated && currentPage === "paper") renderPaperTab();
+  // If any position crossed a level, trigger server mark to close it and send Discord
+  if (needsServerMark) {
+    try {
+      const res = await fetch("/api/emaperps", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "mark" }) });
+      const data = await res.json();
+      if (data.ok && data.state && !data.skipped) {
+        state = data.state;
+        if (currentPage === "paper") renderPaperTab();
+      }
+    } catch (_) {}
+  }
 }
 
 function renderPaperTab() {

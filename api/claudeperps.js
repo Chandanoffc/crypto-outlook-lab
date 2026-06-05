@@ -1,6 +1,6 @@
 "use strict";
 const { hasDatabase, getRuntimeState, upsertRuntimeState } = require("../lib/neon-db");
-const { defaultRuntimeState, sanitizeRuntimeState, runClaudePerps_Scan, analyzeToken } = require("../lib/claudeperps-runtime");
+const { defaultRuntimeState, sanitizeRuntimeState, runClaudePerps_Scan, markPaperPositions, analyzeToken } = require("../lib/claudeperps-runtime");
 
 function buildJsonResponse(res, statusCode, payload) {
   res.statusCode = statusCode;
@@ -82,6 +82,23 @@ module.exports = async function handler(req, res) {
         return buildJsonResponse(res, 200, { ok: true, state: sanitizeRuntimeState(saved.state || fresh) });
       }
       return buildJsonResponse(res, 200, { ok: true, state: fresh });
+    }
+
+    // Client-triggered position mark — fires when refreshMarkPrices() detects a TP/SL hit.
+    // Closes positions in real time without waiting for the next background scan cycle.
+    // Dedup guard: if paper was marked in the last 15s, skip to avoid concurrent double-closes.
+    if (action === "mark") {
+      const { state: loaded } = await loadState();
+      const now = Date.now();
+      if (now - (loaded.paper?.lastMarkAt || 0) < 15_000) {
+        return buildJsonResponse(res, 200, { ok: true, skipped: true, state: sanitizeRuntimeState(loaded) });
+      }
+      await markPaperPositions(loaded, now, inferBaseUrl(req));
+      if (hasDatabase()) {
+        const saved = await upsertRuntimeState("claudeperps", loaded);
+        return buildJsonResponse(res, 200, { ok: true, state: sanitizeRuntimeState(saved.state || loaded) });
+      }
+      return buildJsonResponse(res, 200, { ok: true, state: sanitizeRuntimeState(loaded) });
     }
 
     if (action === "paper-reset") {

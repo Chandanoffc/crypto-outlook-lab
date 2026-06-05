@@ -1,6 +1,6 @@
 "use strict";
 const { hasDatabase, getRuntimeState, upsertRuntimeState } = require("../lib/neon-db");
-const { defaultRuntimeState, sanitizeRuntimeState, runEmaPerps_Scan, analyzeToken } = require("../lib/emaperps-runtime");
+const { defaultRuntimeState, sanitizeRuntimeState, runEmaPerps_Scan, markPaperPositions, analyzeToken } = require("../lib/emaperps-runtime");
 
 function buildJsonResponse(res, statusCode, payload) {
   res.statusCode = statusCode;
@@ -77,6 +77,20 @@ module.exports = async function handler(req, res) {
         return buildJsonResponse(res, 200, { ok: true, state: sanitizeRuntimeState(saved.state || fresh) });
       }
       return buildJsonResponse(res, 200, { ok: true, state: fresh });
+    }
+
+    if (action === "mark") {
+      const { state: loaded } = await loadState();
+      const now = Date.now();
+      if (now - (loaded.paper?.lastMarkAt || 0) < 15_000) {
+        return buildJsonResponse(res, 200, { ok: true, skipped: true, state: sanitizeRuntimeState(loaded) });
+      }
+      await markPaperPositions(loaded, now, inferBaseUrl(req));
+      if (hasDatabase()) {
+        const saved = await upsertRuntimeState("emaperps", loaded);
+        return buildJsonResponse(res, 200, { ok: true, state: sanitizeRuntimeState(saved.state || loaded) });
+      }
+      return buildJsonResponse(res, 200, { ok: true, state: sanitizeRuntimeState(loaded) });
     }
 
     if (action === "paper-reset") {
