@@ -377,7 +377,10 @@ function renderPaperPositionCard(pos, isClosed = false) {
       </div>`;
   }
 
-  const tp1Badge = pos.tp1Reached && !isClosed ? `<span class="paper-pos-tp1-badge">TP1 ✓  SL→Breakeven</span>` : "";
+  const tp1Badge = pos.tp1Reached && !isClosed
+    ? `<span class="paper-pos-tp1-badge">TP1 ✓  SL→Breakeven</span>` : "";
+  const beBadge  = pos.slMovedToBE && !pos.tp1Reached && !isClosed
+    ? `<span class="paper-pos-tp1-badge paper-pos-be-badge">🛡️ +25%  SL→Breakeven</span>` : "";
 
   return `
     <div class="${cardClass}">
@@ -392,7 +395,7 @@ function renderPaperPositionCard(pos, isClosed = false) {
           ${reasonHtml}
         </div>
       </div>
-      ${tp1Badge}
+      ${tp1Badge}${beBadge}
       ${liveLevelsHtml}
       <div class="paper-pos-meta">
         <span>Entry ${fp(pos.entryPrice, prec)} · Size ${fmt$(pos.size)}${lev > 1 ? " · " + lev + "×" : ""} · Q${pos.quality}</span>

@@ -1758,6 +1758,13 @@ body > * { position: relative; z-index: 1; }
   font-weight: 600;
 }
 
+/* Breakeven trigger badge — amber to distinguish from TP1 green */
+.paper-pos-be-badge {
+  background: rgba(251,191,36,0.10);
+  color: #fbbf24;
+  border: 1px solid rgba(251,191,36,0.25);
+}
+
 /* ============================================================
    COMPARISON WIDGET
    ============================================================ */
