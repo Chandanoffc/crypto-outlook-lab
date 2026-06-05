@@ -379,6 +379,8 @@ function renderPaperPositionCard(pos, isClosed = false) {
     </div>`;
 }
 
+let cpMarkInFlight = false; // prevent concurrent mark requests from this client
+
 async function refreshMarkPrices() {
   const openPos = state.paper?.openPositions || [];
   if (!openPos.length) return;
@@ -397,7 +399,6 @@ async function refreshMarkPrices() {
     const price = priceMap[pos.symbol];
     if (!price) return;
     if (price !== pos.lastMarkPrice) { pos.lastMarkPrice = price; pos.lastMarkAt = Date.now(); updated = true; }
-    // Detect TP1/TP2/SL hit — server must close the position officially
     const isLong = pos.side === "Long";
     const hitSL  = pos.sl  && (isLong ? price <= pos.sl  : price >= pos.sl);
     const hitTP2 = pos.tp2 && (isLong ? price >= pos.tp2 : price <= pos.tp2);
@@ -405,7 +406,10 @@ async function refreshMarkPrices() {
     if (hitSL || hitTP2 || hitTP1) needsServerMark = true;
   });
   if (updated && currentPage === "paper") renderPaperTab();
-  if (needsServerMark) {
+  // Only fire one server mark at a time — prevents duplicate close+Discord when
+  // the poll interval triggers a second call while the first is still in-flight.
+  if (needsServerMark && !cpMarkInFlight) {
+    cpMarkInFlight = true;
     try {
       const res = await fetch("/api/claudeperps", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "mark" }) });
       const data = await res.json();
@@ -414,6 +418,7 @@ async function refreshMarkPrices() {
         if (currentPage === "paper") renderPaperTab();
       }
     } catch (_) {}
+    finally { cpMarkInFlight = false; }
   }
 }
 

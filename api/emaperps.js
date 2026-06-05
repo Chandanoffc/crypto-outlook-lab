@@ -82,7 +82,7 @@ module.exports = async function handler(req, res) {
     if (action === "mark") {
       const { state: loaded } = await loadState();
       const now = Date.now();
-      if (now - (loaded.paper?.lastMarkAt || 0) < 15_000) {
+      if (now - (loaded.paper?.lastMarkAt || 0) < 30_000) {
         return buildJsonResponse(res, 200, { ok: true, skipped: true, state: sanitizeRuntimeState(loaded) });
       }
       await markPaperPositions(loaded, now, inferBaseUrl(req));

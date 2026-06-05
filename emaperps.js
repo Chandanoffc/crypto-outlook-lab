@@ -411,6 +411,8 @@ function renderPaperPositionCard(pos, isClosed = false) {
 // Fetch live mark prices for all open positions from Binance FAPI.
 // Also detects TP1/TP2/SL hits and fires a server-side mark to close positions
 // immediately — no manual scan needed when cron is delayed.
+let epMarkInFlight = false; // prevent concurrent mark requests from this client
+
 async function refreshMarkPrices() {
   const openPos = state.paper?.openPositions || [];
   if (!openPos.length) return;
@@ -429,7 +431,6 @@ async function refreshMarkPrices() {
     const price = priceMap[pos.symbol];
     if (!price) return;
     if (price !== pos.lastMarkPrice) { pos.lastMarkPrice = price; pos.lastMarkAt = Date.now(); updated = true; }
-    // Detect TP1/TP2/SL hit — if any, the server needs to close the position officially
     const isLong = pos.side === "Long";
     const hitSL  = pos.sl  && (isLong ? price <= pos.sl  : price >= pos.sl);
     const hitTP2 = pos.tp2 && (isLong ? price >= pos.tp2 : price <= pos.tp2);
@@ -437,8 +438,8 @@ async function refreshMarkPrices() {
     if (hitSL || hitTP2 || hitTP1) needsServerMark = true;
   });
   if (updated && currentPage === "paper") renderPaperTab();
-  // If any position crossed a level, trigger server mark to close it and send Discord
-  if (needsServerMark) {
+  if (needsServerMark && !epMarkInFlight) {
+    epMarkInFlight = true;
     try {
       const res = await fetch("/api/emaperps", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "mark" }) });
       const data = await res.json();
@@ -447,6 +448,7 @@ async function refreshMarkPrices() {
         if (currentPage === "paper") renderPaperTab();
       }
     } catch (_) {}
+    finally { epMarkInFlight = false; }
   }
 }
 
