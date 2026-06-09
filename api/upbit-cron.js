@@ -192,8 +192,15 @@ async function runClaudePerpsBackground(baseUrl) {
   try {
     const stored = await getRuntimeState("claudeperps");
     const state = stored.found && stored.state ? sanitizeClaudeState(stored.state) : defaultClaudeState();
-    if (scannedRecently(state.lastScanAt)) return { ok: true, skipped: true, reason: "Scan is fresh." };
+    // Always stamp lastCronAt so the dashboard can detect when the cron goes silent,
+    // even on "scan is fresh" cycles where we skip the actual scan work.
+    state.lastCronAt = Date.now();
+    if (scannedRecently(state.lastScanAt)) {
+      await upsertRuntimeState("claudeperps", state);
+      return { ok: true, skipped: true, reason: "Scan is fresh." };
+    }
     const result = await runClaudePerps_Scan(state, { manual: false, baseUrl });
+    result.state.lastCronAt = state.lastCronAt;
     const saved = await upsertRuntimeState("claudeperps", result.state);
     return { ok: true, updatedAt: saved.updatedAt, summary: result.summary };
   } catch (err) {
@@ -206,8 +213,13 @@ async function runEmaPerpsBackground(baseUrl) {
   try {
     const stored = await getRuntimeState("emaperps");
     const state = stored.found && stored.state ? sanitizeEmaState(stored.state) : defaultEmaState();
-    if (scannedRecently(state.lastScanAt)) return { ok: true, skipped: true, reason: "Scan is fresh." };
+    state.lastCronAt = Date.now();
+    if (scannedRecently(state.lastScanAt)) {
+      await upsertRuntimeState("emaperps", state);
+      return { ok: true, skipped: true, reason: "Scan is fresh." };
+    }
     const result = await runEmaPerps_Scan(state, { manual: false, baseUrl });
+    result.state.lastCronAt = state.lastCronAt;
     const saved = await upsertRuntimeState("emaperps", result.state);
     return { ok: true, updatedAt: saved.updatedAt, summary: result.summary };
   } catch (err) {
