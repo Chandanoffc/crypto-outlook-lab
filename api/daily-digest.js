@@ -211,7 +211,7 @@ function fPct(v, digits = 1) {
 }
 
 function challengeBar(balance, target = CHALLENGE_TARGET, start = CHALLENGE_START) {
-  const pct = Math.min(1, (balance - start) / (target - start));
+  const pct = Math.max(0, Math.min(1, (balance - start) / (target - start)));
   const filled = Math.round(pct * 20);
   const bar = "█".repeat(filled) + "░".repeat(20 - filled);
   return `[${bar}] ${Math.round(pct * 100)}%`;
