@@ -321,10 +321,11 @@ function renderPaperPositionCard(pos, isClosed = false) {
     const reason = pos.closeReason || "";
     if (reason === "TP2" || reason === "TP1") cardClass = "paper-pos-card paper-pos-card--win";
     else if (reason === "SL") cardClass = "paper-pos-card paper-pos-card--loss";
+    else if (reason === "BE") cardClass = "paper-pos-card paper-pos-card--win";
     else cardClass = "paper-pos-card paper-pos-card--expired";
 
-    const reasonClass = reason === "TP2" ? "tp2" : reason === "TP1" ? "tp1" : reason === "SL" ? "sl" : "exp";
-    reasonHtml = `<span class="paper-pos-reason paper-pos-reason--${reasonClass}">${reason || "CLOSED"}</span>`;
+    const reasonClass = reason === "TP2" ? "tp2" : reason === "TP1" ? "tp1" : reason === "SL" ? "sl" : reason === "BE" ? "be" : "exp";
+    reasonHtml = `<span class="paper-pos-reason paper-pos-reason--${reasonClass}">${reason === "BE" ? "BE" : reason || "CLOSED"}</span>`;
   }
 
   // ── P&L calculation ──────────────────────────────────────────────────────────
