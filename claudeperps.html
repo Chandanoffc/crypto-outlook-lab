@@ -143,12 +143,17 @@
 
             <!-- Chart -->
             <section class="panel chart-panel">
-              <div class="panel-hd-simple">
-                <p class="panel-label">Chart</p>
+              <div class="chart-panel-hd">
                 <span id="cp-chart-symbol" class="chart-symbol">Select a signal or search a token</span>
+                <div class="chart-tf-tabs" id="cp-chart-tf-tabs">
+                  <button class="chart-tf-tab is-active" data-tf="1h">1H</button>
+                  <button class="chart-tf-tab" data-tf="4h">4H</button>
+                  <button class="chart-tf-tab" data-tf="1d">1D</button>
+                </div>
               </div>
               <div id="cp-chart-container" class="chart-frame"></div>
               <div id="cp-chart-levels" class="chart-levels"></div>
+              <div id="cp-chart-reasoning" class="chart-reasoning"></div>
             </section>
 
             <!-- Discord -->

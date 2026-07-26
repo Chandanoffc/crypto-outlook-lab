@@ -12,6 +12,8 @@ let currentTab    = "active";
 let currentPage   = "signals";
 let activeChart   = null;
 let pollTimer     = null;
+let activeChartSignal = null;   // signal currently loaded in the chart
+let activeChartTf     = "1h";   // current TF tab
 const POLL_INTERVAL_MS = 30_000;
 
 // ─── DOM refs ─────────────────────────────────────────────────────────────────
@@ -27,6 +29,8 @@ const dom = {
   chartContainer: document.getElementById("cp-chart-container"),
   chartSymbol:    document.getElementById("cp-chart-symbol"),
   chartLevels:    document.getElementById("cp-chart-levels"),
+  chartReasoning: document.getElementById("cp-chart-reasoning"),
+  chartTfTabs:    document.getElementById("cp-chart-tf-tabs"),
   discordInput:   document.getElementById("cp-discord-input"),
   discordNotify:  document.getElementById("cp-discord-notify"),
   discordSave:    document.getElementById("cp-discord-save"),
@@ -155,7 +159,8 @@ function renderSignalCard(signal) {
   const isLong = signal.side === "Long";
   const dir    = isLong ? "long" : "short";
   const prec   = signal.pricePrecision || 2;
-  const reasons = (signal.reasonLabels || []).slice(0, 3).join(" · ");
+  const reasons = (signal.reasonLabels || []).slice(0, 5).join(" · ");
+  const volStr = signal.volume24h ? ` · $${signal.volume24h >= 1e9 ? (signal.volume24h/1e9).toFixed(1)+"B" : (signal.volume24h/1e6).toFixed(0)+"M"}` : "";
 
   const pctEntry = (v) => {
     if (!signal.entryPrice || !v) return "";
@@ -201,7 +206,7 @@ function renderSignalCard(signal) {
         </div>
 
         <div class="sc-footer">
-          <span class="sc-reasons">${reasons}</span>
+          <span class="sc-reasons">${reasons}${volStr}</span>
           ${signal.outcome ? `<span class="sc-outcome-badge sc-outcome--${signal.outcome.toLowerCase()}">${
             signal.outcome === "TP2" ? "🏆 TP2" :
             signal.outcome === "TP1" ? "✅ TP1" : "❌ SL"
@@ -576,6 +581,135 @@ function updateLastScanLabel() {
   }
 }
 
+// ─── Client-side Binance kline fetch + EMA ───────────────────────────────────
+function clientEma(values, period) {
+  if (values.length < period) return new Array(values.length).fill(null);
+  const m = 2 / (period + 1);
+  let prev = values.slice(0, period).reduce((a, b) => a + b, 0) / period;
+  const result = new Array(period - 1).fill(null);
+  result.push(prev);
+  for (let i = period; i < values.length; i++) {
+    prev = values[i] * m + prev * (1 - m);
+    result.push(prev);
+  }
+  return result;
+}
+
+async function fetchBinanceKlines(symbol, interval, limit = 200) {
+  const url = `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Binance ${res.status}`);
+  const raw = await res.json();
+  const candles = raw.map(k => ({
+    time: Math.floor(k[0] / 1000),
+    open:  parseFloat(k[1]),
+    high:  parseFloat(k[2]),
+    low:   parseFloat(k[3]),
+    close: parseFloat(k[4]),
+  }));
+  const closes = candles.map(c => c.close);
+  const e20 = clientEma(closes, 20);
+  const e50 = clientEma(closes, 50);
+  const ema20Series = candles.map((c, i) => e20[i] != null ? { time: c.time, value: e20[i] } : null).filter(Boolean);
+  const ema50Series = candles.map((c, i) => e50[i] != null ? { time: c.time, value: e50[i] } : null).filter(Boolean);
+  return { candles, ema20Series, ema50Series,
+    ema20: e20[e20.length - 1], ema50: e50[e50.length - 1],
+    currentPrice: candles[candles.length - 1]?.close };
+}
+
+// ─── Signal reasoning panel ───────────────────────────────────────────────────
+function renderReasoningPanel(signal) {
+  if (!dom.chartReasoning) return;
+  if (!signal) { dom.chartReasoning.innerHTML = ""; return; }
+
+  const prec = signal.pricePrecision || 2;
+  const isLong = signal.side === "Long";
+  const reasons = signal.reasonLabels || [];
+  const factors = signal.factors || {};
+
+  // Quality bar
+  const q = signal.quality || 0;
+  const qColor = q >= 90 ? "#F59E0B" : q >= 85 ? "#4ADE80" : "#38bdf8";
+
+  // Confluence chips — colour-coded
+  const chipHtml = reasons.map(r => {
+    const isPos = /uptrend|aligned|cross|demand|wick|optimal|diverge|clean|trending|spike|strong|conflu|tested/i.test(r);
+    const isNeg = /downtrend|caution|warn/i.test(r);
+    const isAmb = /approach|near|momentum/i.test(r);
+    const cls = isNeg ? "red" : isAmb ? "amber" : isPos ? "green" : "";
+    return `<span class="reasoning-chip${cls ? " reasoning-chip--" + cls : ""}">${r}</span>`;
+  }).join("");
+
+  // Risk/reward rows
+  const rr1 = signal.rr1 || 1.5;
+  const rr2 = signal.rr2 || 2.5;
+  const slDist = signal.entryPrice && signal.sl
+    ? Math.abs(((signal.entryPrice - signal.sl) / signal.entryPrice) * 100).toFixed(2)
+    : "–";
+
+  // Volume display
+  const vol = signal.volume24h || factors.quoteVolume;
+  const volStr = vol ? `$${(vol / 1e9).toFixed(1)}B` : "–";
+
+  // Funding
+  const fr = signal.fundingRate;
+  const frStr = fr != null ? (fr * 100).toFixed(4) + "%" : "–";
+  const frClass = fr != null ? (isLong ? (fr < 0 ? "up" : "down") : (fr > 0 ? "up" : "down")) : "";
+
+  dom.chartReasoning.innerHTML = `
+    <div class="reasoning-section">
+      <div class="reasoning-section-title">Quality · ${q}/100</div>
+      <div class="reasoning-quality-bar"><div class="reasoning-quality-fill" style="width:${Math.min(q,100)}%;background:${qColor}"></div></div>
+    </div>
+    ${reasons.length ? `<div class="reasoning-section">
+      <div class="reasoning-section-title">Confluences</div>
+      <div class="reasoning-chips">${chipHtml}</div>
+    </div>` : ""}
+    <div class="reasoning-section">
+      <div class="reasoning-section-title">Trade Levels</div>
+      <div class="reasoning-rows">
+        <div class="reasoning-row"><span class="reasoning-row-label">Entry</span><span class="reasoning-row-value">${fp(signal.entryPrice, prec)}</span></div>
+        <div class="reasoning-row"><span class="reasoning-row-label">TP1 (+${rr1}R)</span><span class="reasoning-row-value up">${fp(signal.tp1, prec)}</span></div>
+        <div class="reasoning-row"><span class="reasoning-row-label">TP2 (+${rr2}R)</span><span class="reasoning-row-value up">${fp(signal.tp2, prec)}</span></div>
+        <div class="reasoning-row"><span class="reasoning-row-label">SL (−${slDist}%)</span><span class="reasoning-row-value down">${fp(signal.sl, prec)}</span></div>
+      </div>
+    </div>
+    <div class="reasoning-section">
+      <div class="reasoning-section-title">Market Context</div>
+      <div class="reasoning-rows">
+        <div class="reasoning-row"><span class="reasoning-row-label">24H Volume</span><span class="reasoning-row-value amber">${volStr}</span></div>
+        <div class="reasoning-row"><span class="reasoning-row-label">Funding Rate</span><span class="reasoning-row-value ${frClass}">${frStr}</span></div>
+        <div class="reasoning-row"><span class="reasoning-row-label">EMA20</span><span class="reasoning-row-value" style="color:#38bdf8">${fp(signal.ema20, prec)}</span></div>
+        <div class="reasoning-row"><span class="reasoning-row-label">EMA50</span><span class="reasoning-row-value" style="color:#a78bfa">${fp(signal.ema50, prec)}</span></div>
+      </div>
+    </div>`;
+}
+
+// ─── TF tab init ─────────────────────────────────────────────────────────────
+function initChartTfTabs() {
+  if (!dom.chartTfTabs) return;
+  dom.chartTfTabs.addEventListener("click", async (e) => {
+    const btn = e.target.closest(".chart-tf-tab");
+    if (!btn) return;
+    const tf = btn.dataset.tf;
+    if (tf === activeChartTf) return;
+    activeChartTf = tf;
+    dom.chartTfTabs.querySelectorAll(".chart-tf-tab").forEach(b => b.classList.toggle("is-active", b === btn));
+    if (activeChartSignal) await loadChartForTf(activeChartSignal, tf);
+  });
+}
+
+async function loadChartForTf(signal, tf) {
+  dom.chartContainer.innerHTML = '<p class="chart-empty">Loading…</p>';
+  try {
+    const data = await fetchBinanceKlines(signal.symbol, tf);
+    data.pricePrecision = signal.pricePrecision;
+    renderChart(data, signal);
+  } catch (err) {
+    dom.chartContainer.innerHTML = `<p class="chart-empty">Chart error: ${err.message}</p>`;
+  }
+}
+
 // ─── Chart rendering ─────────────────────────────────────────────────────────
 function destroyChart() {
   if (activeChart) {
@@ -658,21 +792,18 @@ function renderLevelsRow(signal, data) {
 }
 
 async function openChartForSignal(signal) {
-  dom.chartSymbol.textContent = `${signal.symbol} · ${signal.side} · Q${signal.quality}`;
-  dom.chartContainer.innerHTML = '<p class="chart-empty">Loading chart…</p>';
-  dom.chartLevels.innerHTML = "";
-  try {
-    const res = await fetch("/api/claudeperps", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "analyze", token: signal.symbol }),
+  activeChartSignal = signal;
+  // Reset TF to 1H when a new signal is selected
+  activeChartTf = "1h";
+  if (dom.chartTfTabs) {
+    dom.chartTfTabs.querySelectorAll(".chart-tf-tab").forEach(b => {
+      b.classList.toggle("is-active", b.dataset.tf === "1h");
     });
-    const data = await res.json();
-    if (data.ok) renderChart(data, signal);
-    else dom.chartContainer.innerHTML = `<p class="chart-empty">${data.error || "Failed to load chart."}</p>`;
-  } catch (err) {
-    dom.chartContainer.innerHTML = `<p class="chart-empty">Chart failed: ${err.message}</p>`;
   }
+  const dir = signal.side === "Long" ? "▲" : "▼";
+  dom.chartSymbol.textContent = `${signal.symbol} · ${dir} ${signal.side} · Q${signal.quality}`;
+  renderReasoningPanel(signal);
+  await loadChartForTf(signal, "1h");
 }
 
 // ─── Token search / analysis ─────────────────────────────────────────────────
@@ -1093,6 +1224,7 @@ function startPolling() {
 
 async function init() {
   setStatus("Loading…", "neutral");
+  initChartTfTabs();
   await fetchState();
   startPolling();
 }
