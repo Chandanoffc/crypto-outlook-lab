@@ -4,6 +4,7 @@
 const DS_BASE = 'https://api.dexscreener.com';
 const RC_BASE = 'https://api.rugcheck.xyz/v1';
 const JUP_PRICE = 'https://api.jup.ag/price/v2';
+const METEORA_BASE = 'https://dlmm-api.meteora.ag';
 
 // ── Narrative classifier ───────────────────────────────────────────────────
 const NARRATIVES = [
@@ -199,6 +200,179 @@ async function fetchRugCheck(mint) {
   } catch { return null; }
 }
 
+async function fetchMeteoraLPPools(mint) {
+  try {
+    // DexScreener indexes all Meteora DLMM pools — pull all pairs for the token
+    // and filter for dexId 'meteora' or 'meteoradlmm'
+    const res = await fetch(`${DS_BASE}/latest/dex/tokens/${mint}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    const pairs = (data?.pairs || []).filter(p =>
+      p.chainId === 'solana' && (p.dexId === 'meteora' || p.dexId === 'meteoradlmm')
+    );
+    // Filter dust pools, sort by volume
+    const meaningful = pairs.filter(p => (p.liquidity?.usd || 0) >= 10_000);
+    meaningful.sort((a, b) => (b.volume?.h24 || 0) - (a.volume?.h24 || 0));
+    return meaningful.slice(0, 6).map(p => ({
+      // Map DexScreener pair shape to our LP pool shape
+      address: p.pairAddress,
+      name: `${p.baseToken?.symbol}/${p.quoteToken?.symbol}`,
+      mint_x: p.baseToken?.address,
+      mint_y: p.quoteToken?.address,
+      quoteSymbol: p.quoteToken?.symbol || '?',
+      // DexScreener doesn't expose bin_step or exact fee — estimate from vol/liq ratio
+      bin_step: null,
+      base_fee_percentage: estimateFeeTier(p),
+      liquidity: String(p.liquidity?.usd || 0),
+      volume_24h: p.volume?.h24 || 0,
+      fees_24h: estimateFees24h(p),
+      fee_apr: estimateFeeApr(p),
+      pairAddress: p.pairAddress,
+      priceChange24h: p.priceChange?.h24 || 0,
+    }));
+  } catch { return []; }
+}
+
+function estimateFeeTier(pair) {
+  // Meteora DLMM fee tiers: 0.01, 0.04, 0.08, 0.16, 0.25, 0.5, 1, 2%
+  // Heuristic: vol/liq ratio suggests active fee tier
+  const vol = pair.volume?.h24 || 0;
+  const liq = pair.liquidity?.usd || 1;
+  const ratio = vol / liq;
+  if (ratio > 10) return '1.00';
+  if (ratio > 3)  return '0.50';
+  if (ratio > 1)  return '0.25';
+  if (ratio > 0.3) return '0.08';
+  return '0.04';
+}
+
+function estimateFees24h(pair) {
+  const vol = pair.volume?.h24 || 0;
+  const feePct = parseFloat(estimateFeeTier(pair)) / 100;
+  return vol * feePct;
+}
+
+function estimateFeeApr(pair) {
+  const fees = estimateFees24h(pair);
+  const liq = pair.liquidity?.usd || 0;
+  if (!liq) return 0;
+  return (fees * 365 / liq) * 100;
+}
+
+function scoreLpPool(pool, tokenMomentum = 50) {
+  const tvl = parseFloat(pool.liquidity) || 0;
+  const vol24 = parseFloat(pool.volume_24h || pool.trade_volume_24h) || 0;
+  const fees24 = parseFloat(pool.fees_24h || pool.today_fees) || 0;
+  const feeApr = pool.fee_apr || (tvl > 0 ? (fees24 * 365 / tvl * 100) : 0);
+  const binStep = pool.bin_step || null;
+  const name = (pool.name || '').toUpperCase();
+  const quoteSymbol = (pool.quoteSymbol || '').toUpperCase();
+
+  // IL risk based on quote token
+  let ilRisk, ilPenalty;
+  if (/USDC|USDT|USDS|DAI/.test(quoteSymbol || name)) { ilRisk = 'High'; ilPenalty = 30; }
+  else if (/SOL|WSOL/.test(quoteSymbol || name)) { ilRisk = 'Medium'; ilPenalty = 15; }
+  else { ilRisk = 'Very High'; ilPenalty = 40; }
+
+  const binRisk = binStep ? (binStep <= 20 ? 'Narrow (Active)' : binStep <= 80 ? 'Medium' : 'Wide (Passive)') : 'DLMM';
+
+  // Net APR estimate: fee APR minus IL cost
+  const ilCostEst = ilPenalty * (tokenMomentum < 40 ? 1.5 : tokenMomentum > 65 ? 0.6 : 1.0);
+  const netApr = Math.max(0, feeApr - ilCostEst);
+
+  // Opportunity score 0–100
+  let score = 0;
+  if (feeApr > 200) score = 90;
+  else if (feeApr > 100) score = 78;
+  else if (feeApr > 50) score = 64;
+  else if (feeApr > 20) score = 48;
+  else if (feeApr > 10) score = 32;
+  else score = 15;
+
+  // Penalise very low TVL (thin pool = high slippage for LPs when rebalancing)
+  if (tvl < 5000) score -= 20;
+  else if (tvl < 20000) score -= 10;
+
+  // Reward volume/TVL efficiency
+  const volTvlRatio = tvl > 0 ? vol24 / tvl : 0;
+  if (volTvlRatio > 2) score += 10;
+  else if (volTvlRatio > 1) score += 5;
+
+  score = Math.max(0, Math.min(100, score));
+
+  let verdict, verdictColor;
+  if (score >= 75) { verdict = '🔥 Prime'; verdictColor = '#A78BFA'; }
+  else if (score >= 55) { verdict = '✅ Good'; verdictColor = '#4ADE80'; }
+  else if (score >= 35) { verdict = '⚖️ Fair'; verdictColor = '#F59E0B'; }
+  else { verdict = '⚠️ Thin'; verdictColor = '#F87171'; }
+
+  return { score, feeApr, netApr, ilRisk, ilPenalty: ilCostEst, binRisk, vol24, tvl, fees24, verdict, verdictColor };
+}
+
+function renderMeteoraSection(pools, tokenMomentum) {
+  if (!pools.length) {
+    return `<div class="ts-report-section">
+      <div class="ts-report-title">◎ Meteora LP Opportunities</div>
+      <div class="ts-lp-empty">No active Meteora DLMM pools found for this token</div>
+    </div>`;
+  }
+
+  const rows = pools.map(pool => {
+    const lp = scoreLpPool(pool, tokenMomentum);
+    const name = pool.name || '—';
+    const baseFee = pool.base_fee_percentage ? `~${parseFloat(pool.base_fee_percentage).toFixed(2)}%` : '—';
+    const poolAddr = pool.pairAddress || pool.address || '';
+    const link = poolAddr ? `https://app.meteora.ag/dlmm/${poolAddr}` : 'https://app.meteora.ag/pools';
+
+    return `
+      <tr>
+        <td><a href="${link}" target="_blank" rel="noopener" class="ts-lp-link">${name}</a></td>
+        <td class="mono">${baseFee}<br><span style="color:var(--tx-3);font-size:9px">${pool.bin_step ? 'Bin '+pool.bin_step : 'DLMM'}</span></td>
+        <td class="mono">${fmt$(lp.tvl)}</td>
+        <td class="mono">${fmt$(lp.vol24)}</td>
+        <td class="mono bold" style="color:var(--ac)">${lp.feeApr > 9999 ? '>9999%' : lp.feeApr > 0 ? lp.feeApr.toFixed(0) + '%' : '—'}</td>
+        <td class="mono" style="color:${lp.netApr > 20 ? '#4ADE80' : lp.netApr > 0 ? '#F59E0B' : '#F87171'}">${lp.netApr > 0 ? '~' + lp.netApr.toFixed(0) + '%' : 'Low'}</td>
+        <td><span style="color:${lp.ilRisk === 'High' || lp.ilRisk === 'Very High' ? '#F87171' : '#F59E0B'};font-size:10px;font-weight:700">${lp.ilRisk}</span></td>
+        <td><span style="color:${lp.verdictColor};font-size:10px;font-weight:700">${lp.verdict}</span></td>
+      </tr>`;
+  }).join('');
+
+  // Best pool advice
+  const scored = pools.map(p => ({ pool: p, lp: scoreLpPool(p, tokenMomentum) })).sort((a, b) => b.lp.score - a.lp.score);
+  const best = scored[0];
+  let advice = '';
+  if (best) {
+    const { lp } = best;
+    const bestName = best.pool.name || 'the top pool';
+    if (lp.score >= 55) {
+      advice = `<div class="ts-lp-advice">
+        <span class="ts-lp-advice-label">💡 Best Opportunity</span>
+        <strong>${bestName}</strong> — Fee APR ${lp.feeApr.toFixed(0)}% · Net est. ~${lp.netApr.toFixed(0)}% after ${lp.ilRisk.toLowerCase()} IL.
+        ${lp.binRisk === 'Narrow (Active)' ? 'Narrow bins require active range management — check price daily.' :
+          lp.binRisk === 'Wide (Passive)' ? 'Wide bins are passive — set and check weekly.' :
+          'Medium bins — recheck position every 2–3 days.'}
+        ${lp.ilRisk === 'High' ? ' USDC pair: you bear full IL on price moves — only LP here if you expect sideways action.' :
+          lp.ilRisk === 'Medium' ? ' SOL pair: correlated assets reduce IL but don\'t eliminate it.' :
+          ' Token/token pair: maximum IL exposure — only for experienced LPs.'}
+      </div>`;
+    }
+  }
+
+  return `<div class="ts-report-section">
+    <div class="ts-report-title">◎ Meteora LP Opportunities</div>
+    ${advice}
+    <div class="ts-lp-table-wrap">
+      <table class="ts-table ts-lp-table">
+        <thead><tr>
+          <th>Pool</th><th>Fee / Bins</th><th>TVL</th><th>Vol 24H</th><th>Fee APR</th><th>Net APR est.</th><th>IL Risk</th><th>Rating</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <div style="font-size:10px;color:var(--tx-3);margin-top:8px">Net APR = Fee APR minus estimated IL cost. IL risk is higher on stable-paired pools due to divergence loss. Data: Meteora DLMM API.</div>
+  </div>`;
+}
+
 async function fetchTrendingSolana() {
   const res = await fetch(`${DS_BASE}/token-boosts/latest/v1`);
   if (!res.ok) throw new Error(`DexScreener boosts ${res.status}`);
@@ -219,6 +393,7 @@ function fmt$(n) {
   if (n >= 1_000_000_000) return '$' + (n / 1_000_000_000).toFixed(2) + 'B';
   if (n >= 1_000_000) return '$' + (n / 1_000_000).toFixed(2) + 'M';
   if (n >= 1_000) return '$' + (n / 1_000).toFixed(1) + 'K';
+  if (n >= 1) return '$' + n.toFixed(0);
   return '$' + n.toFixed(4);
 }
 function fmtPct(n) {
@@ -305,7 +480,7 @@ function generateAnalysis(pair, rug, scores) {
 }
 
 // ── Render full token card ─────────────────────────────────────────────────
-function renderTokenCard(pair, rug, container) {
+async function renderTokenCard(pair, rug, container) {
   const scores = scoreToken(pair, rug);
   const { alpha, dims, flags, narrative } = scores;
   const { exec, bullPoints, bearPoints, entry, tp1, tp2, sl, verdict } = generateAnalysis(pair, rug, scores);
@@ -433,6 +608,11 @@ function renderTokenCard(pair, rug, container) {
 
         ${tradeHtml}
 
+        <div id="ts-meteora-section" class="ts-report-section">
+          <div class="ts-report-title">◎ Meteora LP Opportunities</div>
+          <div class="ts-loading" style="padding:12px 0"><div class="ts-spinner"></div>Checking Meteora pools…</div>
+        </div>
+
         <div class="ts-report-section">
           <div class="ts-report-title">Links</div>
           <div class="ts-socials">${socialHtml}</div>
@@ -440,6 +620,14 @@ function renderTokenCard(pair, rug, container) {
       </div>
     </div>
   `;
+
+  // Async: fetch Meteora pools and inject when ready
+  if (mint) {
+    fetchMeteoraLPPools(mint).then(pools => {
+      const el = container.querySelector('#ts-meteora-section');
+      if (el) el.outerHTML = renderMeteoraSection(pools, dims.momentum);
+    });
+  }
 }
 
 // ── AI Scan tab logic ──────────────────────────────────────────────────────
