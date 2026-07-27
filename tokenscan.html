@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TokenScan — Soloris Signals</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <style>
+    /* ── TokenScan-specific styles ── */
+    .ts-hero { padding: 20px 24px 0; }
+    .ts-hero-title { font-size: 13px; font-weight: 600; color: var(--tx-1); letter-spacing: .04em; text-transform: uppercase; margin: 0 0 2px; }
+    .ts-hero-sub { font-size: 11px; color: var(--tx-3); margin: 0; }
+
+    .ts-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--bd); padding: 0 24px; margin-top: 16px; }
+    .ts-tab { padding: 8px 16px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--tx-3); cursor: pointer; border: none; background: none; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .15s; }
+    .ts-tab.is-active { color: var(--ac); border-bottom-color: var(--ac); }
+    .ts-tab:hover:not(.is-active) { color: var(--tx-1); }
+
+    .ts-panel { display: none; padding: 20px 24px; }
+    .ts-panel.is-active { display: block; }
+
+    /* Search bar */
+    .ts-search-row { display: flex; gap: 8px; margin-bottom: 20px; }
+    .ts-input { flex: 1; background: var(--bg-2); border: 1px solid var(--bd); border-radius: 6px; padding: 9px 12px; color: var(--tx-1); font-size: 12px; font-family: 'IBM Plex Mono', monospace; outline: none; transition: border-color .15s; }
+    .ts-input:focus { border-color: var(--ac); }
+    .ts-input::placeholder { color: var(--tx-3); }
+    .ts-btn { padding: 9px 16px; background: var(--ac); color: #000; border: none; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; transition: opacity .15s; letter-spacing: .03em; }
+    .ts-btn:hover { opacity: .85; }
+    .ts-btn:disabled { opacity: .4; cursor: not-allowed; }
+    .ts-btn-ghost { background: var(--bg-3); color: var(--tx-2); border: 1px solid var(--bd); }
+    .ts-btn-ghost:hover { background: var(--bg-2); opacity: 1; }
+
+    /* Score bar */
+    .ts-score-ring { width: 64px; height: 64px; position: relative; flex-shrink: 0; }
+    .ts-score-ring svg { width: 64px; height: 64px; transform: rotate(-90deg); }
+    .ts-score-ring-bg { fill: none; stroke: var(--bg-3); stroke-width: 5; }
+    .ts-score-ring-fill { fill: none; stroke-width: 5; stroke-linecap: round; transition: stroke-dashoffset .6s ease; }
+    .ts-score-label { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .ts-score-num { font-size: 17px; font-weight: 700; font-family: 'IBM Plex Mono', monospace; line-height: 1; }
+    .ts-score-word { font-size: 8px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; margin-top: 2px; }
+
+    /* Result card */
+    .ts-result { background: var(--bg-1); border: 1px solid var(--bd); border-radius: 8px; overflow: hidden; }
+    .ts-result-hd { display: flex; align-items: flex-start; gap: 14px; padding: 16px; border-bottom: 1px solid var(--bd); }
+    .ts-token-logo { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; background: var(--bg-3); flex-shrink: 0; }
+    .ts-token-logo-placeholder { width: 40px; height: 40px; border-radius: 50%; background: var(--bg-3); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700; color: var(--ac); font-family: 'IBM Plex Mono', monospace; }
+    .ts-token-meta { flex: 1; min-width: 0; }
+    .ts-token-name { font-size: 15px; font-weight: 700; color: var(--tx-1); }
+    .ts-token-symbol { font-size: 11px; color: var(--tx-3); font-family: 'IBM Plex Mono', monospace; }
+    .ts-token-ca { font-size: 10px; color: var(--tx-3); font-family: 'IBM Plex Mono', monospace; cursor: pointer; }
+    .ts-token-ca:hover { color: var(--ac); }
+    .ts-verdict-badge { padding: 5px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: .04em; flex-shrink: 0; }
+
+    /* Metrics grid */
+    .ts-metrics { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 1px; background: var(--bd); border-top: none; }
+    .ts-metric { background: var(--bg-1); padding: 12px 14px; }
+    .ts-metric-label { font-size: 10px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--tx-3); margin-bottom: 4px; }
+    .ts-metric-value { font-size: 14px; font-weight: 700; color: var(--tx-1); font-family: 'IBM Plex Mono', monospace; }
+    .ts-metric-sub { font-size: 10px; color: var(--tx-3); margin-top: 2px; }
+    .ts-metric-value.green { color: #4ADE80; }
+    .ts-metric-value.red { color: #F87171; }
+    .ts-metric-value.amber { color: var(--ac); }
+
+    /* Dimension scores */
+    .ts-dims { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 16px; }
+    .ts-dim { display: flex; align-items: center; gap: 8px; }
+    .ts-dim-name { font-size: 10px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--tx-3); width: 72px; flex-shrink: 0; }
+    .ts-dim-bar { flex: 1; height: 4px; background: var(--bg-3); border-radius: 2px; overflow: hidden; }
+    .ts-dim-fill { height: 100%; border-radius: 2px; transition: width .5s ease; }
+    .ts-dim-val { font-size: 10px; font-weight: 700; color: var(--tx-2); width: 24px; text-align: right; font-family: 'IBM Plex Mono', monospace; }
+
+    /* Risk flags */
+    .ts-flags { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 16px; border-top: 1px solid var(--bd); }
+    .ts-flag { display: flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; letter-spacing: .03em; }
+    .ts-flag.danger { background: rgba(248,113,113,.12); color: #F87171; }
+    .ts-flag.warn { background: rgba(245,158,11,.12); color: var(--ac); }
+    .ts-flag.ok { background: rgba(74,222,128,.10); color: #4ADE80; }
+
+    /* Report sections */
+    .ts-report { padding: 16px; border-top: 1px solid var(--bd); }
+    .ts-report-section { margin-bottom: 16px; }
+    .ts-report-title { font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ac); margin-bottom: 8px; }
+    .ts-report-body { font-size: 12px; color: var(--tx-2); line-height: 1.6; }
+    .ts-report-bullets { margin: 0; padding: 0 0 0 16px; }
+    .ts-report-bullets li { font-size: 12px; color: var(--tx-2); line-height: 1.7; }
+
+    .ts-trade-box { background: var(--bg-2); border: 1px solid var(--bd); border-radius: 6px; padding: 12px 14px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+    .ts-trade-item-label { font-size: 9px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--tx-3); margin-bottom: 3px; }
+    .ts-trade-item-value { font-size: 13px; font-weight: 700; color: var(--tx-1); font-family: 'IBM Plex Mono', monospace; }
+
+    /* Socials */
+    .ts-socials { display: flex; gap: 6px; flex-wrap: wrap; }
+    .ts-social-link { padding: 4px 8px; background: var(--bg-3); border-radius: 4px; font-size: 10px; color: var(--tx-2); text-decoration: none; font-weight: 600; letter-spacing: .03em; transition: color .15s; }
+    .ts-social-link:hover { color: var(--ac); }
+
+    /* Alpha scanner */
+    .ts-scanner-hd { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+    .ts-scanner-status { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--tx-3); }
+    .ts-scanner-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ac); }
+    .ts-scanner-dot.pulse { animation: ts-pulse 2s ease-in-out infinite; }
+    @keyframes ts-pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+    .ts-scanner-dot.idle { background: var(--tx-3); animation: none; }
+
+    .ts-filter-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; align-items: center; }
+    .ts-filter-label { font-size: 10px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--tx-3); }
+    .ts-filter-chip { padding: 4px 10px; border-radius: 20px; border: 1px solid var(--bd); background: var(--bg-2); font-size: 10px; font-weight: 600; color: var(--tx-3); cursor: pointer; transition: all .15s; letter-spacing: .03em; }
+    .ts-filter-chip.is-active { background: rgba(245,158,11,.12); border-color: var(--ac); color: var(--ac); }
+
+    /* Token table */
+    .ts-table-wrap { overflow-x: auto; border: 1px solid var(--bd); border-radius: 8px; }
+    .ts-table { width: 100%; border-collapse: collapse; }
+    .ts-table th { padding: 8px 12px; font-size: 9px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--tx-3); text-align: left; border-bottom: 1px solid var(--bd); background: var(--bg-2); white-space: nowrap; }
+    .ts-table td { padding: 10px 12px; font-size: 11px; color: var(--tx-2); border-bottom: 1px solid rgba(255,255,255,.04); vertical-align: middle; white-space: nowrap; }
+    .ts-table tbody tr:hover { background: var(--bg-2); cursor: pointer; }
+    .ts-table tbody tr:last-child td { border-bottom: none; }
+    .ts-table .mono { font-family: 'IBM Plex Mono', monospace; }
+    .ts-table .green { color: #4ADE80; }
+    .ts-table .red { color: #F87171; }
+    .ts-table .amber { color: var(--ac); }
+    .ts-table .bold { font-weight: 700; color: var(--tx-1); }
+
+    .ts-score-pill { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 20px; border-radius: 10px; font-size: 10px; font-weight: 700; font-family: 'IBM Plex Mono', monospace; }
+    .ts-verdict-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 5px; }
+
+    /* Loading/empty states */
+    .ts-loading { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 40px 20px; color: var(--tx-3); font-size: 12px; }
+    .ts-spinner { width: 18px; height: 18px; border: 2px solid var(--bg-3); border-top-color: var(--ac); border-radius: 50%; animation: spin .8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .ts-empty { text-align: center; padding: 40px 20px; color: var(--tx-3); font-size: 12px; }
+
+    /* Top holder bar */
+    .ts-holder-bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; gap: 1px; margin: 6px 0; }
+    .ts-holder-seg { height: 100%; transition: width .4s ease; }
+
+    /* Narrative tag */
+    .ts-narrative { display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border-radius: 10px; font-size: 9px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; background: rgba(139,92,246,.15); color: #A78BFA; }
+
+    /* Expanded scan row */
+    .ts-scan-expand { display: none; background: var(--bg-0); }
+    .ts-scan-expand.is-open { display: table-row; }
+    .ts-scan-expand td { padding: 0; border-bottom: 1px solid var(--bd); }
+    .ts-scan-expand-inner { padding: 16px; }
+
+    /* Section divider */
+    .ts-section-div { height: 1px; background: var(--bd); margin: 20px 0; }
+
+    /* Countdown */
+    .ts-countdown { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--tx-3); }
+  </style>
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-brand">
+    <span class="brand-mark">◈</span>
+    <span class="brand-name">SOLORIS</span>
+    <span class="brand-sep">·</span>
+    <span class="brand-sub">SIGNALS</span>
+  </div>
+  <nav class="topbar-nav" aria-label="Strategy pages">
+    <a class="nav-tab" href="./claudeperps.html">Claudeperps</a>
+    <a class="nav-tab" href="./emaperps.html">EMA Perps</a>
+    <a class="nav-tab is-current" href="./tokenscan.html">TokenScan</a>
+  </nav>
+  <div class="topbar-right">
+    <span class="live-badge">
+      <span class="live-dot"></span>LIVE
+    </span>
+  </div>
+</header>
+
+<main class="page" style="max-width:960px;margin:0 auto;">
+  <div class="ts-hero">
+    <p class="ts-hero-title">TokenScan <span style="color:var(--ac)">α</span></p>
+    <p class="ts-hero-sub">AI Memecoin Research Engine · Solana · Powered by DexScreener + RugCheck</p>
+  </div>
+
+  <div class="ts-tabs">
+    <button class="ts-tab is-active" data-tab="ai-scan">AI Scan</button>
+    <button class="ts-tab" data-tab="alpha-scanner">Alpha Scanner</button>
+  </div>
+
+  <!-- AI SCAN TAB -->
+  <div class="ts-panel is-active" id="ts-panel-ai-scan">
+    <div class="ts-search-row">
+      <input class="ts-input" id="ts-ca-input" placeholder="Enter Solana token address or symbol…" autocomplete="off" spellcheck="false" />
+      <button class="ts-btn" id="ts-scan-btn">Scan Token</button>
+    </div>
+
+    <div id="ts-scan-result"></div>
+  </div>
+
+  <!-- ALPHA SCANNER TAB -->
+  <div class="ts-panel" id="ts-panel-alpha-scanner">
+    <div class="ts-scanner-hd">
+      <div class="ts-scanner-status">
+        <div class="ts-scanner-dot idle" id="ts-dot"></div>
+        <span id="ts-status-text">Idle — press Start to begin scanning</span>
+      </div>
+      <button class="ts-btn" id="ts-start-btn" style="margin-left:auto;">▶ Start Scanner</button>
+      <button class="ts-btn ts-btn-ghost" id="ts-stop-btn" disabled>■ Stop</button>
+      <span class="ts-countdown" id="ts-countdown"></span>
+    </div>
+
+    <div class="ts-filter-row">
+      <span class="ts-filter-label">Filter:</span>
+      <button class="ts-filter-chip is-active" data-filter="all">All</button>
+      <button class="ts-filter-chip" data-filter="moonshot">🌙 Moonshot</button>
+      <button class="ts-filter-chip" data-filter="conviction">🔥 High Conviction</button>
+      <button class="ts-filter-chip" data-filter="bullish">✅ Bullish</button>
+      <button class="ts-filter-chip" data-filter="avoid">⚠️ Avoid</button>
+    </div>
+
+    <div class="ts-table-wrap">
+      <table class="ts-table">
+        <thead>
+          <tr>
+            <th>Score</th>
+            <th>Token</th>
+            <th>Narrative</th>
+            <th>Price</th>
+            <th>24H</th>
+            <th>Vol 24H</th>
+            <th>Liq</th>
+            <th>MCap</th>
+            <th>Age</th>
+            <th>Safety</th>
+            <th>Verdict</th>
+          </tr>
+        </thead>
+        <tbody id="ts-scanner-body">
+          <tr>
+            <td colspan="11" class="ts-empty">Start the scanner to discover trending Solana tokens</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div id="ts-scanner-detail"></div>
+  </div>
+</main>
+
+<script src="./tokenscan.js"></script>
+</body>
+</html>

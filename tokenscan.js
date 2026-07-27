@@ -1,0 +1,650 @@
+/* tokenscan.js — AI Memecoin Research Engine for Solana */
+
+// ── API endpoints ──────────────────────────────────────────────────────────
+const DS_BASE = 'https://api.dexscreener.com';
+const RC_BASE = 'https://api.rugcheck.xyz/v1';
+const JUP_PRICE = 'https://api.jup.ag/price/v2';
+
+// ── Narrative classifier ───────────────────────────────────────────────────
+const NARRATIVES = [
+  { tag: 'Dog',      emoji: '🐕', keywords: ['doge','dog','puppy','woof','shib','bonk','floki','inu','bark','hound','poodle','husky','corgi','mutt'] },
+  { tag: 'Cat',      emoji: '🐱', keywords: ['cat','nyan','meow','paw','kitty','tabby','kitten','purr','feline'] },
+  { tag: 'AI',       emoji: '🤖', keywords: ['ai','gpt','llm','neural','machine','compute','nvidia','claude','agent','brain','robot','cyber'] },
+  { tag: 'Political',emoji: '🏛️', keywords: ['trump','biden','maga','republican','democrat','vote','election','potus','kamala','politics','gop'] },
+  { tag: 'Pepe',     emoji: '🐸', keywords: ['pepe','wojak','chad','based','gigachad','frog','clown','honk','feels','rare'] },
+  { tag: 'Gaming',   emoji: '🎮', keywords: ['game','play','pixel','arcade','pong','mario','pokemon','sonic','gamer','rpg','quest','sword','coin'] },
+  { tag: 'Anime',    emoji: '⛩️', keywords: ['anime','manga','naruto','goku','demon','waifu','otaku','slice','isekai','shinobi','samurai'] },
+  { tag: 'Celebrity',emoji: '⭐', keywords: ['elon','kanye','taylor','musk','bezos','swift','ye','snoop','drake','rogan'] },
+  { tag: 'Space',    emoji: '🚀', keywords: ['moon','mars','space','rocket','galaxy','star','cosmos','astro','orbit','nasa','alien'] },
+  { tag: 'Finance',  emoji: '💰', keywords: ['degen','lambo','diamond','hands','ape','yolo','wagmi','ngmi','fomo','bull','bear','gm'] },
+  { tag: 'Sports',   emoji: '🏆', keywords: ['nfl','nba','soccer','football','basketball','baseball','sport','goat','champion','league'] },
+  { tag: 'Food',     emoji: '🍕', keywords: ['pizza','burger','taco','sushi','ramen','bread','cake','cookie','donut','food','eat','yum'] },
+  { tag: 'Solana',   emoji: '◎', keywords: ['sol','solana','saga','bonk','jto','jup','pyth','drift','meteora','raydium','orca'] },
+  { tag: 'Music',    emoji: '🎵', keywords: ['music','beat','rap','hip','hop','pop','rock','band','song','melody','tune','vinyl'] },
+];
+
+function classifyNarrative(name = '', symbol = '') {
+  const text = (name + ' ' + symbol).toLowerCase();
+  for (const n of NARRATIVES) {
+    if (n.keywords.some(k => text.includes(k))) return n;
+  }
+  return { tag: 'Misc', emoji: '✦', keywords: [] };
+}
+
+// ── Scoring system ─────────────────────────────────────────────────────────
+function scoreToken(dex, rug) {
+  const pair = dex;
+  const vol24 = pair?.volume?.h24 || 0;
+  const liqUsd = pair?.liquidity?.usd || 0;
+  const mc = pair?.marketCap || pair?.fdv || 0;
+  const pc24 = pair?.priceChange?.h24 || 0;
+  const pc1h = pair?.priceChange?.h1 || 0;
+  const txns24 = pair?.txns?.h24 || {};
+  const buys24 = txns24.buys || 0;
+  const sells24 = txns24.sells || 0;
+  const ageMs = pair?.pairCreatedAt ? Date.now() - pair.pairCreatedAt : 0;
+  const ageH = ageMs / 3_600_000;
+
+  const rugScore = rug?.score || 0;
+  const holders = rug?.totalHolders || 0;
+  const lockedPct = rug?.lockedPct || 0;
+  const risks = rug?.risks || [];
+  const topHolders = rug?.topHolders || [];
+
+  const hasMintAuth = risks.some(r => /mint authority/i.test(r.name));
+  const hasFreezeAuth = risks.some(r => /freeze authority/i.test(r.name));
+  const top10Pct = topHolders.slice(0, 10).reduce((s, h) => s + (h.pct || 0), 0);
+
+  // Safety (0–100): lower rugcheck score = safer
+  let safety = 100;
+  if (rugScore > 5000) safety = 0;
+  else if (rugScore > 3000) safety = 15;
+  else if (rugScore > 2000) safety = 35;
+  else if (rugScore > 1000) safety = 60;
+  else if (rugScore > 500) safety = 80;
+  else safety = 95;
+  if (hasMintAuth) safety = Math.max(0, safety - 40);
+  if (hasFreezeAuth) safety = Math.max(0, safety - 25);
+  if (lockedPct < 50 && rug) safety = Math.max(0, safety - 15);
+  if (top10Pct > 60) safety = Math.max(0, safety - 15);
+  if (top10Pct > 40) safety = Math.max(0, safety - 8);
+
+  // Liquidity (0–100)
+  let liquidity = 0;
+  if (liqUsd > 1_000_000) liquidity = 100;
+  else if (liqUsd > 500_000) liquidity = 88;
+  else if (liqUsd > 200_000) liquidity = 74;
+  else if (liqUsd > 100_000) liquidity = 60;
+  else if (liqUsd > 50_000) liquidity = 46;
+  else if (liqUsd > 20_000) liquidity = 32;
+  else if (liqUsd > 10_000) liquidity = 20;
+  else liquidity = 5;
+
+  // Holder (0–100)
+  let holder = 0;
+  if (holders > 10_000) holder = 100;
+  else if (holders > 5_000) holder = 85;
+  else if (holders > 2_000) holder = 68;
+  else if (holders > 1_000) holder = 52;
+  else if (holders > 500) holder = 38;
+  else if (holders > 100) holder = 22;
+  else holder = 8;
+  if (top10Pct < 20) holder = Math.min(100, holder + 12);
+  else if (top10Pct < 35) holder = Math.min(100, holder + 5);
+
+  // Volume (0–100)
+  let volume = 0;
+  if (vol24 > 5_000_000) volume = 100;
+  else if (vol24 > 2_000_000) volume = 88;
+  else if (vol24 > 1_000_000) volume = 76;
+  else if (vol24 > 500_000) volume = 62;
+  else if (vol24 > 200_000) volume = 48;
+  else if (vol24 > 100_000) volume = 34;
+  else if (vol24 > 50_000) volume = 20;
+  else volume = 5;
+
+  // Momentum (0–100)
+  let momentum = 50;
+  if (pc24 > 100) momentum += 30;
+  else if (pc24 > 50) momentum += 20;
+  else if (pc24 > 20) momentum += 12;
+  else if (pc24 > 0) momentum += 5;
+  else if (pc24 < -50) momentum -= 30;
+  else if (pc24 < -20) momentum -= 15;
+  else if (pc24 < 0) momentum -= 8;
+
+  if (buys24 > 0 && sells24 > 0) {
+    const bsRatio = buys24 / (buys24 + sells24);
+    if (bsRatio > 0.65) momentum += 15;
+    else if (bsRatio > 0.55) momentum += 8;
+    else if (bsRatio < 0.35) momentum -= 15;
+    else if (bsRatio < 0.45) momentum -= 8;
+  }
+  if (pc1h > 10) momentum += 8;
+  else if (pc1h < -10) momentum -= 8;
+  momentum = Math.max(0, Math.min(100, momentum));
+
+  // Age score (0–100): sweet spot is 6–72h
+  let age = 0;
+  if (ageH > 72) age = 70;
+  else if (ageH > 24) age = 90;
+  else if (ageH > 6) age = 75;
+  else if (ageH > 1) age = 50;
+  else age = 20;
+
+  // Narrative (0–100)
+  const narr = classifyNarrative(pair?.baseToken?.name, pair?.baseToken?.symbol);
+  const trendingNarratives = ['AI', 'Political', 'Pepe', 'Dog', 'Space'];
+  let narrative = 40;
+  if (trendingNarratives.includes(narr.tag)) narrative = 75;
+  if (narr.tag === 'Misc') narrative = 25;
+
+  // Alpha Score (weighted composite)
+  const alpha = Math.round(
+    0.25 * safety +
+    0.20 * liquidity +
+    0.15 * holder +
+    0.20 * momentum +
+    0.10 * volume +
+    0.05 * age +
+    0.05 * narrative
+  );
+
+  return {
+    alpha,
+    dims: { safety, liquidity, holder, volume, momentum, age, narrative },
+    flags: {
+      hasMintAuth,
+      hasFreezeAuth,
+      lpLocked: lockedPct >= 80,
+      lpLockedPct: lockedPct,
+      top10Pct,
+      rugScore,
+      holders,
+      ageH,
+    },
+    narrative: narr,
+  };
+}
+
+function verdictFromScore(score) {
+  if (score >= 80) return { label: '🌙 Moonshot', tier: 'moonshot', color: '#A78BFA', bg: 'rgba(139,92,246,.18)' };
+  if (score >= 65) return { label: '🔥 High Conviction', tier: 'conviction', color: '#F59E0B', bg: 'rgba(245,158,11,.14)' };
+  if (score >= 50) return { label: '✅ Bullish', tier: 'bullish', color: '#4ADE80', bg: 'rgba(74,222,128,.12)' };
+  if (score >= 35) return { label: '⚖️ Neutral', tier: 'neutral', color: '#94A3B8', bg: 'rgba(148,163,184,.10)' };
+  if (score >= 20) return { label: '⚠️ Caution', tier: 'caution', color: '#F59E0B', bg: 'rgba(245,158,11,.10)' };
+  return { label: '🚨 Avoid', tier: 'avoid', color: '#F87171', bg: 'rgba(248,113,113,.14)' };
+}
+
+// ── Fetch helpers ──────────────────────────────────────────────────────────
+async function fetchDexToken(addressOrSymbol) {
+  const isAddr = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addressOrSymbol.trim());
+  const url = isAddr
+    ? `${DS_BASE}/latest/dex/tokens/${addressOrSymbol.trim()}`
+    : `${DS_BASE}/latest/dex/search/?q=${encodeURIComponent(addressOrSymbol.trim())}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`DexScreener ${res.status}`);
+  const data = await res.json();
+  const pairs = (data.pairs || []).filter(p => p.chainId === 'solana');
+  if (!pairs.length) throw new Error('No Solana pairs found');
+  pairs.sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0));
+  return pairs[0];
+}
+
+async function fetchRugCheck(mint) {
+  try {
+    const res = await fetch(`${RC_BASE}/tokens/${mint}/report`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch { return null; }
+}
+
+async function fetchTrendingSolana() {
+  const res = await fetch(`${DS_BASE}/token-boosts/latest/v1`);
+  if (!res.ok) throw new Error(`DexScreener boosts ${res.status}`);
+  const data = await res.json();
+  return (data || []).filter(t => t.chainId === 'solana').slice(0, 30);
+}
+
+async function fetchNewProfiles() {
+  const res = await fetch(`${DS_BASE}/token-profiles/latest/v1`);
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data || []).filter(t => t.chainId === 'solana').slice(0, 20);
+}
+
+// ── Format helpers ─────────────────────────────────────────────────────────
+function fmt$(n) {
+  if (!n || isNaN(n)) return '$—';
+  if (n >= 1_000_000_000) return '$' + (n / 1_000_000_000).toFixed(2) + 'B';
+  if (n >= 1_000_000) return '$' + (n / 1_000_000).toFixed(2) + 'M';
+  if (n >= 1_000) return '$' + (n / 1_000).toFixed(1) + 'K';
+  return '$' + n.toFixed(4);
+}
+function fmtPct(n) {
+  if (!n && n !== 0) return '—';
+  const s = (n > 0 ? '+' : '') + n.toFixed(1) + '%';
+  return s;
+}
+function fmtAge(ms) {
+  if (!ms) return '—';
+  const h = ms / 3_600_000;
+  if (h < 1) return Math.round(h * 60) + 'm';
+  if (h < 24) return h.toFixed(1) + 'h';
+  return (h / 24).toFixed(1) + 'd';
+}
+function fmtPrice(p) {
+  if (!p) return '—';
+  const n = parseFloat(p);
+  if (n < 0.000001) return '$' + n.toExponential(2);
+  if (n < 0.001) return '$' + n.toFixed(7);
+  if (n < 1) return '$' + n.toFixed(5);
+  return '$' + n.toFixed(4);
+}
+function shortAddr(a) { return a ? a.slice(0, 4) + '…' + a.slice(-4) : ''; }
+
+// ── Generate AI analysis text ──────────────────────────────────────────────
+function generateAnalysis(pair, rug, scores) {
+  const { alpha, dims, flags, narrative } = scores;
+  const verdict = verdictFromScore(alpha);
+  const name = pair?.baseToken?.name || 'Unknown';
+  const symbol = pair?.baseToken?.symbol || '?';
+  const vol24 = pair?.volume?.h24 || 0;
+  const liq = pair?.liquidity?.usd || 0;
+  const mc = pair?.marketCap || pair?.fdv || 0;
+  const pc24 = pair?.priceChange?.h24 || 0;
+
+  const bullPoints = [];
+  const bearPoints = [];
+
+  if (dims.safety >= 80) bullPoints.push('No critical contract risks — mint/freeze authority disabled');
+  if (flags.lpLocked) bullPoints.push(`LP ${flags.lpLockedPct.toFixed(0)}% locked — rug risk significantly reduced`);
+  if (dims.holder >= 70) bullPoints.push(`Strong holder base (${flags.holders.toLocaleString()} holders) indicating organic distribution`);
+  if (dims.momentum >= 70) bullPoints.push(`Strong upward momentum +${pc24.toFixed(0)}% 24H with healthy buy/sell ratio`);
+  if (dims.liquidity >= 70) bullPoints.push(`Deep liquidity ${fmt$(liq)} — minimal slippage for entry/exit`);
+  if (dims.volume >= 70) bullPoints.push(`High volume ${fmt$(vol24)} 24H — real market activity, not wash trading`);
+  if (narrative.tag !== 'Misc') bullPoints.push(`${narrative.emoji} ${narrative.tag} narrative alignment — one of strongest memecoin catalysts`);
+  if (flags.ageH > 24 && flags.ageH < 168) bullPoints.push('Token age in sweet spot (1–7 days) — early but survived initial dump');
+
+  if (flags.hasMintAuth) bearPoints.push('⚠️ Mint authority ENABLED — developer can print unlimited supply');
+  if (flags.hasFreezeAuth) bearPoints.push('⚠️ Freeze authority enabled — accounts can be frozen');
+  if (!flags.lpLocked) bearPoints.push('LP not locked — liquidity can be pulled at any time (rug risk)');
+  if (flags.top10Pct > 50) bearPoints.push(`Top 10 wallets hold ${flags.top10Pct.toFixed(0)}% — extreme concentration risk`);
+  if (dims.momentum < 40) bearPoints.push('Weak or negative momentum — no strong directional move');
+  if (dims.liquidity < 30) bearPoints.push(`Thin liquidity ${fmt$(liq)} — large orders will face significant slippage`);
+  if (dims.holder < 30) bearPoints.push('Low holder count — early stage with limited organic distribution');
+  if (flags.ageH < 2) bearPoints.push('Extremely new token (<2h) — high risk of early dump or rug');
+  if (dims.safety < 40) bearPoints.push(`High RugCheck risk score (${flags.rugScore}) — multiple contract red flags`);
+
+  // Executive summary
+  let exec = '';
+  if (alpha >= 65) {
+    exec = `${name} ($${symbol}) presents a ${verdict.label.replace(/[^\w\s]/g, '').trim()} opportunity in the ${narrative.emoji} ${narrative.tag} narrative space. `;
+    exec += `With ${fmt$(liq)} liquidity and ${fmt$(vol24)} 24H volume, market depth is ${liq > 100_000 ? 'adequate for meaningful position sizing' : 'limited — keep positions small'}. `;
+    exec += dims.safety >= 70 ? 'Contract security checks are clean. ' : 'Contract carries some risk — position accordingly. ';
+  } else if (alpha >= 35) {
+    exec = `${name} ($${symbol}) is a mixed setup — some positive signals but significant risks present. `;
+    exec += `The ${narrative.emoji} ${narrative.tag} narrative is ${narrative.tag !== 'Misc' ? 'working in its favor' : 'undifferentiated'}. `;
+    exec += 'Proceed with caution and small position size only. ';
+  } else {
+    exec = `${name} ($${symbol}) shows multiple red flags across safety, liquidity, and momentum dimensions. `;
+    exec += 'This is a high-risk setup with asymmetric downside. Avoid unless you are experienced with high-risk plays. ';
+  }
+
+  // Trade setup
+  const price = parseFloat(pair?.priceUsd) || 0;
+  let entry = null, tp1 = null, tp2 = null, sl = null;
+  if (alpha >= 50 && price > 0) {
+    entry = price;
+    tp1 = price * (1 + Math.min(0.5, pc24 > 0 ? 0.3 : 0.2));
+    tp2 = price * (1 + Math.min(1.5, pc24 > 0 ? 0.8 : 0.5));
+    sl = price * (1 - (dims.safety < 60 ? 0.25 : 0.15));
+  }
+
+  return { exec, bullPoints, bearPoints, entry, tp1, tp2, sl, verdict };
+}
+
+// ── Render full token card ─────────────────────────────────────────────────
+function renderTokenCard(pair, rug, container) {
+  const scores = scoreToken(pair, rug);
+  const { alpha, dims, flags, narrative } = scores;
+  const { exec, bullPoints, bearPoints, entry, tp1, tp2, sl, verdict } = generateAnalysis(pair, rug, scores);
+
+  const name = pair?.baseToken?.name || 'Unknown';
+  const symbol = pair?.baseToken?.symbol || '?';
+  const mint = pair?.baseToken?.address || '';
+  const imageUrl = pair?.info?.imageUrl;
+  const socials = pair?.info?.socials || [];
+  const websites = pair?.info?.websites || [];
+  const vol24 = pair?.volume?.h24 || 0;
+  const liq = pair?.liquidity?.usd || 0;
+  const mc = pair?.marketCap || pair?.fdv || 0;
+  const pc24 = pair?.priceChange?.h24 || 0;
+  const pc1h = pair?.priceChange?.h1 || 0;
+  const pc6h = pair?.priceChange?.h6 || 0;
+  const txns24 = pair?.txns?.h24 || {};
+  const buys = txns24.buys || 0;
+  const sells = txns24.sells || 0;
+  const ageMs = pair?.pairCreatedAt ? Date.now() - pair.pairCreatedAt : 0;
+
+  const circumference = 2 * Math.PI * 26;
+  const strokeDash = circumference * (alpha / 100);
+  const ringColor = alpha >= 65 ? '#A78BFA' : alpha >= 50 ? '#4ADE80' : alpha >= 35 ? '#F59E0B' : '#F87171';
+
+  const dimColor = (v) => v >= 70 ? '#4ADE80' : v >= 45 ? '#F59E0B' : '#F87171';
+
+  const logoHtml = imageUrl
+    ? `<img class="ts-token-logo" src="${imageUrl}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/><div class="ts-token-logo-placeholder" style="display:none">${symbol[0]}</div>`
+    : `<div class="ts-token-logo-placeholder">${symbol[0] || '?'}</div>`;
+
+  // Risk flags
+  const flagHtml = [
+    flags.hasMintAuth ? '<span class="ts-flag danger">⚠ Mint Auth</span>' : '<span class="ts-flag ok">✓ No Mint</span>',
+    flags.hasFreezeAuth ? '<span class="ts-flag danger">⚠ Freeze Auth</span>' : '<span class="ts-flag ok">✓ No Freeze</span>',
+    flags.lpLocked ? `<span class="ts-flag ok">✓ LP ${flags.lpLockedPct.toFixed(0)}% Locked</span>` : '<span class="ts-flag danger">⚠ LP Unlocked</span>',
+    flags.top10Pct > 50 ? `<span class="ts-flag danger">⚠ Top10: ${flags.top10Pct.toFixed(0)}%</span>` : flags.top10Pct > 30 ? `<span class="ts-flag warn">Top10: ${flags.top10Pct.toFixed(0)}%</span>` : `<span class="ts-flag ok">✓ Top10: ${flags.top10Pct.toFixed(0)}%</span>`,
+    flags.holders > 0 ? `<span class="ts-flag ${flags.holders > 1000 ? 'ok' : 'warn'}">${flags.holders.toLocaleString()} Holders</span>` : '',
+    flags.rugScore > 3000 ? `<span class="ts-flag danger">RugScore: ${flags.rugScore}</span>` : flags.rugScore > 1000 ? `<span class="ts-flag warn">RugScore: ${flags.rugScore}</span>` : `<span class="ts-flag ok">RugScore: ${flags.rugScore || '—'}</span>`,
+  ].join('');
+
+  // Social links
+  const socialHtml = [
+    ...websites.map(w => `<a class="ts-social-link" href="${w.url}" target="_blank" rel="noopener">${w.label || 'Website'}</a>`),
+    ...socials.map(s => `<a class="ts-social-link" href="${s.url}" target="_blank" rel="noopener">${s.type}</a>`),
+    `<a class="ts-social-link" href="https://dexscreener.com/solana/${mint}" target="_blank" rel="noopener">DexScreener</a>`,
+    `<a class="ts-social-link" href="https://rugcheck.xyz/tokens/${mint}" target="_blank" rel="noopener">RugCheck</a>`,
+  ].join('');
+
+  // Trade setup HTML
+  const tradeHtml = entry ? `
+    <div class="ts-report-section">
+      <div class="ts-report-title">Suggested Trade Setup</div>
+      <div class="ts-trade-box">
+        <div><div class="ts-trade-item-label">Entry</div><div class="ts-trade-item-value">${fmtPrice(entry)}</div></div>
+        <div><div class="ts-trade-item-label">TP1 (+${((tp1/entry-1)*100).toFixed(0)}%)</div><div class="ts-trade-item-value" style="color:#4ADE80">${fmtPrice(tp1)}</div></div>
+        <div><div class="ts-trade-item-label">TP2 (+${((tp2/entry-1)*100).toFixed(0)}%)</div><div class="ts-trade-item-value" style="color:#4ADE80">${fmtPrice(tp2)}</div></div>
+        <div><div class="ts-trade-item-label">Stop Loss</div><div class="ts-trade-item-value" style="color:#F87171">${fmtPrice(sl)}</div></div>
+        <div><div class="ts-trade-item-label">R/R Ratio</div><div class="ts-trade-item-value" style="color:var(--ac)">${((tp1/entry-1)/(entry/sl-1)).toFixed(1)}:1</div></div>
+        <div><div class="ts-trade-item-label">Risk/Position</div><div class="ts-trade-item-value">1–3%</div></div>
+      </div>
+    </div>
+  ` : '';
+
+  container.innerHTML = `
+    <div class="ts-result">
+      <div class="ts-result-hd">
+        <div style="display:flex;gap:10px;align-items:center;flex:1">
+          ${logoHtml}
+          <div class="ts-token-meta">
+            <div class="ts-token-name">${name} <span class="ts-narrative">${narrative.emoji} ${narrative.tag}</span></div>
+            <div class="ts-token-symbol">$${symbol}</div>
+            <div class="ts-token-ca" onclick="navigator.clipboard.writeText('${mint}');this.textContent='Copied!';setTimeout(()=>this.textContent='${shortAddr(mint)}',1200)">${shortAddr(mint)}</div>
+          </div>
+        </div>
+        <div class="ts-score-ring">
+          <svg viewBox="0 0 64 64"><circle class="ts-score-ring-bg" cx="32" cy="32" r="26"/><circle class="ts-score-ring-fill" cx="32" cy="32" r="26" stroke="${ringColor}" stroke-dasharray="${strokeDash} ${circumference}" stroke-dashoffset="0"/></svg>
+          <div class="ts-score-label"><span class="ts-score-num" style="color:${ringColor}">${alpha}</span><span class="ts-score-word" style="color:${ringColor}">${verdict.label.replace(/[🌙🔥✅⚖️⚠️🚨]/g,'').trim().split(' ')[0]}</span></div>
+        </div>
+        <span class="ts-verdict-badge" style="background:${verdict.bg};color:${verdict.color}">${verdict.label}</span>
+      </div>
+
+      <div class="ts-metrics">
+        <div class="ts-metric"><div class="ts-metric-label">Price</div><div class="ts-metric-value">${fmtPrice(pair?.priceUsd)}</div></div>
+        <div class="ts-metric"><div class="ts-metric-label">1H</div><div class="ts-metric-value ${pc1h>=0?'green':'red'}">${fmtPct(pc1h)}</div></div>
+        <div class="ts-metric"><div class="ts-metric-label">6H</div><div class="ts-metric-value ${pc6h>=0?'green':'red'}">${fmtPct(pc6h)}</div></div>
+        <div class="ts-metric"><div class="ts-metric-label">24H</div><div class="ts-metric-value ${pc24>=0?'green':'red'}">${fmtPct(pc24)}</div></div>
+        <div class="ts-metric"><div class="ts-metric-label">Volume 24H</div><div class="ts-metric-value">${fmt$(vol24)}</div></div>
+        <div class="ts-metric"><div class="ts-metric-label">Liquidity</div><div class="ts-metric-value">${fmt$(liq)}</div></div>
+        <div class="ts-metric"><div class="ts-metric-label">Market Cap</div><div class="ts-metric-value">${fmt$(mc)}</div></div>
+        <div class="ts-metric"><div class="ts-metric-label">Age</div><div class="ts-metric-value">${fmtAge(ageMs)}</div></div>
+        <div class="ts-metric"><div class="ts-metric-label">Buys / Sells</div><div class="ts-metric-value"><span class="green">${buys}</span> / <span class="red">${sells}</span></div></div>
+        <div class="ts-metric"><div class="ts-metric-label">DEX</div><div class="ts-metric-value" style="text-transform:capitalize">${pair?.dexId || '—'}</div></div>
+      </div>
+
+      <div class="ts-dims">
+        ${Object.entries(dims).map(([k, v]) => `
+          <div class="ts-dim">
+            <span class="ts-dim-name">${k}</span>
+            <div class="ts-dim-bar"><div class="ts-dim-fill" style="width:${v}%;background:${dimColor(v)}"></div></div>
+            <span class="ts-dim-val">${v}</span>
+          </div>
+        `).join('')}
+      </div>
+
+      <div class="ts-flags">${flagHtml}</div>
+
+      <div class="ts-report">
+        <div class="ts-report-section">
+          <div class="ts-report-title">Executive Summary</div>
+          <div class="ts-report-body">${exec}</div>
+        </div>
+
+        ${bullPoints.length ? `
+        <div class="ts-report-section">
+          <div class="ts-report-title">Bull Case</div>
+          <ul class="ts-report-bullets">${bullPoints.map(p => `<li>${p}</li>`).join('')}</ul>
+        </div>` : ''}
+
+        ${bearPoints.length ? `
+        <div class="ts-report-section">
+          <div class="ts-report-title">Bear Case / Risks</div>
+          <ul class="ts-report-bullets">${bearPoints.map(p => `<li>${p}</li>`).join('')}</ul>
+        </div>` : ''}
+
+        ${tradeHtml}
+
+        <div class="ts-report-section">
+          <div class="ts-report-title">Links</div>
+          <div class="ts-socials">${socialHtml}</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// ── AI Scan tab logic ──────────────────────────────────────────────────────
+const scanBtn = document.getElementById('ts-scan-btn');
+const caInput = document.getElementById('ts-ca-input');
+const scanResult = document.getElementById('ts-scan-result');
+
+async function runAiScan() {
+  const query = caInput.value.trim();
+  if (!query) return;
+  scanBtn.disabled = true;
+  scanBtn.textContent = 'Scanning…';
+  scanResult.innerHTML = '<div class="ts-loading"><div class="ts-spinner"></div>Fetching token data…</div>';
+
+  try {
+    const pair = await fetchDexToken(query);
+    const mint = pair?.baseToken?.address;
+    scanResult.innerHTML = '<div class="ts-loading"><div class="ts-spinner"></div>Running safety checks…</div>';
+    const rug = mint ? await fetchRugCheck(mint) : null;
+    renderTokenCard(pair, rug, scanResult);
+  } catch (e) {
+    scanResult.innerHTML = `<div class="ts-empty">❌ ${e.message || 'Failed to fetch token data'}</div>`;
+  } finally {
+    scanBtn.disabled = false;
+    scanBtn.textContent = 'Scan Token';
+  }
+}
+
+scanBtn.addEventListener('click', runAiScan);
+caInput.addEventListener('keydown', e => { if (e.key === 'Enter') runAiScan(); });
+
+// ── Alpha Scanner tab logic ────────────────────────────────────────────────
+let scannerRunning = false;
+let scannerTimer = null;
+let scannerCountdown = null;
+let currentFilter = 'all';
+let scannerData = [];
+const SCAN_INTERVAL = 90; // seconds
+
+const startBtn = document.getElementById('ts-start-btn');
+const stopBtn = document.getElementById('ts-stop-btn');
+const statusText = document.getElementById('ts-status-text');
+const dot = document.getElementById('ts-dot');
+const scannerBody = document.getElementById('ts-scanner-body');
+const scannerDetail = document.getElementById('ts-scanner-detail');
+const countdownEl = document.getElementById('ts-countdown');
+
+function setScannerState(running) {
+  scannerRunning = running;
+  startBtn.disabled = running;
+  stopBtn.disabled = !running;
+  dot.className = 'ts-scanner-dot' + (running ? ' pulse' : ' idle');
+}
+
+async function runAlphaScan() {
+  setScannerState(true);
+  statusText.textContent = 'Scanning trending Solana tokens…';
+  try {
+    const [boosts, profiles] = await Promise.all([
+      fetchTrendingSolana().catch(() => []),
+      fetchNewProfiles().catch(() => []),
+    ]);
+    const addresses = new Set();
+    const combined = [...boosts, ...profiles];
+    const unique = combined.filter(t => {
+      const addr = t.tokenAddress || t.baseToken?.address;
+      if (!addr || addresses.has(addr)) return false;
+      addresses.add(addr);
+      return true;
+    }).slice(0, 25);
+
+    statusText.textContent = `Analyzing ${unique.length} tokens…`;
+
+    const results = [];
+    for (const t of unique) {
+      try {
+        const addr = t.tokenAddress || t.baseToken?.address;
+        if (!addr) continue;
+        const pair = await fetchDexToken(addr);
+        if (!pair) continue;
+        const rug = await fetchRugCheck(addr);
+        const scores = scoreToken(pair, rug);
+        results.push({ pair, rug, scores, addr });
+      } catch { /* skip failed tokens */ }
+    }
+
+    results.sort((a, b) => b.scores.alpha - a.scores.alpha);
+    scannerData = results;
+    renderScannerTable();
+    statusText.textContent = `Last scan: ${new Date().toLocaleTimeString()} · ${results.length} tokens analyzed`;
+    startCountdown();
+  } catch (e) {
+    statusText.textContent = `Error: ${e.message}`;
+  }
+}
+
+function startCountdown() {
+  let remaining = SCAN_INTERVAL;
+  clearInterval(scannerCountdown);
+  scannerCountdown = setInterval(() => {
+    remaining--;
+    countdownEl.textContent = `Next scan in ${remaining}s`;
+    if (remaining <= 0) {
+      clearInterval(scannerCountdown);
+      countdownEl.textContent = '';
+      if (scannerRunning) runAlphaScan();
+    }
+  }, 1000);
+}
+
+function renderScannerTable() {
+  const filtered = scannerData.filter(({ scores, pair }) => {
+    if (currentFilter === 'all') return true;
+    const v = verdictFromScore(scores.alpha);
+    if (currentFilter === 'moonshot') return v.tier === 'moonshot';
+    if (currentFilter === 'conviction') return v.tier === 'conviction';
+    if (currentFilter === 'bullish') return v.tier === 'bullish';
+    if (currentFilter === 'avoid') return ['avoid','caution'].includes(v.tier);
+    return true;
+  });
+
+  if (!filtered.length) {
+    scannerBody.innerHTML = '<tr><td colspan="11" class="ts-empty">No tokens match this filter</td></tr>';
+    return;
+  }
+
+  scannerBody.innerHTML = filtered.map(({ pair, rug, scores, addr }, i) => {
+    const { alpha, dims, flags, narrative } = scores;
+    const verdict = verdictFromScore(alpha);
+    const name = pair?.baseToken?.name || 'Unknown';
+    const symbol = pair?.baseToken?.symbol || '?';
+    const pc24 = pair?.priceChange?.h24 || 0;
+    const vol24 = pair?.volume?.h24 || 0;
+    const liq = pair?.liquidity?.usd || 0;
+    const mc = pair?.marketCap || pair?.fdv || 0;
+    const ageMs = pair?.pairCreatedAt ? Date.now() - pair.pairCreatedAt : 0;
+
+    const scoreBg = alpha >= 65 ? '#A78BFA' : alpha >= 50 ? '#4ADE80' : alpha >= 35 ? '#F59E0B' : '#F87171';
+    const safetyColor = dims.safety >= 70 ? '#4ADE80' : dims.safety >= 40 ? '#F59E0B' : '#F87171';
+
+    return `
+      <tr data-idx="${i}" onclick="toggleScanDetail(${i}, this)">
+        <td><span class="ts-score-pill" style="background:${scoreBg}22;color:${scoreBg}">${alpha}</span></td>
+        <td class="bold">${name}<br><span style="color:var(--tx-3);font-size:9px">$${symbol}</span></td>
+        <td><span class="ts-narrative">${narrative.emoji} ${narrative.tag}</span></td>
+        <td class="mono">${fmtPrice(pair?.priceUsd)}</td>
+        <td class="mono ${pc24>=0?'green':'red'}">${fmtPct(pc24)}</td>
+        <td class="mono">${fmt$(vol24)}</td>
+        <td class="mono">${fmt$(liq)}</td>
+        <td class="mono">${fmt$(mc)}</td>
+        <td class="mono">${fmtAge(ageMs)}</td>
+        <td><span style="color:${safetyColor};font-size:10px;font-weight:700">${dims.safety}</span></td>
+        <td><span class="ts-verdict-dot" style="background:${verdict.color}"></span><span style="font-size:10px;color:${verdict.color}">${verdict.label.replace(/[^\w\s]/g,'').trim()}</span></td>
+      </tr>
+      <tr class="ts-scan-expand" id="ts-expand-${i}">
+        <td colspan="11"><div class="ts-scan-expand-inner" id="ts-expand-inner-${i}">
+          <div class="ts-loading"><div class="ts-spinner"></div>Loading full analysis…</div>
+        </div></td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function toggleScanDetail(idx, row) {
+  const expandRow = document.getElementById(`ts-expand-${idx}`);
+  const inner = document.getElementById(`ts-expand-inner-${idx}`);
+  const isOpen = expandRow.classList.contains('is-open');
+  // Close all
+  document.querySelectorAll('.ts-scan-expand.is-open').forEach(r => r.classList.remove('is-open'));
+  if (!isOpen) {
+    expandRow.classList.add('is-open');
+    const { pair, rug } = scannerData[idx];
+    renderTokenCard(pair, rug, inner);
+  }
+}
+window.toggleScanDetail = toggleScanDetail;
+
+startBtn.addEventListener('click', () => {
+  runAlphaScan();
+});
+
+stopBtn.addEventListener('click', () => {
+  setScannerState(false);
+  clearInterval(scannerCountdown);
+  clearInterval(scannerTimer);
+  countdownEl.textContent = '';
+  statusText.textContent = 'Scanner stopped';
+});
+
+// Filter chips
+document.querySelectorAll('.ts-filter-chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('.ts-filter-chip').forEach(c => c.classList.remove('is-active'));
+    chip.classList.add('is-active');
+    currentFilter = chip.dataset.filter;
+    renderScannerTable();
+  });
+});
+
+// ── Tab switching ──────────────────────────────────────────────────────────
+document.querySelectorAll('.ts-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.ts-tab').forEach(t => t.classList.remove('is-active'));
+    document.querySelectorAll('.ts-panel').forEach(p => p.classList.remove('is-active'));
+    tab.classList.add('is-active');
+    document.getElementById(`ts-panel-${tab.dataset.tab}`).classList.add('is-active');
+  });
+});
