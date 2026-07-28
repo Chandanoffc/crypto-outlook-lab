@@ -817,13 +817,390 @@ stopBtn.addEventListener('click', () => {
   statusText.textContent = 'Scanner stopped';
 });
 
-// Filter chips
-document.querySelectorAll('.ts-filter-chip').forEach(chip => {
+// Alpha Scanner filter chips
+document.querySelectorAll('[data-filter]').forEach(chip => {
   chip.addEventListener('click', () => {
-    document.querySelectorAll('.ts-filter-chip').forEach(c => c.classList.remove('is-active'));
+    document.querySelectorAll('[data-filter]').forEach(c => c.classList.remove('is-active'));
     chip.classList.add('is-active');
     currentFilter = chip.dataset.filter;
     renderScannerTable();
+  });
+});
+
+// ── DLMM Scanner ───────────────────────────────────────────────────────────
+let dlmmRunning = false;
+let dlmmCountdownTimer = null;
+let dlmmData = [];
+let dlmmSortKey = 'score';
+let dlmmMinTvl = 10000;
+const DLMM_INTERVAL = 60;
+
+const dlmmStartBtn = document.getElementById('dlmm-start-btn');
+const dlmmStopBtn  = document.getElementById('dlmm-stop-btn');
+const dlmmStatusEl = document.getElementById('dlmm-status-text');
+const dlmmDot      = document.getElementById('dlmm-dot');
+const dlmmBody     = document.getElementById('dlmm-body');
+const dlmmCountEl  = document.getElementById('dlmm-countdown');
+
+function setDlmmState(running) {
+  dlmmRunning = running;
+  dlmmStartBtn.disabled = running;
+  dlmmStopBtn.disabled = !running;
+  dlmmDot.className = 'ts-scanner-dot' + (running ? ' pulse' : ' idle');
+}
+
+function fmtFee(n) {
+  if (!n || isNaN(n)) return '$—';
+  if (n >= 1000) return '$' + (n/1000).toFixed(1) + 'K';
+  if (n >= 1)    return '$' + n.toFixed(2);
+  if (n >= 0.01) return '$' + n.toFixed(3);
+  return '<$0.01';
+}
+
+function dlmmFeesFromPair(pair) {
+  const feeRate = parseFloat(estimateFeeTier(pair)) / 100;
+  const v = pair.volume || {};
+  return {
+    m5:  (v.m5  || 0) * feeRate,
+    h1:  (v.h1  || 0) * feeRate,
+    h12: (v.h24 || 0) / 2 * feeRate,
+    h24: (v.h24 || 0) * feeRate,
+    rate: feeRate,
+  };
+}
+
+function dlmmTrend(pair) {
+  const vol5m = pair.volume?.m5 || 0;
+  const vol1h = pair.volume?.h1 || 0;
+  if (!vol1h) return 'flat';
+  const extrap = vol5m * 12; // 5m → projected 1h
+  const ratio  = extrap / vol1h;
+  if (ratio > 1.4) return 'up';
+  if (ratio < 0.6) return 'down';
+  return 'flat';
+}
+
+function dlmmAgeClass(ageH) {
+  if (ageH < 6)   return { cls: 'dlmm-age-new',  label: ageH < 1 ? '<1h NEW' : fmtAge(ageH * 3_600_000) + ' NEW' };
+  if (ageH < 72)  return { cls: 'dlmm-age-good', label: fmtAge(ageH * 3_600_000) };
+  return               { cls: 'dlmm-age-old',  label: fmtAge(ageH * 3_600_000) };
+}
+
+function scoreDlmmPool(pair) {
+  const tvl    = pair.liquidity?.usd || 0;
+  const vol24  = pair.volume?.h24    || 0;
+  const fees   = dlmmFeesFromPair(pair);
+  const ageMs  = pair.pairCreatedAt ? Date.now() - pair.pairCreatedAt : 0;
+  const ageH   = ageMs / 3_600_000;
+  const feeApr = tvl > 0 ? (fees.h24 * 365 / tvl * 100) : 0;
+  const volTvl = tvl > 0 ? vol24 / tvl : 0;
+  const trend  = dlmmTrend(pair);
+  const quote  = (pair.quoteToken?.symbol || '').toUpperCase();
+
+  // APR component (0–40)
+  let aprScore = feeApr > 500 ? 40 : feeApr > 200 ? 34 : feeApr > 75 ? 27 :
+                 feeApr > 30  ? 19 : feeApr > 10  ? 12 : 4;
+
+  // Vol/TVL efficiency (0–25)
+  let effScore = volTvl > 10 ? 25 : volTvl > 5 ? 20 : volTvl > 2 ? 16 :
+                 volTvl > 1  ? 12 : volTvl > 0.3 ? 7 : 2;
+
+  // Age sweet spot (0–15): 6h–48h is ideal
+  let ageScore = ageH < 1 ? 5 : ageH < 6 ? 10 : ageH < 48 ? 15 :
+                 ageH < 168 ? 10 : 5;
+
+  // Momentum (0–20)
+  let momentumScore = trend === 'up' ? 20 : trend === 'flat' ? 10 : 3;
+
+  // IL consideration: token/token pairs get small penalty
+  let ilPenalty = /USDC|USDT|USDS/.test(quote) ? 0 :
+                  /SOL|WSOL/.test(quote)         ? 0 : 5;
+
+  const total = Math.max(0, Math.min(100, aprScore + effScore + ageScore + momentumScore - ilPenalty));
+  return { total, aprScore, effScore, ageScore, momentumScore, feeApr, volTvl, trend, fees, ageH, ilPenalty };
+}
+
+function generateDlmmReasoning(pair, sc) {
+  const quote = (pair.quoteToken?.symbol || '').toUpperCase();
+  const base  = pair.baseToken?.symbol || '?';
+  const { feeApr, volTvl, trend, fees, ageH } = sc;
+  const buys1h  = pair.txns?.h1?.buys  || 0;
+  const sells1h = pair.txns?.h1?.sells || 0;
+  const items = [];
+
+  // Fee yield
+  if (feeApr > 200) items.push({ icon: '🔥', text: `${feeApr.toFixed(0)}% fee APR — top-tier yield. Every $1K LP earns ~${fmtFee(feeApr / 365 * 10)}/day` });
+  else if (feeApr > 50) items.push({ icon: '✅', text: `${feeApr.toFixed(0)}% fee APR — strong yield, competitive with top DeFi pools` });
+  else if (feeApr > 10) items.push({ icon: '📊', text: `${feeApr.toFixed(0)}% fee APR — moderate yield, suitable for lower-risk LPs` });
+  else items.push({ icon: '⚠️', text: `${feeApr.toFixed(1)}% fee APR — low yield. Consider other pools unless TVL is very stable` });
+
+  // Efficiency
+  if (volTvl > 5) items.push({ icon: '⚡', text: `${volTvl.toFixed(1)}× vol/TVL — exceptional capital efficiency. Volume massively outpaces liquidity depth` });
+  else if (volTvl > 1) items.push({ icon: '📈', text: `${volTvl.toFixed(1)}× vol/TVL — healthy activity. Daily volume exceeds total TVL` });
+  else items.push({ icon: '💤', text: `${volTvl.toFixed(2)}× vol/TVL — low turnover. Pool is underutilised relative to its liquidity` });
+
+  // Volume trend
+  const vol5mRate = (pair.volume?.m5 || 0) * 12;
+  const vol1h     = pair.volume?.h1 || 0;
+  if (trend === 'up')   items.push({ icon: '🚀', text: `Volume accelerating — recent 5m pace extrapolates to ${fmt$(vol5mRate)}/hr vs ${fmt$(vol1h)}/hr 1H avg. Fees picking up` });
+  else if (trend === 'down') items.push({ icon: '❄️', text: `Volume cooling — recent 5m pace (${fmt$(vol5mRate)}/hr) well below 1H avg (${fmt$(vol1h)}/hr). Fees may slow` });
+  else items.push({ icon: '➡️', text: `Volume stable — 5m pace tracking close to 1H average. Consistent fee generation` });
+
+  // Age context
+  if (ageH < 2)       items.push({ icon: '⚡', text: `Brand new pool (${ageH.toFixed(1)}h) — extremely early. Very high fee potential but also highest rug/dump risk. Do NOT size large` });
+  else if (ageH < 24) items.push({ icon: '🌱', text: `Fresh pool (${ageH.toFixed(1)}h old) — past the initial dump window, still in high-fee momentum phase` });
+  else if (ageH < 72) items.push({ icon: '⏱️', text: `Pool is ${ageH.toFixed(1)}h old — prime LP window. Survived early volatility, fees still elevated` });
+  else                items.push({ icon: 'ℹ️', text: `Mature pool (${(ageH/24).toFixed(1)}d old) — stable fees but early high-APR phase has likely passed` });
+
+  // IL context
+  if (/SOL|WSOL/.test(quote)) items.push({ icon: '🛡️', text: `${base}/SOL pair — correlated assets reduce IL. SOL tends to move with meme tokens, limiting divergence loss` });
+  else if (/USDC|USDT/.test(quote)) items.push({ icon: '⚖️', text: `${base}/USDC pair — maximum IL. Any price move creates divergence loss. Only LP here if expecting sideways price action` });
+  else items.push({ icon: '🎲', text: `Token/token pair — high IL risk from both assets. Best for small experimental positions only` });
+
+  // Buy/sell pressure
+  if (buys1h + sells1h > 10) {
+    const bsPct = Math.round(buys1h / (buys1h + sells1h) * 100);
+    if (bsPct > 60) items.push({ icon: '🟢', text: `${bsPct}% buy pressure last hour (${buys1h}B / ${sells1h}S) — net long flow, price stable or rising, favourable for LP` });
+    else if (bsPct < 40) items.push({ icon: '🔴', text: `${100-bsPct}% sell pressure last hour (${sells1h}S / ${buys1h}B) — selling dominates, IL risk elevated` });
+  }
+
+  return items;
+}
+
+function renderDlmmExpanded(pair, sc, container) {
+  const fees   = sc.fees;
+  const ageMs  = pair.pairCreatedAt ? Date.now() - pair.pairCreatedAt : 0;
+  const created = pair.pairCreatedAt ? new Date(pair.pairCreatedAt) : null;
+  const reasons = generateDlmmReasoning(pair, sc);
+  const pairAddr = pair.pairAddress || '';
+  const metLink  = pairAddr ? `https://app.meteora.ag/dlmm/${pairAddr}` : 'https://app.meteora.ag/pools';
+
+  // Biggest fee bar = h12, scale others to it
+  const maxFee = Math.max(fees.m5, fees.h1, fees.h12) || 1;
+  const barColor = (f) => f / maxFee > 0.6 ? '#4ADE80' : f / maxFee > 0.3 ? '#F59E0B' : '#94A3B8';
+
+  container.innerHTML = `
+    <div class="dlmm-expand-inner">
+      <div class="dlmm-detail-section">
+        <div class="dlmm-detail-title">Fee Breakdown</div>
+        <div class="dlmm-fee-bars">
+          <div class="dlmm-fee-bar-row">
+            <span class="dlmm-fee-bar-label">5m</span>
+            <div class="dlmm-fee-bar-track"><div class="dlmm-fee-bar-fill" style="width:${fees.m5/maxFee*100}%;background:${barColor(fees.m5)}"></div></div>
+            <span class="dlmm-fee-bar-val">${fmtFee(fees.m5)}</span>
+          </div>
+          <div class="dlmm-fee-bar-row">
+            <span class="dlmm-fee-bar-label">1H</span>
+            <div class="dlmm-fee-bar-track"><div class="dlmm-fee-bar-fill" style="width:${fees.h1/maxFee*100}%;background:${barColor(fees.h1)}"></div></div>
+            <span class="dlmm-fee-bar-val">${fmtFee(fees.h1)}</span>
+          </div>
+          <div class="dlmm-fee-bar-row">
+            <span class="dlmm-fee-bar-label">12H</span>
+            <div class="dlmm-fee-bar-track"><div class="dlmm-fee-bar-fill" style="width:${fees.h12/maxFee*100}%;background:${barColor(fees.h12)}"></div></div>
+            <span class="dlmm-fee-bar-val">${fmtFee(fees.h12)}</span>
+          </div>
+        </div>
+        <div class="dlmm-open-time">
+          <div class="dlmm-open-time-item">
+            <label>Pool Opened</label>
+            <span>${created ? created.toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '—'}</span>
+          </div>
+          <div class="dlmm-open-time-item">
+            <label>Age</label>
+            <span>${fmtAge(ageMs)}</span>
+          </div>
+          <div class="dlmm-open-time-item">
+            <label>Fee Rate (est.)</label>
+            <span>${(sc.fees.rate * 100).toFixed(2)}%</span>
+          </div>
+          <div class="dlmm-open-time-item">
+            <label>Vol/TVL</label>
+            <span>${sc.volTvl.toFixed(2)}×</span>
+          </div>
+        </div>
+        <a class="dlmm-action-btn" href="${metLink}" target="_blank" rel="noopener">
+          ◎ Open in Meteora →
+        </a>
+      </div>
+      <div class="dlmm-detail-section">
+        <div class="dlmm-detail-title">Why This Pool</div>
+        <div class="dlmm-reasoning">
+          ${reasons.map(r => `<div class="dlmm-reason-item"><span class="dlmm-reason-icon">${r.icon}</span><span>${r.text}</span></div>`).join('')}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function fetchDlmmPools(minTvl) {
+  // Multi-search strategy: parallel queries across known active Solana tokens
+  // DexScreener search returns pairs matching the token symbol/name
+  const SEARCH_TERMS = [
+    'JUP','BONK','POPCAT','DRIFT','JTO','TRUMP','PYTH','RAY',
+    'PENGU','GOAT','MOODENG','CHILLGUY','PNUT','AI16Z','FWOG','ZEREBRO',
+    'BARSIK','GRIFFAIN','ALCH','SWARMS',
+  ];
+
+  const searches = await Promise.all(
+    SEARCH_TERMS.map(q =>
+      fetch(`${DS_BASE}/latest/dex/search/?q=${q}`)
+        .then(r => r.json())
+        .then(d => (d.pairs || []).filter(p =>
+          p.chainId === 'solana' &&
+          (p.dexId === 'meteora' || p.dexId === 'meteoradlmm') &&
+          (p.liquidity?.usd || 0) >= minTvl &&
+          (p.volume?.h24 || 0) > 0
+        ))
+        .catch(() => [])
+    )
+  );
+
+  // Also pull boosted token mints and batch-fetch their Meteora pairs
+  const boostPairs = await fetchTrendingSolana()
+    .then(boosts => {
+      const addrs = [...new Set(boosts.map(t => t.tokenAddress).filter(Boolean))].slice(0, 28);
+      if (!addrs.length) return [];
+      return fetch(`${DS_BASE}/latest/dex/tokens/${addrs.join(',')}`)
+        .then(r => r.json())
+        .then(d => (d.pairs || []).filter(p =>
+          p.chainId === 'solana' &&
+          (p.dexId === 'meteora' || p.dexId === 'meteoradlmm') &&
+          (p.liquidity?.usd || 0) >= minTvl
+        ));
+    })
+    .catch(() => []);
+
+  // Deduplicate by pairAddress
+  const seen = new Set();
+  const all = [...searches.flat(), ...boostPairs];
+  return all.filter(p => {
+    if (seen.has(p.pairAddress)) return false;
+    seen.add(p.pairAddress);
+    return true;
+  });
+}
+
+function renderDlmmTable() {
+  const sorted = [...dlmmData].sort((a, b) => {
+    if (dlmmSortKey === 'score')    return b.sc.total     - a.sc.total;
+    if (dlmmSortKey === 'fee_apr')  return b.sc.feeApr    - a.sc.feeApr;
+    if (dlmmSortKey === 'fees_1h')  return b.sc.fees.h1   - a.sc.fees.h1;
+    if (dlmmSortKey === 'vol_tvl')  return b.sc.volTvl    - a.sc.volTvl;
+    return 0;
+  });
+
+  if (!sorted.length) {
+    dlmmBody.innerHTML = '<tr><td colspan="11" class="ts-empty">No Meteora DLMM pools found above the TVL threshold</td></tr>';
+    return;
+  }
+
+  dlmmBody.innerHTML = sorted.map((item, i) => {
+    const { pair, sc } = item;
+    const base   = pair.baseToken?.symbol  || '?';
+    const quote  = pair.quoteToken?.symbol || '?';
+    const tvl    = pair.liquidity?.usd     || 0;
+    const ageMs  = pair.pairCreatedAt ? Date.now() - pair.pairCreatedAt : 0;
+    const age    = dlmmAgeClass(ageMs / 3_600_000);
+    const trend  = sc.trend;
+    const trendEl = trend === 'up'   ? '<span class="dlmm-trend-up">▲</span>' :
+                    trend === 'down' ? '<span class="dlmm-trend-down">▼</span>' :
+                                       '<span class="dlmm-trend-flat">→</span>';
+    const scoreColor = sc.total >= 70 ? '#A78BFA' : sc.total >= 50 ? '#4ADE80' : sc.total >= 35 ? '#F59E0B' : '#F87171';
+    const feeClass = (f, ref) => f > ref * 1.4 ? 'hot' : f > ref * 0.5 ? 'warm' : 'cold';
+
+    return `
+      <tr data-dlmm-idx="${i}" onclick="toggleDlmmDetail(${i},this)">
+        <td style="color:var(--tx-3);font-size:10px">${i+1}</td>
+        <td style="font-weight:700;color:var(--tx-1)">${base}<span style="color:var(--tx-3);font-weight:400">/${quote}</span></td>
+        <td><span class="dlmm-age-pill ${age.cls}">${age.label}</span></td>
+        <td class="mono">${fmt$(tvl)}</td>
+        <td class="dlmm-fee-cell ${feeClass(sc.fees.m5, sc.fees.h1/12)}">${fmtFee(sc.fees.m5)}</td>
+        <td class="dlmm-fee-cell ${feeClass(sc.fees.h1, sc.fees.h12/12)}">${fmtFee(sc.fees.h1)}</td>
+        <td class="dlmm-fee-cell warm">${fmtFee(sc.fees.h12)}</td>
+        <td class="mono" style="color:var(--ac);font-weight:700">${sc.feeApr > 9999 ? '>9999%' : sc.feeApr.toFixed(0) + '%'}</td>
+        <td class="mono" style="color:${sc.volTvl > 2 ? '#4ADE80' : sc.volTvl > 0.5 ? '#F59E0B' : '#F87171'}">${sc.volTvl.toFixed(1)}×</td>
+        <td>${trendEl}</td>
+        <td><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;color:${scoreColor}">${sc.total}</span></td>
+      </tr>
+      <tr class="dlmm-expand-row" id="dlmm-exp-${i}">
+        <td colspan="11"><div id="dlmm-exp-inner-${i}"></div></td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function toggleDlmmDetail(idx, row) {
+  const expRow   = document.getElementById(`dlmm-exp-${idx}`);
+  const inner    = document.getElementById(`dlmm-exp-inner-${idx}`);
+  const isOpen   = expRow.classList.contains('is-open');
+  // Close all expanded rows
+  document.querySelectorAll('.dlmm-expand-row.is-open').forEach(r => r.classList.remove('is-open'));
+  document.querySelectorAll('.dlmm-table tbody tr.is-expanded').forEach(r => r.classList.remove('is-expanded'));
+  if (!isOpen) {
+    expRow.classList.add('is-open');
+    row.classList.add('is-expanded');
+    const { pair, sc } = dlmmData.find((_, i) => i === idx) || {};
+    if (pair && sc) renderDlmmExpanded(pair, sc, inner);
+  }
+}
+window.toggleDlmmDetail = toggleDlmmDetail;
+
+async function runDlmmScan() {
+  setDlmmState(true);
+  dlmmStatusEl.textContent = 'Fetching trending Solana tokens…';
+  try {
+    dlmmStatusEl.textContent = 'Scanning Meteora DLMM pools…';
+    const pairs = await fetchDlmmPools(dlmmMinTvl);
+    dlmmData = pairs.map(pair => ({ pair, sc: scoreDlmmPool(pair) }));
+    renderDlmmTable();
+    dlmmStatusEl.textContent = `Found ${dlmmData.length} Meteora pools · Last scan ${new Date().toLocaleTimeString()}`;
+    startDlmmCountdown();
+  } catch (e) {
+    dlmmStatusEl.textContent = `Error: ${e.message}`;
+    setDlmmState(false);
+  }
+}
+
+function startDlmmCountdown() {
+  let rem = DLMM_INTERVAL;
+  clearInterval(dlmmCountdownTimer);
+  dlmmCountEl.textContent = `Next refresh in ${rem}s`;
+  dlmmCountdownTimer = setInterval(() => {
+    rem--;
+    dlmmCountEl.textContent = `Next refresh in ${rem}s`;
+    if (rem <= 0) {
+      clearInterval(dlmmCountdownTimer);
+      dlmmCountEl.textContent = '';
+      if (dlmmRunning) runDlmmScan();
+    }
+  }, 1000);
+}
+
+dlmmStartBtn.addEventListener('click', runDlmmScan);
+dlmmStopBtn.addEventListener('click', () => {
+  setDlmmState(false);
+  clearInterval(dlmmCountdownTimer);
+  dlmmCountEl.textContent = '';
+  dlmmStatusEl.textContent = 'Scanner stopped';
+});
+
+// DLMM sort chips
+document.querySelectorAll('[data-dlmm-sort]').forEach(chip => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('[data-dlmm-sort]').forEach(c => c.classList.remove('is-active'));
+    chip.classList.add('is-active');
+    dlmmSortKey = chip.dataset.dlmmSort;
+    renderDlmmTable();
+  });
+});
+
+// DLMM TVL filter chips
+document.querySelectorAll('[data-dlmm-tvl]').forEach(chip => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('[data-dlmm-tvl]').forEach(c => c.classList.remove('is-active'));
+    chip.classList.add('is-active');
+    dlmmMinTvl = parseInt(chip.dataset.dlmmTvl);
+    if (dlmmData.length) renderDlmmTable();
   });
 });
 

@@ -147,6 +147,65 @@
     /* Countdown */
     .ts-countdown { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--tx-3); }
 
+    /* DLMM Scanner */
+    .dlmm-hd { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+    .dlmm-status { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--tx-3); }
+
+    .dlmm-filter-row { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+
+    .dlmm-table-wrap { overflow-x: auto; border: 1px solid var(--bd); border-radius: 8px; }
+    .dlmm-table { width: 100%; border-collapse: collapse; }
+    .dlmm-table th { padding: 8px 11px; font-size: 9px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--tx-3); text-align: left; border-bottom: 1px solid var(--bd); background: var(--bg-2); white-space: nowrap; cursor: pointer; user-select: none; }
+    .dlmm-table th:hover { color: var(--tx-1); }
+    .dlmm-table th .sort-arrow { margin-left: 3px; opacity: .4; }
+    .dlmm-table th.sorted .sort-arrow { opacity: 1; color: var(--ac); }
+    .dlmm-table td { padding: 10px 11px; font-size: 11px; color: var(--tx-2); border-bottom: 1px solid rgba(255,255,255,.04); vertical-align: middle; white-space: nowrap; }
+    .dlmm-table tbody tr:hover td { background: rgba(255,255,255,.025); cursor: pointer; }
+    .dlmm-table tbody tr.is-expanded td { background: rgba(245,158,11,.04); }
+    .dlmm-table tbody tr:last-child td { border-bottom: none; }
+
+    .dlmm-fee-cell { font-family: 'IBM Plex Mono', monospace; font-size: 11px; }
+    .dlmm-fee-cell.hot { color: #4ADE80; font-weight: 700; }
+    .dlmm-fee-cell.warm { color: var(--ac); }
+    .dlmm-fee-cell.cold { color: var(--tx-3); }
+
+    .dlmm-trend-up   { color: #4ADE80; font-size: 13px; }
+    .dlmm-trend-down { color: #F87171; font-size: 13px; }
+    .dlmm-trend-flat { color: var(--tx-3); font-size: 13px; }
+
+    .dlmm-age-pill { display: inline-block; padding: 2px 7px; border-radius: 10px; font-size: 9px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+    .dlmm-age-new  { background: rgba(139,92,246,.15); color: #A78BFA; }
+    .dlmm-age-good { background: rgba(74,222,128,.12); color: #4ADE80; }
+    .dlmm-age-old  { background: rgba(148,163,184,.10); color: #94A3B8; }
+
+    /* Expanded detail */
+    .dlmm-expand-row { display: none; }
+    .dlmm-expand-row.is-open { display: table-row; }
+    .dlmm-expand-row td { padding: 0; border-bottom: 1px solid var(--bd); background: var(--bg-0); }
+    .dlmm-expand-inner { padding: 16px 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 640px) { .dlmm-expand-inner { grid-template-columns: 1fr; } }
+
+    .dlmm-detail-section { }
+    .dlmm-detail-title { font-size: 9px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--ac); margin-bottom: 10px; }
+
+    .dlmm-fee-bars { display: flex; flex-direction: column; gap: 8px; }
+    .dlmm-fee-bar-row { display: flex; align-items: center; gap: 8px; }
+    .dlmm-fee-bar-label { font-size: 10px; font-weight: 600; color: var(--tx-3); width: 28px; flex-shrink: 0; }
+    .dlmm-fee-bar-track { flex: 1; height: 5px; background: var(--bg-3); border-radius: 3px; overflow: hidden; }
+    .dlmm-fee-bar-fill { height: 100%; border-radius: 3px; transition: width .5s ease; }
+    .dlmm-fee-bar-val { font-size: 10px; font-weight: 700; font-family: 'IBM Plex Mono', monospace; color: var(--tx-1); width: 56px; text-align: right; flex-shrink: 0; }
+
+    .dlmm-reasoning { display: flex; flex-direction: column; gap: 6px; }
+    .dlmm-reason-item { display: flex; align-items: flex-start; gap: 8px; font-size: 11px; color: var(--tx-2); line-height: 1.5; }
+    .dlmm-reason-icon { flex-shrink: 0; margin-top: 1px; }
+
+    .dlmm-open-time { background: var(--bg-2); border: 1px solid var(--bd); border-radius: 6px; padding: 10px 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+    .dlmm-open-time-item label { font-size: 9px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--tx-3); display: block; margin-bottom: 3px; }
+    .dlmm-open-time-item span { font-size: 12px; font-weight: 700; color: var(--tx-1); font-family: 'IBM Plex Mono', monospace; }
+
+    .dlmm-action-btn { display: inline-flex; align-items: center; gap: 5px; padding: 7px 12px; background: rgba(139,92,246,.15); border: 1px solid rgba(139,92,246,.35); border-radius: 6px; color: #A78BFA; font-size: 11px; font-weight: 700; text-decoration: none; margin-top: 12px; transition: background .15s; }
+    .dlmm-action-btn:hover { background: rgba(139,92,246,.25); }
+
     /* Meteora LP */
     .ts-lp-table-wrap { overflow-x: auto; border: 1px solid var(--bd); border-radius: 6px; }
     .ts-lp-table th { font-size: 9px; padding: 7px 10px; }
@@ -187,6 +246,7 @@
   <div class="ts-tabs">
     <button class="ts-tab is-active" data-tab="ai-scan">AI Scan</button>
     <button class="ts-tab" data-tab="alpha-scanner">Alpha Scanner</button>
+    <button class="ts-tab" data-tab="dlmm-scanner">DLMM Scanner</button>
   </div>
 
   <!-- AI SCAN TAB -->
@@ -248,6 +308,54 @@
     <div id="ts-scanner-detail"></div>
   </div>
 </main>
+
+  <!-- DLMM SCANNER TAB -->
+  <div class="ts-panel" id="ts-panel-dlmm-scanner">
+    <div class="dlmm-hd">
+      <div class="dlmm-status">
+        <div class="ts-scanner-dot idle" id="dlmm-dot"></div>
+        <span id="dlmm-status-text">Idle — press Scan to find top Meteora DLMM pools</span>
+      </div>
+      <button class="ts-btn" id="dlmm-start-btn" style="margin-left:auto;">◎ Scan DLMM Pools</button>
+      <button class="ts-btn ts-btn-ghost" id="dlmm-stop-btn" disabled>■ Stop</button>
+      <span class="ts-countdown" id="dlmm-countdown"></span>
+    </div>
+
+    <div class="dlmm-filter-row">
+      <span class="ts-filter-label">Sort by:</span>
+      <button class="ts-filter-chip is-active" data-dlmm-sort="score">Score</button>
+      <button class="ts-filter-chip" data-dlmm-sort="fee_apr">Fee APR</button>
+      <button class="ts-filter-chip" data-dlmm-sort="fees_1h">Fees 1H</button>
+      <button class="ts-filter-chip" data-dlmm-sort="vol_tvl">Vol/TVL</button>
+      <span class="ts-filter-label" style="margin-left:8px">Min TVL:</span>
+      <button class="ts-filter-chip is-active" data-dlmm-tvl="10000">$10K+</button>
+      <button class="ts-filter-chip" data-dlmm-tvl="50000">$50K+</button>
+      <button class="ts-filter-chip" data-dlmm-tvl="100000">$100K+</button>
+    </div>
+
+    <div class="dlmm-table-wrap">
+      <table class="dlmm-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Pool</th>
+            <th>Age</th>
+            <th>TVL</th>
+            <th>Fees 5m</th>
+            <th>Fees 1H</th>
+            <th>Fees 12H</th>
+            <th>Fee APR</th>
+            <th>Vol/TVL</th>
+            <th>Trend</th>
+            <th>Score</th>
+          </tr>
+        </thead>
+        <tbody id="dlmm-body">
+          <tr><td colspan="11" class="ts-empty">Press "Scan DLMM Pools" to discover top fee opportunities</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
 
 <script src="./tokenscan.js"></script>
 </body>
