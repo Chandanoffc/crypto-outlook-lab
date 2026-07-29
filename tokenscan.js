@@ -831,6 +831,7 @@ document.querySelectorAll('[data-filter]').forEach(chip => {
 let dlmmRunning = false;
 let dlmmCountdownTimer = null;
 let dlmmData = [];
+let dlmmSortedData = [];   // tracks current sorted view for correct row→pool lookup
 let dlmmSortKey = 'score';
 let dlmmMinTvl = 10000;
 const DLMM_INTERVAL = 60;
@@ -1081,7 +1082,7 @@ async function fetchDlmmPools(minTvl) {
 }
 
 function renderDlmmTable() {
-  const sorted = [...dlmmData].sort((a, b) => {
+  const sorted = dlmmSortedData = [...dlmmData].sort((a, b) => {
     if (dlmmSortKey === 'score')    return b.sc.total     - a.sc.total;
     if (dlmmSortKey === 'fee_apr')  return b.sc.feeApr    - a.sc.feeApr;
     if (dlmmSortKey === 'fees_1h')  return b.sc.fees.h1   - a.sc.fees.h1;
@@ -1139,7 +1140,7 @@ function toggleDlmmDetail(idx, row) {
   if (!isOpen) {
     expRow.classList.add('is-open');
     row.classList.add('is-expanded');
-    const { pair, sc } = dlmmData.find((_, i) => i === idx) || {};
+    const { pair, sc } = dlmmSortedData[idx] || {};
     if (pair && sc) renderDlmmExpanded(pair, sc, inner);
   }
 }
