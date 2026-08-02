@@ -682,6 +682,91 @@ function setScannerState(running) {
   dot.className = 'ts-scanner-dot' + (running ? ' pulse' : ' idle');
 }
 
+// ── Snipe Window ─────────────────────────────────────────────────────────────
+// Criteria: pool < 2h old · h1 change 20–500% · liq > $10K · buyers > sellers in 5m
+function isInSnipeWindow(pair) {
+  const ageMs  = pair?.pairCreatedAt ? Date.now() - pair.pairCreatedAt : null;
+  if (!ageMs || ageMs > 2 * 3_600_000) return false;          // must be < 2h old
+  const pc1h   = pair?.priceChange?.h1 ?? 0;
+  if (pc1h < 20 || pc1h > 500) return false;                  // 20–500% gain in 1h
+  const liq    = pair?.liquidity?.usd ?? 0;
+  if (liq < 10_000) return false;                              // need real liquidity
+  const m5     = pair?.txns?.m5 || {};
+  if ((m5.buys || 0) <= (m5.sells || 0)) return false;        // buyers must dominate right now
+  return true;
+}
+
+function renderSnipeWindow(pairs) {
+  const snipeCards = document.getElementById('snipe-cards');
+  const snipeCount = document.getElementById('snipe-count');
+  if (!snipeCards) return;
+
+  const hits = pairs.filter(isInSnipeWindow)
+    .sort((a, b) => (b.priceChange?.h1 ?? 0) - (a.priceChange?.h1 ?? 0))
+    .slice(0, 20);
+
+  snipeCount.textContent = hits.length ? `${hits.length} live` : '0 now';
+
+  if (!hits.length) {
+    snipeCards.innerHTML = '<div class="snipe-empty">No tokens in snipe window right now — check back soon</div>';
+    return;
+  }
+
+  snipeCards.innerHTML = hits.map(pair => {
+    const name    = pair?.baseToken?.name || 'Unknown';
+    const symbol  = pair?.baseToken?.symbol || '?';
+    const mint    = pair?.baseToken?.address || '';
+    const pc1h    = pair?.priceChange?.h1 ?? 0;
+    const pc5m    = pair?.priceChange?.m5 ?? 0;
+    const liq     = pair?.liquidity?.usd ?? 0;
+    const vol5m   = pair?.volume?.m5 ?? 0;
+    const m5      = pair?.txns?.m5 || {};
+    const buys    = m5.buys || 0;
+    const sells   = m5.sells || 0;
+    const ageMs   = Date.now() - pair.pairCreatedAt;
+    const ageMin  = Math.round(ageMs / 60_000);
+    const pairAddr = pair?.pairAddress || '';
+
+    // How far through the snipe window (0–100): age as % of 2h
+    const windowPct = Math.min(100, (ageMs / (2 * 3_600_000)) * 100);
+    // Bar color: green when fresh, amber as it ages
+    const barColor  = windowPct < 50 ? '#4ADE80' : windowPct < 80 ? '#F59E0B' : '#F87171';
+    // Hot = < 20 min old
+    const isHot     = ageMin < 20;
+    // Buy pressure %
+    const total     = buys + sells;
+    const buyPct    = total > 0 ? Math.round((buys / total) * 100) : 50;
+    const pressureColor = buyPct >= 65 ? '#4ADE80' : '#F59E0B';
+
+    const dsLink = `https://dexscreener.com/solana/${pairAddr}`;
+
+    return `
+      <div class="snipe-card${isHot ? ' snipe-card-hot' : ''}" onclick="window.open('${dsLink}','_blank')">
+        <div class="snipe-card-name">${name}</div>
+        <div class="snipe-card-symbol">$${symbol}</div>
+        <span class="snipe-card-age${isHot ? ' snipe-card-age-hot' : ''}">${ageMin < 60 ? ageMin + 'm' : (ageMin/60).toFixed(1) + 'h'}</span>
+        <div class="snipe-momentum${pc1h > 300 ? ' warn' : ''}">+${pc1h.toFixed(0)}% <span style="font-size:10px;font-weight:500;color:var(--tx-3)">1H</span></div>
+        <div class="snipe-card-row">
+          <span class="snipe-card-label">5m move</span>
+          <span class="snipe-card-val" style="color:${pc5m>=0?'#4ADE80':'#F87171'}">${pc5m>=0?'+':''}${pc5m.toFixed(1)}%</span>
+        </div>
+        <div class="snipe-card-row">
+          <span class="snipe-card-label">Liq</span>
+          <span class="snipe-card-val">${fmt$(liq)}</span>
+        </div>
+        <div class="snipe-card-row">
+          <span class="snipe-card-label">Vol 5m</span>
+          <span class="snipe-card-val">${fmt$(vol5m)}</span>
+        </div>
+        <div class="snipe-bar"><div class="snipe-bar-fill" style="width:${windowPct.toFixed(0)}%;background:${barColor}"></div></div>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span class="snipe-pressure" style="color:${pressureColor}">${buyPct}% buys</span>
+          <a class="snipe-card-link" href="${dsLink}" target="_blank" onclick="event.stopPropagation()">Chart →</a>
+        </div>
+      </div>`;
+  }).join('');
+}
+
 async function runAlphaScan() {
   setScannerState(true);
   statusText.textContent = 'Scanning trending Solana tokens…';
@@ -702,18 +787,21 @@ async function runAlphaScan() {
     statusText.textContent = `Analyzing ${unique.length} tokens…`;
 
     const results = [];
+    const allPairs = [];
     for (const t of unique) {
       try {
         const addr = t.tokenAddress || t.baseToken?.address;
         if (!addr) continue;
         const pair = await fetchDexToken(addr);
         if (!pair) continue;
+        allPairs.push(pair);
         const rug = await fetchRugCheck(addr);
         const scores = scoreToken(pair, rug);
         results.push({ pair, rug, scores, addr });
       } catch { /* skip failed tokens */ }
     }
 
+    renderSnipeWindow(allPairs);
     results.sort((a, b) => b.scores.alpha - a.scores.alpha);
     scannerData = results;
     renderScannerTable();

@@ -215,6 +215,34 @@
     .ts-lp-advice { background: rgba(139,92,246,.08); border: 1px solid rgba(139,92,246,.25); border-radius: 6px; padding: 10px 12px; margin-bottom: 12px; font-size: 12px; color: var(--tx-2); line-height: 1.6; }
     .ts-lp-advice-label { display: block; font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: #A78BFA; margin-bottom: 4px; }
     .ts-lp-empty { font-size: 12px; color: var(--tx-3); padding: 12px 0; }
+
+    /* ── Snipe Window ───────────────────────────────────────────────────────── */
+    .snipe-window { background: rgba(251,191,36,.04); border: 1px solid rgba(251,191,36,.18); border-radius: 10px; padding: 14px 16px; margin-bottom: 16px; }
+    .snipe-hd { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+    .snipe-title { font-size: 13px; font-weight: 700; color: #FBB724; letter-spacing: .03em; }
+    .snipe-subtitle { font-size: 11px; color: var(--tx-3); }
+    .snipe-count { margin-left: auto; font-size: 11px; font-weight: 700; color: #FBB724; background: rgba(251,183,36,.12); border: 1px solid rgba(251,183,36,.25); border-radius: 20px; padding: 2px 10px; }
+    .snipe-cards { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; scroll-snap-type: x mandatory; }
+    .snipe-cards::-webkit-scrollbar { height: 3px; }
+    .snipe-cards::-webkit-scrollbar-thumb { background: rgba(251,191,36,.3); border-radius: 2px; }
+    .snipe-empty { font-size: 12px; color: var(--tx-3); padding: 8px 0; }
+    .snipe-card { flex: 0 0 200px; scroll-snap-align: start; background: rgba(255,255,255,.03); border: 1px solid rgba(251,191,36,.15); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 5px; cursor: pointer; transition: border-color .15s, background .15s; position: relative; }
+    .snipe-card:hover { border-color: rgba(251,191,36,.4); background: rgba(251,191,36,.06); }
+    .snipe-card-hot { border-color: rgba(239,68,68,.35) !important; background: rgba(239,68,68,.04) !important; }
+    .snipe-card-name { font-size: 12px; font-weight: 700; color: var(--tx-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 36px; }
+    .snipe-card-symbol { font-size: 10px; color: var(--tx-3); }
+    .snipe-card-age { position: absolute; top: 8px; right: 8px; font-size: 9px; font-weight: 700; background: rgba(251,191,36,.2); color: #FBB724; border-radius: 4px; padding: 2px 5px; }
+    .snipe-card-age-hot { background: rgba(239,68,68,.2) !important; color: #F87171 !important; }
+    .snipe-card-row { display: flex; justify-content: space-between; font-size: 10px; }
+    .snipe-card-label { color: var(--tx-3); }
+    .snipe-card-val { font-weight: 600; font-family: 'JetBrains Mono', monospace; }
+    .snipe-momentum { font-size: 14px; font-weight: 800; color: #4ADE80; line-height: 1; }
+    .snipe-momentum.warn { color: #F59E0B; }
+    .snipe-bar { height: 3px; background: rgba(255,255,255,.06); border-radius: 2px; overflow: hidden; margin-top: 2px; }
+    .snipe-bar-fill { height: 100%; border-radius: 2px; }
+    .snipe-pressure { font-size: 9px; font-weight: 700; }
+    .snipe-card-link { font-size: 9px; color: #A78BFA; text-decoration: none; margin-top: 3px; display: inline-block; }
+    .snipe-card-link:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
@@ -269,6 +297,18 @@
       <button class="ts-btn" id="ts-start-btn" style="margin-left:auto;">▶ Start Scanner</button>
       <button class="ts-btn ts-btn-ghost" id="ts-stop-btn" disabled>■ Stop</button>
       <span class="ts-countdown" id="ts-countdown"></span>
+    </div>
+
+    <!-- Snipe Window -->
+    <div class="snipe-window" id="snipe-window">
+      <div class="snipe-hd">
+        <span class="snipe-title">🎯 Snipe Window</span>
+        <span class="snipe-subtitle">Tokens &lt;2h old · momentum &gt;20% · not yet 5×'d · active buyers</span>
+        <span class="snipe-count" id="snipe-count"></span>
+      </div>
+      <div class="snipe-cards" id="snipe-cards">
+        <div class="snipe-empty">Run the scanner to populate snipe window…</div>
+      </div>
     </div>
 
     <div class="ts-filter-row">
