@@ -1009,6 +1009,19 @@ function renderAnalysisResult(data) {
     </div>`;
 
   dom.chartSymbol.textContent = `${data.symbol} · Analysis`;
+  // Set activeChartSignal so TF tabs work after an Analyze search
+  activeChartSignal = signal || {
+    symbol: data.symbol,
+    pricePrecision: data.pricePrecision || 2,
+    entryPrice: data.currentPrice,
+    sl: null, tp1: null, tp2: null,
+  };
+  activeChartTf = "1h";
+  if (dom.chartTfTabs) {
+    dom.chartTfTabs.querySelectorAll(".chart-tf-tab").forEach(b => {
+      b.classList.toggle("is-active", b.dataset.tf === "1h");
+    });
+  }
   renderChart(data, signal || null);
 }
 
