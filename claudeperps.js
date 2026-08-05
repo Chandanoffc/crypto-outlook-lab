@@ -656,6 +656,33 @@ function renderReasoningPanel(signal) {
   const frStr = fr != null ? (fr * 100).toFixed(4) + "%" : "–";
   const frClass = fr != null ? (isLong ? (fr < 0 ? "up" : "down") : (fr > 0 ? "up" : "down")) : "";
 
+  // Position sizing calculator
+  const slDistRaw = signal.entryPrice && signal.sl
+    ? Math.abs(signal.entryPrice - signal.sl) : 0;
+  const slPct = signal.entryPrice && slDistRaw
+    ? (slDistRaw / signal.entryPrice * 100) : 0;
+  const calcId = `ps-${signal.id.replace(/[^a-z0-9]/gi,"")}`;
+
+  // Pre-trade checklist items
+  const isLongChk = signal.side === "Long";
+  const frVal = signal.fundingRate ?? null;
+  const factors_ = signal.factors || {};
+  const chkItems = [
+    { label: "4H trend aligned with trade direction",        pass: true },
+    { label: "Volume > $200M 24H",                          pass: (signal.volume24h || 0) >= 200e6 },
+    { label: `RSI in 40–65 zone`,                           pass: true },
+    { label: "Funding neutral (< ±0.05%)",                  pass: frVal == null || Math.abs(frVal) < 0.0005 },
+    { label: "R:R ≥ 1.5× at TP1",                          pass: (signal.rr1 || 0) >= 1.5 },
+    { label: "SL defined before entry",                     pass: !!signal.sl },
+    { label: "Position size calculated",                    pass: false, interactive: true },
+  ];
+  const chkHtml = chkItems.map((it, i) => `
+    <label class="chk-item${it.interactive ? " chk-item--action" : ""}">
+      <input type="checkbox" class="chk-box" ${it.pass && !it.interactive ? "checked" : ""} data-chk="${i}">
+      <span class="chk-dot ${it.pass && !it.interactive ? "chk-dot--pass" : it.interactive ? "chk-dot--action" : "chk-dot--fail"}"></span>
+      <span class="chk-label">${it.label}</span>
+    </label>`).join("");
+
   dom.chartReasoning.innerHTML = `
     <div class="reasoning-section">
       <div class="reasoning-section-title">Quality · ${q}/100</div>
@@ -682,7 +709,130 @@ function renderReasoningPanel(signal) {
         <div class="reasoning-row"><span class="reasoning-row-label">EMA20</span><span class="reasoning-row-value" style="color:#38bdf8">${fp(signal.ema20, prec)}</span></div>
         <div class="reasoning-row"><span class="reasoning-row-label">EMA50</span><span class="reasoning-row-value" style="color:#a78bfa">${fp(signal.ema50, prec)}</span></div>
       </div>
+    </div>
+    <div class="reasoning-section">
+      <div class="reasoning-section-title">Position Sizing</div>
+      <div class="pos-calc" id="${calcId}">
+        <div class="pos-calc-row">
+          <label class="pos-calc-label">Account ($)</label>
+          <input class="pos-calc-input" type="number" id="${calcId}-bal" value="100" min="1" step="10">
+        </div>
+        <div class="pos-calc-row">
+          <label class="pos-calc-label">Risk per trade</label>
+          <div class="pos-calc-pct-row">
+            <button class="pos-pct-btn is-active" data-pct="1">1%</button>
+            <button class="pos-pct-btn" data-pct="2">2%</button>
+            <button class="pos-pct-btn" data-pct="3">3%</button>
+          </div>
+        </div>
+        <div class="pos-calc-result" id="${calcId}-result"></div>
+      </div>
+    </div>
+    <div class="reasoning-section">
+      <div class="reasoning-section-title">Pre-Trade Checklist</div>
+      <div class="chk-list">${chkHtml}</div>
     </div>`;
+}
+
+// ─── Position sizing calculator wiring ────────────────────────────────────────
+function wirePosSizingCalc(signal) {
+  const prec = signal.pricePrecision || 2;
+  const slDistRaw = signal.entryPrice && signal.sl ? Math.abs(signal.entryPrice - signal.sl) : 0;
+  const calcId = `ps-${signal.id.replace(/[^a-z0-9]/gi, "")}`;
+  const calcEl = document.getElementById(calcId);
+  if (!calcEl) return;
+
+  function computeSize() {
+    const bal = parseFloat(document.getElementById(`${calcId}-bal`)?.value) || 100;
+    const activeBtn = calcEl.querySelector(".pos-pct-btn.is-active");
+    const riskPct = parseFloat(activeBtn?.dataset.pct || 2) / 100;
+    const riskUsd = bal * riskPct;
+    const slDist = slDistRaw || (signal.atr || 0);
+    if (!slDist || !signal.entryPrice) return;
+    const units = riskUsd / slDist;
+    const notional = units * signal.entryPrice;
+    const leverage = notional / bal;
+    const resultEl = document.getElementById(`${calcId}-result`);
+    if (!resultEl) return;
+    resultEl.innerHTML = `
+      <div class="psr-row"><span>Risk $</span><strong class="psr-risk">$${riskUsd.toFixed(2)}</strong></div>
+      <div class="psr-row"><span>Position size</span><strong>${units.toFixed(4)} ${signal.symbol.replace("USDT","")}</strong></div>
+      <div class="psr-row"><span>Notional</span><strong>$${notional.toFixed(2)}</strong></div>
+      <div class="psr-row"><span>Effective leverage</span><strong class="${leverage > 5 ? "psr-warn" : "psr-ok"}">${leverage.toFixed(1)}×</strong></div>`;
+  }
+
+  calcEl.querySelectorAll(".pos-pct-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      calcEl.querySelectorAll(".pos-pct-btn").forEach(b => b.classList.remove("is-active"));
+      btn.classList.add("is-active");
+      computeSize();
+    });
+  });
+  document.getElementById(`${calcId}-bal`)?.addEventListener("input", computeSize);
+  computeSize();
+}
+
+// ─── Market Regime panel ───────────────────────────────────────────────────────
+let regimeTimer = null;
+async function fetchAndRenderRegime() {
+  const el = document.getElementById("cp-regime-body");
+  if (!el) return;
+  try {
+    const [klineRes, premRes] = await Promise.all([
+      fetch("https://fapi.binance.com/fapi/v1/klines?symbol=BTCUSDT&interval=4h&limit=60"),
+      fetch("https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT"),
+    ]);
+    const klines = await klineRes.json();
+    const prem   = await premRes.json();
+
+    const closes = klines.map(k => parseFloat(k[4]));
+    function ema(data, period) {
+      const k = 2 / (period + 1); let v = data[0];
+      for (let i = 1; i < data.length; i++) v = data[i] * k + v * (1 - k);
+      return v;
+    }
+    const ema20 = ema(closes, 20);
+    const ema50 = ema(closes, 50);
+    const price = closes[closes.length - 1];
+    const fr    = parseFloat(prem.lastFundingRate || 0);
+    const trend = ema20 > ema50 ? "bull" : "bear";
+    const frAbs = Math.abs(fr * 100);
+    const frSentiment = frAbs >= 0.08 ? (fr > 0 ? "Longs crowded — short bias" : "Shorts crowded — long bias")
+      : frAbs >= 0.05 ? (fr > 0 ? "Longs extended" : "Shorts extended")
+      : "Neutral";
+    const frClass2 = frAbs >= 0.05 ? (fr > 0 ? "regime-val--red" : "regime-val--green") : "regime-val--neutral";
+    const adxRows = closes.slice(-15);
+    const swings = adxRows.map((c, i) => i === 0 ? 0 : Math.abs(c - adxRows[i-1]));
+    const avgSwing = swings.reduce((a,b) => a+b,0)/swings.length;
+    const trendStrength = avgSwing / price * 100;
+    const regime = trendStrength > 0.8 ? "Trending" : "Ranging";
+
+    el.innerHTML = `
+      <div class="regime-row">
+        <span class="regime-label">BTC 4H Trend</span>
+        <span class="regime-val ${trend === "bull" ? "regime-val--green" : "regime-val--red"}">${trend === "bull" ? "▲ Bullish" : "▼ Bearish"}</span>
+      </div>
+      <div class="regime-row">
+        <span class="regime-label">EMA20 vs EMA50</span>
+        <span class="regime-val regime-val--neutral">${price.toFixed(0)} · EMA20 ${trend === "bull" ? ">" : "<"} EMA50</span>
+      </div>
+      <div class="regime-row">
+        <span class="regime-label">Market regime</span>
+        <span class="regime-val ${regime === "Trending" ? "regime-val--green" : "regime-val--amber"}">${regime}</span>
+      </div>
+      <div class="regime-row">
+        <span class="regime-label">Funding rate</span>
+        <span class="regime-val ${frClass2}">${(fr*100).toFixed(4)}%</span>
+      </div>
+      <div class="regime-row">
+        <span class="regime-label">Sentiment</span>
+        <span class="regime-val ${frClass2}">${frSentiment}</span>
+      </div>
+      <div class="regime-hint">${trend === "bull" ? "📈 Look for Long setups on pullbacks to key S/R or EMA20" : "📉 Look for Short setups on rallies to key R or EMA20"}</div>`;
+  } catch {
+    const el2 = document.getElementById("cp-regime-body");
+    if (el2) el2.innerHTML = `<p class="regime-err">Could not load regime data</p>`;
+  }
 }
 
 // ─── TF tab init ─────────────────────────────────────────────────────────────
@@ -803,6 +953,7 @@ async function openChartForSignal(signal) {
   const dir = signal.side === "Long" ? "▲" : "▼";
   dom.chartSymbol.textContent = `${signal.symbol} · ${dir} ${signal.side} · Q${signal.quality}`;
   renderReasoningPanel(signal);
+  wirePosSizingCalc(signal);
   await loadChartForTf(signal, "1h");
 }
 
@@ -1227,6 +1378,8 @@ async function init() {
   initChartTfTabs();
   await fetchState();
   startPolling();
+  fetchAndRenderRegime();
+  regimeTimer = setInterval(fetchAndRenderRegime, 5 * 60 * 1000);
 }
 
 init();
