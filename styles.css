@@ -1665,6 +1665,7 @@ body > * { position: relative; z-index: 1; }
 .paper-pos-card--short   { border-left: 2px solid var(--short); }
 .paper-pos-card--win     { border-left: 2px solid var(--long); }
 .paper-pos-card--loss    { border-left: 2px solid var(--short); }
+.paper-pos-card--be      { border-left: 2px solid var(--accent); }
 .paper-pos-card--expired { border-left: 2px solid var(--tx-4); }
 
 .paper-pos-head {
