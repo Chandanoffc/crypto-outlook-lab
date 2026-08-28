@@ -34,9 +34,20 @@ module.exports = async function handler(req, res) {
   if (req.method !== "GET" && req.method !== "POST") return buildJsonResponse(res, 405, { error: "Method not allowed." });
 
   try {
-    // GET: return current state
+    // GET: return current state (auto-scan if stale > 10 min)
     if (req.method === "GET") {
       const { available, state, updatedAt } = await loadState();
+      const AUTO_SCAN_INTERVAL_MS = 10 * 60 * 1000;
+      const stale = !state.lastScanAt || (Date.now() - state.lastScanAt) > AUTO_SCAN_INTERVAL_MS;
+      if (stale && available) {
+        // Fire-and-forget — don't block the GET response
+        (async () => {
+          try {
+            const result = await runClaudePerps_Scan(state, { manual: false, baseUrl: inferBaseUrl(req) });
+            if (hasDatabase()) await upsertRuntimeState("claudeperps", result.state);
+          } catch (_) { /* non-blocking */ }
+        })();
+      }
       return buildJsonResponse(res, 200, { ok: true, available, state, updatedAt });
     }
 

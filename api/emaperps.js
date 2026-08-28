@@ -36,6 +36,16 @@ module.exports = async function handler(req, res) {
   try {
     if (req.method === "GET") {
       const { available, state, updatedAt } = await loadState();
+      const AUTO_SCAN_INTERVAL_MS = 10 * 60 * 1000;
+      const stale = !state.lastScanAt || (Date.now() - state.lastScanAt) > AUTO_SCAN_INTERVAL_MS;
+      if (stale && available) {
+        (async () => {
+          try {
+            const result = await runEmaPerps_Scan(state, { manual: false, baseUrl: inferBaseUrl(req) });
+            if (hasDatabase()) await upsertRuntimeState("emaperps", result.state);
+          } catch (_) { /* non-blocking */ }
+        })();
+      }
       return buildJsonResponse(res, 200, { ok: true, available, state, updatedAt });
     }
 
