@@ -1,5 +1,5 @@
 "use strict";
-const { hasDatabase, getRuntimeState, upsertRuntimeState, tryClaimMarkLock } = require("../lib/neon-db");
+const { hasDatabase, getRuntimeState, upsertRuntimeState, tryClaimScanLock, tryClaimMarkLock } = require("../lib/neon-db");
 const { defaultRuntimeState, sanitizeRuntimeState, runClaudePerps_Scan, markPaperPositions, analyzeToken } = require("../lib/claudeperps-runtime");
 
 function buildJsonResponse(res, statusCode, payload) {
@@ -53,6 +53,12 @@ module.exports = async function handler(req, res) {
 
     // Manual scan trigger
     if (action === "scan") {
+      const now = Date.now();
+      const claimed = await tryClaimScanLock("claudeperps", now, 60_000);
+      if (!claimed) {
+        const { state: cur } = await loadState();
+        return buildJsonResponse(res, 200, { ok: true, skipped: true, state: sanitizeRuntimeState(cur) });
+      }
       const { state: loaded } = await loadState();
       const result = await runClaudePerps_Scan(loaded, { manual: true, baseUrl: inferBaseUrl(req) });
       if (hasDatabase()) {

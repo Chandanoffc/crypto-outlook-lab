@@ -1,5 +1,5 @@
 "use strict";
-const { hasDatabase, getRuntimeState, upsertRuntimeState, tryClaimMarkLock } = require("../lib/neon-db");
+const { hasDatabase, getRuntimeState, upsertRuntimeState, tryClaimScanLock, tryClaimMarkLock } = require("../lib/neon-db");
 const { defaultRuntimeState, sanitizeRuntimeState, runEmaPerps_Scan, markPaperPositions, analyzeToken } = require("../lib/emaperps-runtime");
 
 function buildJsonResponse(res, statusCode, payload) {
@@ -50,6 +50,15 @@ module.exports = async function handler(req, res) {
     }
 
     if (action === "scan") {
+      const now = Date.now();
+      // Atomic scan lock: only one concurrent scan runs at a time (60s cooldown).
+      // Two concurrent requests both stamp lastScanAt; Postgres serialises the UPDATE
+      // so exactly one wins — the other gets rowCount=0 and returns immediately.
+      const claimed = await tryClaimScanLock("emaperps", now, 60_000);
+      if (!claimed) {
+        const { state: cur } = await loadState();
+        return buildJsonResponse(res, 200, { ok: true, skipped: true, state: sanitizeRuntimeState(cur) });
+      }
       const { state: loaded } = await loadState();
       const result = await runEmaPerps_Scan(loaded, { manual: true, baseUrl: inferBaseUrl(req) });
       if (hasDatabase()) {

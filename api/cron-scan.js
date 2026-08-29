@@ -7,7 +7,7 @@
  * the previous auto-scan approach fired concurrently on every GET request and
  * caused duplicate Discord alerts when multiple frontend polls overlapped.
  */
-const { hasDatabase, getRuntimeState, upsertRuntimeState } = require("../lib/neon-db");
+const { hasDatabase, getRuntimeState, upsertRuntimeState, tryClaimScanLock } = require("../lib/neon-db");
 const { defaultRuntimeState: cpDefault, sanitizeRuntimeState: cpSanitize, runClaudePerps_Scan } = require("../lib/claudeperps-runtime");
 const { defaultRuntimeState: epDefault, sanitizeRuntimeState: epSanitize, runEmaPerps_Scan } = require("../lib/emaperps-runtime");
 
@@ -42,29 +42,41 @@ module.exports = async function handler(req, res) {
   const baseUrl = inferBaseUrl(req);
   const results = {};
 
-  // ClaudePerps scan
+  const now = Date.now();
+
+  // ClaudePerps scan — atomic lock prevents overlap with manual scan button
   try {
-    const { available, state } = await loadState("claudeperps", cpDefault, cpSanitize);
-    if (available) {
-      const result = await runClaudePerps_Scan(state, { manual: false, baseUrl });
-      if (hasDatabase()) await upsertRuntimeState("claudeperps", result.state);
-      results.claudeperps = { ok: true, summary: result.summary };
+    const claimed = await tryClaimScanLock("claudeperps", now, 60_000);
+    if (!claimed) {
+      results.claudeperps = { ok: true, skipped: true };
     } else {
-      results.claudeperps = { ok: false, reason: "no-db" };
+      const { available, state } = await loadState("claudeperps", cpDefault, cpSanitize);
+      if (available) {
+        const result = await runClaudePerps_Scan(state, { manual: false, baseUrl });
+        if (hasDatabase()) await upsertRuntimeState("claudeperps", result.state);
+        results.claudeperps = { ok: true, summary: result.summary };
+      } else {
+        results.claudeperps = { ok: false, reason: "no-db" };
+      }
     }
   } catch (err) {
     results.claudeperps = { ok: false, error: String(err.message) };
   }
 
-  // EMAPerps scan — run after ClaudePerps finishes (sequential, not concurrent)
+  // EMAPerps scan — sequential, same lock pattern
   try {
-    const { available, state } = await loadState("emaperps", epDefault, epSanitize);
-    if (available) {
-      const result = await runEmaPerps_Scan(state, { manual: false, baseUrl });
-      if (hasDatabase()) await upsertRuntimeState("emaperps", result.state);
-      results.emaperps = { ok: true, summary: result.summary };
+    const claimed = await tryClaimScanLock("emaperps", now, 60_000);
+    if (!claimed) {
+      results.emaperps = { ok: true, skipped: true };
     } else {
-      results.emaperps = { ok: false, reason: "no-db" };
+      const { available, state } = await loadState("emaperps", epDefault, epSanitize);
+      if (available) {
+        const result = await runEmaPerps_Scan(state, { manual: false, baseUrl });
+        if (hasDatabase()) await upsertRuntimeState("emaperps", result.state);
+        results.emaperps = { ok: true, summary: result.summary };
+      } else {
+        results.emaperps = { ok: false, reason: "no-db" };
+      }
     }
   } catch (err) {
     results.emaperps = { ok: false, error: String(err.message) };
