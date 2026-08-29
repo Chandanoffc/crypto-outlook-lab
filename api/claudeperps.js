@@ -1,5 +1,5 @@
 "use strict";
-const { hasDatabase, getRuntimeState, upsertRuntimeState } = require("../lib/neon-db");
+const { hasDatabase, getRuntimeState, upsertRuntimeState, tryClaimMarkLock } = require("../lib/neon-db");
 const { defaultRuntimeState, sanitizeRuntimeState, runClaudePerps_Scan, markPaperPositions, analyzeToken } = require("../lib/claudeperps-runtime");
 
 function buildJsonResponse(res, statusCode, payload) {
@@ -88,11 +88,10 @@ module.exports = async function handler(req, res) {
     // Closes positions in real time without waiting for the next background scan cycle.
     // Dedup guard: if paper was marked in the last 15s, skip to avoid concurrent double-closes.
     if (action === "mark") {
-      const { state: loaded } = await loadState();
       const now = Date.now();
-      if (now - (loaded.paper?.lastMarkAt || 0) < 30_000) {
-        return buildJsonResponse(res, 200, { ok: true, skipped: true, state: sanitizeRuntimeState(loaded) });
-      }
+      const claimed = await tryClaimMarkLock("claudeperps", now, 30_000);
+      if (!claimed) return buildJsonResponse(res, 200, { ok: true, skipped: true });
+      const { state: loaded } = await loadState();
       await markPaperPositions(loaded, now, inferBaseUrl(req));
       if (hasDatabase()) {
         const saved = await upsertRuntimeState("claudeperps", loaded);

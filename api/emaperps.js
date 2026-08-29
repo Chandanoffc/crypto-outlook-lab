@@ -1,5 +1,5 @@
 "use strict";
-const { hasDatabase, getRuntimeState, upsertRuntimeState } = require("../lib/neon-db");
+const { hasDatabase, getRuntimeState, upsertRuntimeState, tryClaimMarkLock } = require("../lib/neon-db");
 const { defaultRuntimeState, sanitizeRuntimeState, runEmaPerps_Scan, markPaperPositions, analyzeToken } = require("../lib/emaperps-runtime");
 
 function buildJsonResponse(res, statusCode, payload) {
@@ -80,11 +80,14 @@ module.exports = async function handler(req, res) {
     }
 
     if (action === "mark") {
-      const { state: loaded } = await loadState();
       const now = Date.now();
-      if (now - (loaded.paper?.lastMarkAt || 0) < 30_000) {
-        return buildJsonResponse(res, 200, { ok: true, skipped: true, state: sanitizeRuntimeState(loaded) });
-      }
+      // Atomic DB-level lock: only one concurrent mark request wins.
+      // The conditional UPDATE only succeeds when lastMarkAt is stale (>30s).
+      // Two concurrent requests both try; exactly one gets rowCount > 0.
+      const claimed = await tryClaimMarkLock("emaperps", now, 30_000);
+      if (!claimed) return buildJsonResponse(res, 200, { ok: true, skipped: true });
+      // Load state AFTER claiming lock (lastMarkAt already stamped in DB by the lock)
+      const { state: loaded } = await loadState();
       await markPaperPositions(loaded, now, inferBaseUrl(req));
       if (hasDatabase()) {
         const saved = await upsertRuntimeState("emaperps", loaded);
