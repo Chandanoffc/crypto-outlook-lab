@@ -12,9 +12,11 @@ let currentTab  = "active";
 let currentPage = "signals";
 let activeChart = null;
 let pollTimer   = null;
+let markTimer   = null;
 let activeChartSignal = null;
 let activeChartTf     = "1h";
 const POLL_INTERVAL_MS = 30_000;
+const MARK_INTERVAL_MS = 10_000; // check TP/SL hits every 10s for faster close alerts
 
 // ─── DOM refs ─────────────────────────────────────────────────────────────────
 const dom = {
@@ -490,8 +492,7 @@ function renderPaperTab() {
       : `<div class="paper-empty">No closed trades yet.</div>`;
   }
 
-  // Always fetch fresh prices for open positions (independent of scan cycle)
-  if (openPos.length) refreshMarkPrices();
+  // Mark prices are refreshed by the independent markTimer (every 10s) — no call here.
 }
 
 // ─── 24H Comparison ──────────────────────────────────────────────────────────
@@ -1424,6 +1425,11 @@ document.querySelectorAll("[data-ep-test]").forEach(btn => {
 function startPolling() {
   if (pollTimer) clearInterval(pollTimer);
   pollTimer = setInterval(fetchState, POLL_INTERVAL_MS);
+  // Independent faster timer for TP/SL price checks — don't wait for the 30s
+  // state poll. refreshMarkPrices sends action=mark only when a hit is detected,
+  // so this is cheap (Binance ticker fetch only) when nothing is happening.
+  if (markTimer) clearInterval(markTimer);
+  markTimer = setInterval(refreshMarkPrices, MARK_INTERVAL_MS);
 }
 
 async function init() {
