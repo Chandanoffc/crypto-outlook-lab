@@ -10,6 +10,7 @@
 const { hasDatabase, getRuntimeState, upsertRuntimeState, tryClaimScanLock } = require("../lib/neon-db");
 const { defaultRuntimeState: cpDefault, sanitizeRuntimeState: cpSanitize, runClaudePerps_Scan } = require("../lib/claudeperps-runtime");
 const { defaultRuntimeState: epDefault, sanitizeRuntimeState: epSanitize, runEmaPerps_Scan } = require("../lib/emaperps-runtime");
+const { runZenCalls_Scan } = require("../lib/zencalls-scan");
 
 function buildJsonResponse(res, statusCode, payload) {
   res.statusCode = statusCode;
@@ -80,6 +81,26 @@ module.exports = async function handler(req, res) {
     }
   } catch (err) {
     results.emaperps = { ok: false, error: String(err.message) };
+  }
+
+  // ZenCalls price monitor — checks TP1/TP2/SL for all open conviction calls
+  try {
+    const claimed = await tryClaimScanLock("zencalls", now, 60_000);
+    if (!claimed) {
+      results.zencalls = { ok: true, skipped: true };
+    } else {
+      const row = hasDatabase() ? await getRuntimeState("zencalls") : null;
+      if (row && row.state) {
+        const state = row.state;
+        const summary = await runZenCalls_Scan(state);
+        if (hasDatabase()) await upsertRuntimeState("zencalls", state);
+        results.zencalls = { ok: true, summary };
+      } else {
+        results.zencalls = { ok: true, summary: { hits: 0, reason: "no-calls" } };
+      }
+    }
+  } catch (err) {
+    results.zencalls = { ok: false, error: String(err.message) };
   }
 
   return buildJsonResponse(res, 200, { ok: true, scannedAt: Date.now(), results });
