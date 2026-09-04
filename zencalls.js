@@ -396,7 +396,7 @@ function bindSettings() {
 
 // ── Strategy Scanner Signals ──────────────────────────────
 
-const STRAT_API = "./api/zencalls-strategy";
+const STRAT_API = "./api/zencalls?view=strategy";
 let stratPrices = {};
 
 function fmt(n) {
