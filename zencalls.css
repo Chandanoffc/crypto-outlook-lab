@@ -1,5 +1,7 @@
 /* ── ZenCalls — page-specific styles ──────────────────────── */
 
+[hidden] { display: none !important; }
+
 .badge-zen {
   background: linear-gradient(135deg, rgba(139,92,246,0.18), rgba(168,85,247,0.10));
   color: #a78bfa;
