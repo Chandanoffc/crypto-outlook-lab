@@ -394,6 +394,92 @@ function bindSettings() {
   });
 }
 
+// ── Strategy Scanner Signals ──────────────────────────────
+
+const STRAT_API = "./api/zencalls-strategy";
+let stratPrices = {};
+
+function fmt(n) {
+  if (n == null) return "—";
+  return n >= 1000 ? n.toFixed(2) : n >= 1 ? n.toFixed(4) : n.toPrecision(5);
+}
+
+function timeAgo(ts) {
+  if (!ts) return "—";
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 60) return `${s}s ago`;
+  if (s < 3600) return `${Math.floor(s/60)}m ago`;
+  if (s < 86400) return `${Math.floor(s/3600)}h ago`;
+  return `${Math.floor(s/86400)}d ago`;
+}
+
+function renderStratCard(sig) {
+  const livePrice = stratPrices[sig.symbol] || null;
+  const pnl = (livePrice && sig.entry)
+    ? ((livePrice - sig.entry) / sig.entry * 100).toFixed(2)
+    : null;
+  const pnlStr = pnl != null
+    ? `<span style="color:${parseFloat(pnl)>=0?'var(--long)':'var(--short)'}">${pnl >= 0 ? '+' : ''}${pnl}%</span>`
+    : "";
+
+  return `
+  <div class="zc-strat-card">
+    <div class="zc-strat-card-top">
+      <span class="zc-strat-symbol">${sig.symbol}</span>
+      <span class="zc-strat-rr">R:R 1:${sig.rr ?? "—"}</span>
+    </div>
+    <div class="zc-strat-pattern">${sig.pattern}</div>
+    <div class="zc-strat-levels">
+      <div class="zc-strat-level">
+        <span class="label">Entry</span>
+        <span class="val">${fmt(sig.entry)}</span>
+      </div>
+      <div class="zc-strat-level is-tp">
+        <span class="label">TP1</span>
+        <span class="val">${fmt(sig.tp1)}</span>
+      </div>
+      <div class="zc-strat-level is-tp">
+        <span class="label">TP2</span>
+        <span class="val">${fmt(sig.tp2)}</span>
+      </div>
+      <div class="zc-strat-level is-sl">
+        <span class="label">SL</span>
+        <span class="val">${fmt(sig.sl)}</span>
+      </div>
+    </div>
+    <div class="zc-strat-footer">
+      <span>${timeAgo(sig.detectedAt)}</span>
+      <span class="zc-strat-live-price">${livePrice ? fmt(livePrice) : ""}${pnlStr ? ' · ' + pnlStr : ''}</span>
+    </div>
+  </div>`;
+}
+
+async function loadStratSignals() {
+  try {
+    const data = await fetch(STRAT_API).then(r => r.json());
+    if (!data.ok) return;
+    const signals = data.signals || [];
+    const grid = document.getElementById("zc-strat-grid");
+    const scanEl = document.getElementById("zc-strat-last-scan");
+    if (scanEl) scanEl.textContent = `Last scan: ${timeAgo(data.lastScan)}`;
+    if (!signals.length) {
+      grid.innerHTML = `<div class="zc-empty-state">
+        <div class="zc-empty-icon">🔍</div>
+        <p class="zc-empty-title">No signals yet</p>
+        <p class="zc-empty-sub">The strategy scanner fires when a setup matches. Check back after the next cron cycle.</p>
+      </div>`;
+      return;
+    }
+    // Fetch live prices for all strategy signal symbols
+    const syms = [...new Set(signals.map(s => s.symbol))];
+    try {
+      const tickers = await fetch(`https://fapi.binance.com/fapi/v1/ticker/price`).then(r => r.json());
+      for (const t of tickers) stratPrices[t.symbol] = parseFloat(t.price);
+    } catch { /* non-fatal */ }
+    grid.innerHTML = signals.map(renderStratCard).join("");
+  } catch { /* non-fatal */ }
+}
+
 // ── Init ──────────────────────────────────────────────────
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -402,4 +488,7 @@ document.addEventListener("DOMContentLoaded", () => {
   bindSettings();
   setStatus("neutral", "Loading…");
   loadCalls();
+  loadStratSignals();
+  // Refresh strategy signals every 60s
+  setInterval(loadStratSignals, 60_000);
 });

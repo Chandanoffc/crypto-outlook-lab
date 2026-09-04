@@ -426,10 +426,142 @@
   padding: 8px 10px;
 }
 
+/* ── Strategy Scanner Section ──────────────────────────── */
+
+.zc-strategy-section {
+  margin-top: 48px;
+  padding-top: 32px;
+  border-top: 1px solid var(--bd-2);
+}
+
+.zc-strategy-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.zc-strategy-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--tx-1);
+  margin: 0 0 4px;
+}
+
+.zc-strategy-sub {
+  font-size: 0.78rem;
+  color: var(--tx-3);
+  margin: 0;
+  max-width: 560px;
+}
+
+.zc-strat-scan-time {
+  font-size: 0.72rem;
+  color: var(--tx-4, var(--tx-3));
+  white-space: nowrap;
+  padding-top: 4px;
+}
+
+.zc-strat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+/* Strategy signal card */
+.zc-strat-card {
+  background: var(--bg-1);
+  border: 1px solid var(--bd-2);
+  border-left: 3px solid #a78bfa;
+  border-radius: var(--r-lg);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.zc-strat-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.zc-strat-symbol {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--tx-1);
+  font-family: var(--font-mono, monospace);
+}
+
+.zc-strat-rr {
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: rgba(167,139,250,0.12);
+  color: #a78bfa;
+  border: 1px solid rgba(167,139,250,0.25);
+  border-radius: 4px;
+  padding: 2px 7px;
+}
+
+.zc-strat-pattern {
+  font-size: 0.75rem;
+  color: var(--tx-2);
+  line-height: 1.4;
+}
+
+.zc-strat-levels {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.zc-strat-level {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.zc-strat-level .label {
+  font-size: 0.65rem;
+  color: var(--tx-3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.zc-strat-level .val {
+  font-size: 0.78rem;
+  font-weight: 600;
+  font-family: var(--font-mono, monospace);
+  color: var(--tx-1);
+}
+
+.zc-strat-level.is-tp  .val { color: var(--long); }
+.zc-strat-level.is-sl  .val { color: var(--short); }
+
+.zc-strat-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  color: var(--tx-3);
+}
+
+.zc-strat-live-price {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--tx-1);
+}
+
 /* Responsive */
 @media (max-width: 640px) {
-  .zc-calls-grid { grid-template-columns: 1fr; }
-  .zc-stats-row { flex-wrap: wrap; }
-  .zc-stat { min-width: 80px; }
-  .zc-levels { grid-template-columns: repeat(2, 1fr); }
+  .zc-calls-grid  { grid-template-columns: 1fr; }
+  .zc-strat-grid  { grid-template-columns: 1fr; }
+  .zc-stats-row   { flex-wrap: wrap; }
+  .zc-stat        { min-width: 80px; }
+  .zc-levels      { grid-template-columns: repeat(2, 1fr); }
+  .zc-strat-levels { grid-template-columns: repeat(2, 1fr); }
+  .zc-strategy-header { flex-direction: column; }
 }
