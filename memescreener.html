@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MemeScreener · Soloris Signals</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./memescreener.css" />
+    <script src="./memescreener.js" defer></script>
+  </head>
+  <body>
+
+    <!-- Topbar -->
+    <header class="topbar">
+      <div class="topbar-inner">
+        <a class="brand" href="./claudeperps.html">
+          <img class="brand-logo" src="./hyperdrive-mark.svg" alt="" />
+          <span class="brand-name">Soloris <em>Signals</em></span>
+        </a>
+        <nav class="topbar-nav" aria-label="Strategy pages">
+          <a class="nav-tab" href="./claudeperps.html">Claudeperps</a>
+          <a class="nav-tab" href="./emaperps.html">EMA Perps</a>
+          <a class="nav-tab" href="./tokenscan.html">TokenScan</a>
+          <a class="nav-tab" href="./zencalls.html">ZenCalls</a>
+          <a class="nav-tab is-current" href="./memescreener.html">MemeScreener</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="page-content">
+
+      <!-- Hero -->
+      <div class="strategy-hero">
+        <div class="hero-left">
+          <span class="badge badge-sm" style="background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.2)">Solana · Pump.fun / LetsBonk</span>
+          <h1 class="hero-title">Memecoin Risk Screener</h1>
+          <p class="hero-sub">Enter on-chain metrics for a new launch. The rubric scores contract safety, distribution, dev history, volume authenticity, and social patterns — then classifies the risk level and sends to Discord.</p>
+        </div>
+        <div class="hero-status">
+          <button id="ms-settings-btn" class="btn btn-ghost" type="button">⚙ Settings</button>
+        </div>
+      </div>
+
+      <div class="ms-layout">
+
+        <!-- ── Form panel ───────────────────────────────── -->
+        <div class="ms-form-panel">
+
+          <!-- Token identity -->
+          <div class="ms-section">
+            <h2 class="ms-section-title">Token Identity</h2>
+            <div class="ms-row">
+              <div class="ms-field-group">
+                <label class="ms-label" for="f-token">Token name / ticker</label>
+                <input id="f-token" class="ms-field" type="text" placeholder="e.g. PEPE2" />
+              </div>
+              <div class="ms-field-group">
+                <label class="ms-label" for="f-age">Age <span class="hint">(minutes since launch)</span></label>
+                <input id="f-age" class="ms-field" type="number" min="0" placeholder="e.g. 45" />
+              </div>
+            </div>
+            <div class="ms-row">
+              <div class="ms-field-group">
+                <label class="ms-label" for="f-copycat">Copycat name / ticker?</label>
+                <select id="f-copycat" class="ms-field">
+                  <option value="">— Unknown</option>
+                  <option value="false">No — original name</option>
+                  <option value="true">Yes — copycat</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Contract safety -->
+          <div class="ms-section">
+            <h2 class="ms-section-title">Contract Safety</h2>
+            <div class="ms-row">
+              <div class="ms-field-group">
+                <label class="ms-label" for="f-mint">Mint authority revoked?</label>
+                <select id="f-mint" class="ms-field">
+                  <option value="">— Unknown</option>
+                  <option value="true">Yes ✓</option>
+                  <option value="false">No ✗</option>
+                </select>
+              </div>
+              <div class="ms-field-group">
+                <label class="ms-label" for="f-freeze">Freeze authority revoked?</label>
+                <select id="f-freeze" class="ms-field">
+                  <option value="">— Unknown</option>
+                  <option value="true">Yes ✓</option>
+                  <option value="false">No ✗</option>
+                </select>
+              </div>
+            </div>
+            <div class="ms-row">
+              <div class="ms-field-group">
+                <label class="ms-label" for="f-lp">LP locked or burned?</label>
+                <select id="f-lp" class="ms-field">
+                  <option value="">— Unknown</option>
+                  <option value="true">Yes ✓</option>
+                  <option value="false">No ✗</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Distribution -->
+          <div class="ms-section">
+            <h2 class="ms-section-title">Token Distribution</h2>
+            <div class="ms-row">
+              <div class="ms-field-group">
+                <label class="ms-label" for="f-top10">Top 10 holders <span class="hint">(%)</span></label>
+                <input id="f-top10" class="ms-field" type="number" min="0" max="100" placeholder="e.g. 25" />
+              </div>
+              <div class="ms-field-group">
+                <label class="ms-label" for="f-cluster">Connected cluster <span class="hint">(%)</span></label>
+                <input id="f-cluster" class="ms-field" type="number" min="0" max="100" placeholder="e.g. 12" />
+              </div>
+            </div>
+            <div class="ms-row">
+              <div class="ms-field-group">
+                <label class="ms-label" for="f-buyers">Unique buyers</label>
+                <input id="f-buyers" class="ms-field" type="number" min="0" placeholder="e.g. 840" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Volume -->
+          <div class="ms-section">
+            <h2 class="ms-section-title">Volume &amp; Liquidity</h2>
+            <div class="ms-row">
+              <div class="ms-field-group">
+                <label class="ms-label" for="f-vol">24h volume <span class="hint">(USD)</span></label>
+                <input id="f-vol" class="ms-field" type="number" min="0" placeholder="e.g. 280000" />
+              </div>
+              <div class="ms-field-group">
+                <label class="ms-label" for="f-vol10">% volume from top 10 wallets</label>
+                <input id="f-vol10" class="ms-field" type="number" min="0" max="100" placeholder="e.g. 45" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Dev history -->
+          <div class="ms-section">
+            <h2 class="ms-section-title">Developer History</h2>
+            <div class="ms-row">
+              <div class="ms-field-group">
+                <label class="ms-label" for="f-devtokens">Dev's previous token count</label>
+                <input id="f-devtokens" class="ms-field" type="number" min="0" placeholder="e.g. 3" />
+              </div>
+              <div class="ms-field-group">
+                <label class="ms-label" for="f-devrugs">Dev rug flags on past coins</label>
+                <input id="f-devrugs" class="ms-field" type="number" min="0" placeholder="e.g. 0" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Social -->
+          <div class="ms-section">
+            <h2 class="ms-section-title">Social Signal</h2>
+            <div class="ms-field-group">
+              <label class="ms-label" for="f-social">Mention velocity vs price</label>
+              <select id="f-social" class="ms-field">
+                <option value="unknown">— Unknown</option>
+                <option value="rising_faster_than_price">Rising faster than price 🟢</option>
+                <option value="tracking_price">Tracking price 🟡</option>
+                <option value="flat_or_falling_while_price_rises">Flat/falling while price rises 🔴</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- KOL -->
+          <div class="ms-section">
+            <h2 class="ms-section-title">KOL / Influencer</h2>
+            <div class="ms-field-group">
+              <label class="ms-label" for="f-kol">Promoted by a KOL?</label>
+              <select id="f-kol" class="ms-field">
+                <option value="">— Unknown / No</option>
+                <option value="false">No</option>
+                <option value="true">Yes</option>
+              </select>
+            </div>
+            <div id="ms-kol-extra" hidden style="display:flex;flex-direction:column;gap:14px">
+              <div class="ms-row">
+                <div class="ms-field-group">
+                  <label class="ms-label" for="f-kolholder">KOL is a large holder?</label>
+                  <select id="f-kolholder" class="ms-field">
+                    <option value="">— Unknown</option>
+                    <option value="false">No</option>
+                    <option value="true">Yes 🔴</option>
+                  </select>
+                </div>
+                <div class="ms-field-group">
+                  <label class="ms-label" for="f-kolpromo">On paid promo list?</label>
+                  <select id="f-kolpromo" class="ms-field">
+                    <option value="">— Unknown</option>
+                    <option value="false">No</option>
+                    <option value="true">Yes 🔴</option>
+                  </select>
+                </div>
+              </div>
+              <div class="ms-field-group">
+                <label class="ms-label" for="f-kolage">KOL post age <span class="hint">(minutes ago)</span></label>
+                <input id="f-kolage" class="ms-field" type="number" min="0" placeholder="e.g. 15" />
+              </div>
+            </div>
+          </div>
+
+          <div class="ms-screen-row">
+            <button id="ms-screen-btn" class="btn btn-primary" type="button">Screen Token</button>
+          </div>
+
+        </div>
+
+        <!-- ── Result panel ──────────────────────────────── -->
+        <div class="ms-result-panel-wrap">
+          <div id="ms-result-panel">
+            <div style="color:var(--tx-3);font-size:0.85rem;text-align:center;padding:32px 0">
+              Fill in the fields and click <strong>Screen Token</strong> to see the risk classification.
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+
+    <!-- Settings modal -->
+    <div id="ms-settings-overlay" class="ms-modal-overlay" hidden>
+      <div class="ms-modal">
+        <div class="ms-modal-header">
+          <h2 class="ms-modal-title">MemeScreener Settings</h2>
+          <button id="ms-settings-close" class="ms-modal-close" type="button">✕</button>
+        </div>
+        <form id="ms-settings-form" autocomplete="off">
+          <div class="ms-field-group">
+            <label class="ms-label" for="ms-s-webhook">Discord Webhook URL</label>
+            <input id="ms-s-webhook" class="ms-field" type="url" placeholder="https://discord.com/api/webhooks/…" />
+            <span style="font-size:0.72rem;color:var(--tx-3)">Alert fires when you click "Send to Discord" on a screened token.</span>
+          </div>
+          <div class="ms-modal-footer">
+            <button type="button" id="ms-settings-cancel" class="btn btn-ghost">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+  </body>
+</html>
