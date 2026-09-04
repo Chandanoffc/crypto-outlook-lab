@@ -11,6 +11,7 @@ const { hasDatabase, getRuntimeState, upsertRuntimeState, tryClaimScanLock } = r
 const { defaultRuntimeState: cpDefault, sanitizeRuntimeState: cpSanitize, runClaudePerps_Scan } = require("../lib/claudeperps-runtime");
 const { defaultRuntimeState: epDefault, sanitizeRuntimeState: epSanitize, runEmaPerps_Scan } = require("../lib/emaperps-runtime");
 const { runZenCalls_Scan } = require("../lib/zencalls-scan");
+const { runZenStrategy_Scan, defaultState: zcStratDefault } = require("../lib/zencalls-strategy");
 
 function buildJsonResponse(res, statusCode, payload) {
   res.statusCode = statusCode;
@@ -101,6 +102,28 @@ module.exports = async function handler(req, res) {
     }
   } catch (err) {
     results.zencalls = { ok: false, error: String(err.message) };
+  }
+
+  // ZenCalls strategy scanner — auto-scans ALL Binance perp tokens for S/R setups
+  try {
+    const claimed = await tryClaimScanLock("zencalls-strategy", now, 60_000);
+    if (!claimed) {
+      results.zencalls_strategy = { ok: true, skipped: true };
+    } else {
+      let stratState = zcStratDefault();
+      if (hasDatabase()) {
+        const row = await getRuntimeState("zencalls-strategy");
+        if (row && row.state) stratState = { ...zcStratDefault(), ...row.state };
+      }
+      // Read Discord webhook from ZenCalls settings
+      const zcRow = hasDatabase() ? await getRuntimeState("zencalls") : null;
+      const webhook = zcRow?.state?.settings?.discordWebhook || "";
+      const summary = await runZenStrategy_Scan(stratState, { webhook });
+      if (hasDatabase()) await upsertRuntimeState("zencalls-strategy", stratState);
+      results.zencalls_strategy = { ok: true, summary };
+    }
+  } catch (err) {
+    results.zencalls_strategy = { ok: false, error: String(err.message) };
   }
 
   return buildJsonResponse(res, 200, { ok: true, scannedAt: Date.now(), results });
