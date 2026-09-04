@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ZenCalls · Soloris Signals</title>
+    <meta name="description" content="Manually curated conviction trade calls — chart-driven setups with defined entry, targets, and invalidation." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./zencalls.css" />
+    <script src="./zencalls.js" defer></script>
+  </head>
+  <body>
+
+    <!-- ── Topbar ────────────────────────────────────────────── -->
+    <header class="topbar">
+      <div class="topbar-inner">
+        <a class="brand" href="./claudeperps.html">
+          <img class="brand-logo" src="./hyperdrive-mark.svg" alt="" />
+          <span class="brand-name">Soloris <em>Signals</em></span>
+        </a>
+
+        <nav class="topbar-nav" aria-label="Strategy pages">
+          <a class="nav-tab" href="./claudeperps.html">Claudeperps</a>
+          <a class="nav-tab" href="./emaperps.html">EMA Perps</a>
+          <a class="nav-tab" href="./tokenscan.html">TokenScan</a>
+          <a class="nav-tab is-current" href="./zencalls.html">ZenCalls</a>
+        </nav>
+
+        <div class="topbar-end">
+          <span class="live-badge zc-badge-manual">
+            <span class="live-dot" style="background:var(--ac);" aria-hidden="true"></span>
+            Manual Calls
+          </span>
+          <span class="strategy-chip">Conviction</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- ── Page ─────────────────────────────────────────────── -->
+    <main class="page">
+
+      <!-- Hero -->
+      <div class="strategy-hero">
+        <div class="hero-left">
+          <span class="strategy-badge badge-zen">ZenCalls</span>
+          <h1 class="hero-title">Conviction Trade Calls</h1>
+          <p class="hero-sub">
+            Chart-driven, manually curated setups — not automated scans. Each call defines a pattern, entry zone, two profit targets, and a hard invalidation level. Only high-conviction reads make the board.
+          </p>
+        </div>
+        <div class="hero-status">
+          <div id="zc-status-dot" class="status-dot status-dot--neutral"></div>
+          <span id="zc-status-msg" class="status-msg">Loading…</span>
+          <span id="zc-open-count" class="status-scan"></span>
+        </div>
+      </div>
+
+      <!-- Controls row -->
+      <div class="zc-controls-row">
+        <div class="zc-filter-tabs" role="tablist">
+          <button class="zc-filter-tab is-active" data-filter="open" role="tab">Open</button>
+          <button class="zc-filter-tab" data-filter="closed" role="tab">Closed</button>
+          <button class="zc-filter-tab" data-filter="all" role="tab">All</button>
+        </div>
+        <div class="zc-controls-end">
+          <button id="zc-add-btn" class="btn btn-primary" type="button">+ New Call</button>
+          <button id="zc-settings-btn" class="btn btn-ghost" type="button">Settings</button>
+        </div>
+      </div>
+
+      <!-- Stats row -->
+      <div id="zc-stats-row" class="zc-stats-row">
+        <div class="zc-stat">
+          <span class="label">Open</span>
+          <span id="stat-open" class="zc-stat-val">—</span>
+        </div>
+        <div class="zc-stat">
+          <span class="label">TP Hit</span>
+          <span id="stat-tp" class="zc-stat-val" style="color:var(--long)">—</span>
+        </div>
+        <div class="zc-stat">
+          <span class="label">SL Hit</span>
+          <span id="stat-sl" class="zc-stat-val" style="color:var(--short)">—</span>
+        </div>
+        <div class="zc-stat">
+          <span class="label">Win Rate</span>
+          <span id="stat-wr" class="zc-stat-val">—</span>
+        </div>
+        <div class="zc-stat">
+          <span class="label">Total Calls</span>
+          <span id="stat-total" class="zc-stat-val">—</span>
+        </div>
+      </div>
+
+      <!-- Calls grid -->
+      <div id="zc-calls-grid" class="zc-calls-grid">
+        <div class="zc-empty-state">
+          <div class="zc-empty-icon">📋</div>
+          <p class="zc-empty-title">No calls yet</p>
+          <p class="zc-empty-sub">Add the first conviction call using the button above.</p>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- ── Add/Edit Call Modal ──────────────────────────────── -->
+    <div id="zc-modal-overlay" class="zc-modal-overlay" hidden>
+      <div class="zc-modal" role="dialog" aria-modal="true" aria-labelledby="zc-modal-title">
+        <div class="zc-modal-header">
+          <h2 class="zc-modal-title" id="zc-modal-title">New Call</h2>
+          <button id="zc-modal-close" class="zc-modal-close" type="button" aria-label="Close">✕</button>
+        </div>
+        <form id="zc-call-form" class="zc-modal-body" autocomplete="off">
+          <input type="hidden" id="zc-edit-id" value="" />
+
+          <div class="zc-form-row">
+            <div class="zc-form-field">
+              <label class="label" for="zc-f-symbol">Symbol</label>
+              <input class="zc-input" id="zc-f-symbol" type="text" placeholder="ZAMAUSDT" required />
+            </div>
+            <div class="zc-form-field">
+              <label class="label" for="zc-f-side">Side</label>
+              <select class="zc-input" id="zc-f-side">
+                <option value="long">Long</option>
+                <option value="short">Short</option>
+              </select>
+            </div>
+            <div class="zc-form-field">
+              <label class="label" for="zc-f-tf">Timeframe</label>
+              <select class="zc-input" id="zc-f-tf">
+                <option value="15m">15m</option>
+                <option value="1h">1h</option>
+                <option value="4h" selected>4h</option>
+                <option value="1D">1D</option>
+                <option value="1W">1W</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="zc-form-field">
+            <label class="label" for="zc-f-pattern">Pattern / Setup</label>
+            <input class="zc-input" id="zc-f-pattern" type="text" placeholder="Descending Wedge Breakout at Monthly Support" />
+          </div>
+
+          <div class="zc-form-row">
+            <div class="zc-form-field">
+              <label class="label" for="zc-f-entry">Entry</label>
+              <input class="zc-input" id="zc-f-entry" type="number" step="any" placeholder="0.04978" />
+            </div>
+            <div class="zc-form-field">
+              <label class="label" for="zc-f-tp1">TP 1</label>
+              <input class="zc-input" id="zc-f-tp1" type="number" step="any" placeholder="0.05366" />
+            </div>
+            <div class="zc-form-field">
+              <label class="label" for="zc-f-tp2">TP 2</label>
+              <input class="zc-input" id="zc-f-tp2" type="number" step="any" placeholder="0.05837" />
+            </div>
+            <div class="zc-form-field">
+              <label class="label" for="zc-f-sl">Stop Loss</label>
+              <input class="zc-input" id="zc-f-sl" type="number" step="any" placeholder="0.04700" />
+            </div>
+          </div>
+
+          <div class="zc-form-field">
+            <label class="label" for="zc-f-note">Note (optional)</label>
+            <textarea class="zc-input zc-textarea" id="zc-f-note" rows="3" placeholder="Monthly support confluence + wedge breakout. Volume confirming. Risk below monthly low."></textarea>
+          </div>
+
+          <div id="zc-form-error" class="zc-form-error" hidden></div>
+
+          <div class="zc-modal-footer">
+            <button type="button" id="zc-modal-cancel" class="btn btn-ghost">Cancel</button>
+            <button type="submit" id="zc-form-submit" class="btn btn-primary">Add Call</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ── Settings Modal ──────────────────────────────────── -->
+    <div id="zc-settings-overlay" class="zc-modal-overlay" hidden>
+      <div class="zc-modal" role="dialog" aria-modal="true" aria-labelledby="zc-settings-title">
+        <div class="zc-modal-header">
+          <h2 class="zc-modal-title" id="zc-settings-title">ZenCalls Settings</h2>
+          <button id="zc-settings-close" class="zc-modal-close" type="button" aria-label="Close">✕</button>
+        </div>
+        <form id="zc-settings-form" class="zc-modal-body" autocomplete="off">
+          <div class="zc-form-field">
+            <label class="label" for="zc-s-webhook">Discord Webhook URL</label>
+            <input class="zc-input" id="zc-s-webhook" type="url" placeholder="https://discord.com/api/webhooks/…" />
+            <p style="font-size:12px;color:var(--tx-3);margin-top:6px;">Alerts fire when a new call is added and when status changes to TP/SL.</p>
+          </div>
+          <div class="zc-form-field" style="flex-direction:row;align-items:center;gap:10px;">
+            <input type="checkbox" id="zc-s-notify" style="width:16px;height:16px;accent-color:var(--ac);" />
+            <label for="zc-s-notify" style="font-size:13px;color:var(--tx-2);cursor:pointer;">Send Discord alert for new calls</label>
+          </div>
+          <div class="zc-modal-footer">
+            <button type="button" id="zc-settings-cancel" class="btn btn-ghost">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+  </body>
+</html>
