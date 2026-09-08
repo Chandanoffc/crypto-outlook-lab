@@ -13,7 +13,6 @@
   </head>
   <body>
 
-    <!-- Topbar -->
     <header class="topbar">
       <div class="topbar-inner">
         <a class="brand" href="./claudeperps.html">
@@ -32,199 +31,138 @@
 
     <main class="page-content">
 
-      <!-- Hero -->
       <div class="strategy-hero">
         <div class="hero-left">
           <span class="badge badge-sm" style="background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.2)">Solana · Pump.fun / LetsBonk</span>
           <h1 class="hero-title">Memecoin Risk Screener</h1>
-          <p class="hero-sub">Enter on-chain metrics for a new launch. The rubric scores contract safety, distribution, dev history, volume authenticity, and social patterns — then classifies the risk level and sends to Discord.</p>
+          <p class="hero-sub">Paste a contract address — auto-fetches on-chain data via Helius, scores it across 7 risk factors, and sends a Discord alert.</p>
         </div>
         <div class="hero-status">
           <button id="ms-settings-btn" class="btn btn-ghost" type="button">⚙ Settings</button>
         </div>
       </div>
 
-      <div class="ms-layout">
-
-        <!-- ── Form panel ───────────────────────────────── -->
-        <div class="ms-form-panel">
-
-          <!-- Token identity -->
-          <div class="ms-section">
-            <h2 class="ms-section-title">Token Identity</h2>
-            <div class="ms-row">
-              <div class="ms-field-group">
-                <label class="ms-label" for="f-token">Token name / ticker</label>
-                <input id="f-token" class="ms-field" type="text" placeholder="e.g. PEPE2" />
-              </div>
-              <div class="ms-field-group">
-                <label class="ms-label" for="f-age">Age <span class="hint">(minutes since launch)</span></label>
-                <input id="f-age" class="ms-field" type="number" min="0" placeholder="e.g. 45" />
-              </div>
-            </div>
-            <div class="ms-row">
-              <div class="ms-field-group">
-                <label class="ms-label" for="f-copycat">Copycat name / ticker?</label>
-                <select id="f-copycat" class="ms-field">
-                  <option value="">— Unknown</option>
-                  <option value="false">No — original name</option>
-                  <option value="true">Yes — copycat</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          <!-- Contract safety -->
-          <div class="ms-section">
-            <h2 class="ms-section-title">Contract Safety</h2>
-            <div class="ms-row">
-              <div class="ms-field-group">
-                <label class="ms-label" for="f-mint">Mint authority revoked?</label>
-                <select id="f-mint" class="ms-field">
-                  <option value="">— Unknown</option>
-                  <option value="true">Yes ✓</option>
-                  <option value="false">No ✗</option>
-                </select>
-              </div>
-              <div class="ms-field-group">
-                <label class="ms-label" for="f-freeze">Freeze authority revoked?</label>
-                <select id="f-freeze" class="ms-field">
-                  <option value="">— Unknown</option>
-                  <option value="true">Yes ✓</option>
-                  <option value="false">No ✗</option>
-                </select>
-              </div>
-            </div>
-            <div class="ms-row">
-              <div class="ms-field-group">
-                <label class="ms-label" for="f-lp">LP locked or burned?</label>
-                <select id="f-lp" class="ms-field">
-                  <option value="">— Unknown</option>
-                  <option value="true">Yes ✓</option>
-                  <option value="false">No ✗</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          <!-- Distribution -->
-          <div class="ms-section">
-            <h2 class="ms-section-title">Token Distribution</h2>
-            <div class="ms-row">
-              <div class="ms-field-group">
-                <label class="ms-label" for="f-top10">Top 10 holders <span class="hint">(%)</span></label>
-                <input id="f-top10" class="ms-field" type="number" min="0" max="100" placeholder="e.g. 25" />
-              </div>
-              <div class="ms-field-group">
-                <label class="ms-label" for="f-cluster">Connected cluster <span class="hint">(%)</span></label>
-                <input id="f-cluster" class="ms-field" type="number" min="0" max="100" placeholder="e.g. 12" />
-              </div>
-            </div>
-            <div class="ms-row">
-              <div class="ms-field-group">
-                <label class="ms-label" for="f-buyers">Unique buyers</label>
-                <input id="f-buyers" class="ms-field" type="number" min="0" placeholder="e.g. 840" />
-              </div>
-            </div>
-          </div>
-
-          <!-- Volume -->
-          <div class="ms-section">
-            <h2 class="ms-section-title">Volume &amp; Liquidity</h2>
-            <div class="ms-row">
-              <div class="ms-field-group">
-                <label class="ms-label" for="f-vol">24h volume <span class="hint">(USD)</span></label>
-                <input id="f-vol" class="ms-field" type="number" min="0" placeholder="e.g. 280000" />
-              </div>
-              <div class="ms-field-group">
-                <label class="ms-label" for="f-vol10">% volume from top 10 wallets</label>
-                <input id="f-vol10" class="ms-field" type="number" min="0" max="100" placeholder="e.g. 45" />
-              </div>
-            </div>
-          </div>
-
-          <!-- Dev history -->
-          <div class="ms-section">
-            <h2 class="ms-section-title">Developer History</h2>
-            <div class="ms-row">
-              <div class="ms-field-group">
-                <label class="ms-label" for="f-devtokens">Dev's previous token count</label>
-                <input id="f-devtokens" class="ms-field" type="number" min="0" placeholder="e.g. 3" />
-              </div>
-              <div class="ms-field-group">
-                <label class="ms-label" for="f-devrugs">Dev rug flags on past coins</label>
-                <input id="f-devrugs" class="ms-field" type="number" min="0" placeholder="e.g. 0" />
-              </div>
-            </div>
-          </div>
-
-          <!-- Social -->
-          <div class="ms-section">
-            <h2 class="ms-section-title">Social Signal</h2>
-            <div class="ms-field-group">
-              <label class="ms-label" for="f-social">Mention velocity vs price</label>
-              <select id="f-social" class="ms-field">
-                <option value="unknown">— Unknown</option>
-                <option value="rising_faster_than_price">Rising faster than price 🟢</option>
-                <option value="tracking_price">Tracking price 🟡</option>
-                <option value="flat_or_falling_while_price_rises">Flat/falling while price rises 🔴</option>
-              </select>
-            </div>
-          </div>
-
-          <!-- KOL -->
-          <div class="ms-section">
-            <h2 class="ms-section-title">KOL / Influencer</h2>
-            <div class="ms-field-group">
-              <label class="ms-label" for="f-kol">Promoted by a KOL?</label>
-              <select id="f-kol" class="ms-field">
-                <option value="">— Unknown / No</option>
-                <option value="false">No</option>
-                <option value="true">Yes</option>
-              </select>
-            </div>
-            <div id="ms-kol-extra" hidden style="display:flex;flex-direction:column;gap:14px">
-              <div class="ms-row">
-                <div class="ms-field-group">
-                  <label class="ms-label" for="f-kolholder">KOL is a large holder?</label>
-                  <select id="f-kolholder" class="ms-field">
-                    <option value="">— Unknown</option>
-                    <option value="false">No</option>
-                    <option value="true">Yes 🔴</option>
-                  </select>
-                </div>
-                <div class="ms-field-group">
-                  <label class="ms-label" for="f-kolpromo">On paid promo list?</label>
-                  <select id="f-kolpromo" class="ms-field">
-                    <option value="">— Unknown</option>
-                    <option value="false">No</option>
-                    <option value="true">Yes 🔴</option>
-                  </select>
-                </div>
-              </div>
-              <div class="ms-field-group">
-                <label class="ms-label" for="f-kolage">KOL post age <span class="hint">(minutes ago)</span></label>
-                <input id="f-kolage" class="ms-field" type="number" min="0" placeholder="e.g. 15" />
-              </div>
-            </div>
-          </div>
-
-          <div class="ms-screen-row">
-            <button id="ms-screen-btn" class="btn btn-primary" type="button">Screen Token</button>
-          </div>
-
-        </div>
-
-        <!-- ── Result panel ──────────────────────────────── -->
-        <div class="ms-result-panel-wrap">
-          <div id="ms-result-panel">
-            <div style="color:var(--tx-3);font-size:0.85rem;text-align:center;padding:32px 0">
-              Fill in the fields and click <strong>Screen Token</strong> to see the risk classification.
-            </div>
-          </div>
-        </div>
-
+      <!-- CA input -->
+      <div class="ms-ca-row">
+        <input id="ms-ca-input" class="ms-ca-input" type="text" placeholder="Paste contract address (CA)…" autocomplete="off" spellcheck="false" />
+        <button id="ms-scan-btn" class="btn btn-primary ms-scan-btn" type="button">Screen</button>
       </div>
+      <div id="ms-scan-status" class="ms-scan-status" hidden></div>
+
+      <!-- Result -->
+      <div id="ms-result-wrap" hidden>
+
+        <!-- Market strip -->
+        <div id="ms-market-strip" class="ms-market-strip"></div>
+
+        <div class="ms-result-grid">
+
+          <!-- Score card -->
+          <div class="ms-score-card" id="ms-score-card">
+            <div class="ms-result-header">
+              <div class="ms-score-ring-wrap" id="ms-ring-wrap"></div>
+              <div class="ms-result-meta">
+                <div class="ms-token-name" id="ms-token-name">—</div>
+                <div class="ms-ca-display" id="ms-ca-display"></div>
+                <div class="ms-classification" id="ms-classification"></div>
+                <div id="ms-forced-tag" class="ms-forced-tag" hidden>⚠️ Force-classified High Risk</div>
+              </div>
+            </div>
+
+            <!-- Sub scores -->
+            <div class="ms-sub-scores" id="ms-sub-scores"></div>
+
+            <!-- Summary -->
+            <div class="ms-summary" id="ms-summary"></div>
+
+            <!-- Missing fields -->
+            <div id="ms-missing" class="ms-missing" hidden></div>
+
+            <!-- Actions -->
+            <div class="ms-actions">
+              <button id="ms-alert-btn" class="btn btn-primary" type="button">Send to Discord</button>
+              <span id="ms-alert-status" class="ms-alert-status"></span>
+            </div>
+          </div>
+
+          <!-- Manual override panel -->
+          <div class="ms-override-panel">
+            <div class="ms-override-title">Fill missing fields</div>
+            <p class="ms-override-sub">Helius can't retrieve these automatically. Add what you know to improve the score.</p>
+
+            <div class="ms-override-fields">
+              <div class="ms-field-group">
+                <label class="ms-label" for="ov-cluster">Connected cluster % <span class="hint">(wallet graph)</span></label>
+                <input id="ov-cluster" class="ms-field" type="number" min="0" max="100" placeholder="e.g. 15" />
+              </div>
+              <div class="ms-field-group">
+                <label class="ms-label" for="ov-vol10">% volume from top 10 wallets</label>
+                <input id="ov-vol10" class="ms-field" type="number" min="0" max="100" placeholder="e.g. 40" />
+              </div>
+              <div class="ms-field-group">
+                <label class="ms-label" for="ov-devtokens">Dev's prev token count</label>
+                <input id="ov-devtokens" class="ms-field" type="number" min="0" placeholder="e.g. 3" />
+              </div>
+              <div class="ms-field-group">
+                <label class="ms-label" for="ov-devrugs">Dev rug flags</label>
+                <input id="ov-devrugs" class="ms-field" type="number" min="0" placeholder="e.g. 0" />
+              </div>
+              <div class="ms-field-group">
+                <label class="ms-label" for="ov-copycat">Copycat name?</label>
+                <select id="ov-copycat" class="ms-field">
+                  <option value="">— Unknown</option>
+                  <option value="false">No</option>
+                  <option value="true">Yes</option>
+                </select>
+              </div>
+              <div class="ms-field-group">
+                <label class="ms-label" for="ov-social">Mention velocity vs price</label>
+                <select id="ov-social" class="ms-field">
+                  <option value="unknown">— Unknown</option>
+                  <option value="rising_faster_than_price">Rising faster 🟢</option>
+                  <option value="tracking_price">Tracking 🟡</option>
+                  <option value="flat_or_falling_while_price_rises">Flat/falling 🔴</option>
+                </select>
+              </div>
+              <div class="ms-field-group">
+                <label class="ms-label" for="ov-kol">Promoted by KOL?</label>
+                <select id="ov-kol" class="ms-field">
+                  <option value="">— Unknown / No</option>
+                  <option value="false">No</option>
+                  <option value="true">Yes</option>
+                </select>
+              </div>
+              <div id="ov-kol-extra" hidden class="ms-kol-extra">
+                <div class="ms-field-group">
+                  <label class="ms-label" for="ov-kolholder">KOL is large holder?</label>
+                  <select id="ov-kolholder" class="ms-field">
+                    <option value="">— Unknown</option>
+                    <option value="false">No</option>
+                    <option value="true">Yes 🔴</option>
+                  </select>
+                </div>
+                <div class="ms-field-group">
+                  <label class="ms-label" for="ov-kolpromo">On paid promo list?</label>
+                  <select id="ov-kolpromo" class="ms-field">
+                    <option value="">— Unknown</option>
+                    <option value="false">No</option>
+                    <option value="true">Yes 🔴</option>
+                  </select>
+                </div>
+              </div>
+              <button id="ms-rescore-btn" class="btn btn-ghost" type="button" style="width:100%;margin-top:4px">Re-score</button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- History -->
+      <div id="ms-history-wrap" class="ms-history-wrap" hidden>
+        <div class="ms-history-title">Recent Screens</div>
+        <div id="ms-history-list" class="ms-history-list"></div>
+      </div>
+
     </main>
 
     <!-- Settings modal -->
@@ -238,7 +176,7 @@
           <div class="ms-field-group">
             <label class="ms-label" for="ms-s-webhook">Discord Webhook URL</label>
             <input id="ms-s-webhook" class="ms-field" type="url" placeholder="https://discord.com/api/webhooks/…" />
-            <span style="font-size:0.72rem;color:var(--tx-3)">Alert fires when you click "Send to Discord" on a screened token.</span>
+            <span style="font-size:0.72rem;color:var(--tx-3)">Alert fires when you click "Send to Discord".</span>
           </div>
           <div class="ms-modal-footer">
             <button type="button" id="ms-settings-cancel" class="btn btn-ghost">Cancel</button>
