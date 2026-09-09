@@ -1,5 +1,6 @@
 "use strict";
 const { hasDatabase, getRuntimeState, upsertRuntimeState } = require("../lib/neon-db");
+const { defaultState: memeAutoDefault } = require("../lib/meme-autoscan");
 
 const STATE_KEY = "memescreener";
 const HELIUS_KEY = process.env.HELIUS_API_KEY || "";
@@ -262,6 +263,15 @@ module.exports = async function handler(req, res) {
   const state = await loadState();
 
   if (req.method === "GET") {
+    const url = new URL(req.url || "/", "http://localhost");
+    if (url.searchParams.get("view") === "autoscans") {
+      let autoState = memeAutoDefault();
+      if (hasDatabase()) {
+        const row = await getRuntimeState("meme-autoscan");
+        if (row?.state) autoState = { ...memeAutoDefault(), ...row.state };
+      }
+      return res.end(JSON.stringify({ ok: true, tokens: autoState.tokens || [], lastScan: autoState.lastScan || 0 }));
+    }
     return res.end(JSON.stringify({ ok: true, settings: state.settings, history: state.history }));
   }
   if (req.method !== "POST") { res.statusCode = 405; return res.end(JSON.stringify({ error: "Method not allowed" })); }

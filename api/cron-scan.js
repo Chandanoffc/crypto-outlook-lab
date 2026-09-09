@@ -12,6 +12,7 @@ const { defaultRuntimeState: cpDefault, sanitizeRuntimeState: cpSanitize, runCla
 const { defaultRuntimeState: epDefault, sanitizeRuntimeState: epSanitize, runEmaPerps_Scan } = require("../lib/emaperps-runtime");
 const { runZenCalls_Scan } = require("../lib/zencalls-scan");
 const { runZenStrategy_Scan, defaultState: zcStratDefault } = require("../lib/zencalls-strategy");
+const { runMemeAutoScan, checkMemeMilestones, defaultState: memeDefault } = require("../lib/meme-autoscan");
 
 function buildJsonResponse(res, statusCode, payload) {
   res.statusCode = statusCode;
@@ -124,6 +125,29 @@ module.exports = async function handler(req, res) {
     }
   } catch (err) {
     results.zencalls_strategy = { ok: false, error: String(err.message) };
+  }
+
+  // Meme auto-scan — scans Pump.fun graduates + DexScreener signals
+  try {
+    const claimed = await tryClaimScanLock("meme-autoscan", now, 60_000);
+    if (!claimed) {
+      results.meme_autoscan = { ok: true, skipped: true };
+    } else {
+      let memeState = memeDefault();
+      if (hasDatabase()) {
+        const row = await getRuntimeState("meme-autoscan");
+        if (row?.state) memeState = { ...memeDefault(), ...row.state };
+      }
+      const msRow = hasDatabase() ? await getRuntimeState("memescreener") : null;
+      const webhook = msRow?.state?.settings?.discordWebhook || "";
+      const summary = await runMemeAutoScan(memeState, { webhook });
+      // Check milestones for all previously detected tokens (2x/3x/4x/5x/10x)
+      const milestoneSummary = await checkMemeMilestones(memeState, { webhook });
+      if (hasDatabase()) await upsertRuntimeState("meme-autoscan", memeState);
+      results.meme_autoscan = { ok: true, summary, milestones: milestoneSummary };
+    }
+  } catch (err) {
+    results.meme_autoscan = { ok: false, error: String(err.message) };
   }
 
   return buildJsonResponse(res, 200, { ok: true, scannedAt: Date.now(), results });

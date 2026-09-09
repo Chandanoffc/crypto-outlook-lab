@@ -345,7 +345,101 @@ function bindAll() {
   });
 }
 
+// ── Auto-scan loader ──────────────────────────────────────
+
+function fmtUsd(v) {
+  if (v == null) return "—";
+  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(2)}M`;
+  if (v >= 1_000) return `$${(v / 1_000).toFixed(1)}K`;
+  return `$${v.toFixed(0)}`;
+}
+function fmtPrice(v) {
+  if (v == null) return "—";
+  const n = parseFloat(v);
+  return isNaN(n) ? "—" : `$${n.toExponential(3)}`;
+}
+
+function renderAutoCard(token) {
+  const score = token.composite_score;
+  const scorePct = score != null ? Math.round(score * 100) : null;
+  const scoreClass = scorePct == null ? "" : scorePct >= 70 ? "green" : scorePct >= 50 ? "amber" : "red";
+  const source = token.source === "pumpfun" ? "🎰 Pump.fun" : "📡 DexScreener";
+  const age = token.age_minutes != null ? `${token.age_minutes}m ago` : "—";
+  const ratio = token.vol_liq_ratio != null ? `${token.vol_liq_ratio.toFixed(1)}×` : "—";
+  const top10 = token.top10_holder_pct != null ? `${token.top10_holder_pct.toFixed(1)}%` : "—";
+
+  // Milestone display
+  const milestones = token.milestones_hit || [];
+  const milestoneBadges = milestones.map(m => `<span class="ms-milestone-badge">${m}</span>`).join("");
+
+  // Current multiplier vs detection price
+  const mult = token.current_multiple;
+  const multStr = mult != null ? `${mult}×` : "—";
+  const multClass = mult == null ? "" : mult >= 3 ? "green" : mult >= 1.5 ? "amber" : "";
+
+  const card = document.createElement("div");
+  card.className = "ms-auto-card";
+  card.innerHTML = `
+    <div class="ms-auto-card-header">
+      <span class="ms-auto-sym">${token.symbol || token.name || "?"}</span>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+        ${scorePct != null ? `<span class="ms-auto-score ${scoreClass}">${scorePct}%</span>` : ""}
+        <span class="ms-auto-badge">${source}</span>
+      </div>
+    </div>
+    ${milestones.length ? `<div class="ms-milestones-row">${milestoneBadges}</div>` : ""}
+    <div class="ms-auto-stats">
+      <div class="ms-auto-stat"><span class="ms-auto-stat-label">MC at Detection</span><span class="ms-auto-stat-val">${fmtUsd(token.detected_mc)}</span></div>
+      <div class="ms-auto-stat"><span class="ms-auto-stat-label">Current ×</span><span class="ms-auto-stat-val ms-auto-score ${multClass}" style="background:none;padding:0">${multStr}</span></div>
+      <div class="ms-auto-stat"><span class="ms-auto-stat-label">Liquidity</span><span class="ms-auto-stat-val">${fmtUsd(token.liquidity_usd)}</span></div>
+      <div class="ms-auto-stat"><span class="ms-auto-stat-label">Vol 1h</span><span class="ms-auto-stat-val">${fmtUsd(token.vol_h1_usd)}</span></div>
+      <div class="ms-auto-stat"><span class="ms-auto-stat-label">Vol/Liq</span><span class="ms-auto-stat-val">${ratio}</span></div>
+      <div class="ms-auto-stat"><span class="ms-auto-stat-label">Age detected</span><span class="ms-auto-stat-val">${age}</span></div>
+      <div class="ms-auto-stat"><span class="ms-auto-stat-label">Top 10%</span><span class="ms-auto-stat-val">${top10}</span></div>
+      <div class="ms-auto-stat"><span class="ms-auto-stat-label">Buyers</span><span class="ms-auto-stat-val">${token.unique_buyers ?? "—"}</span></div>
+    </div>
+    <div class="ms-auto-mint">${token.mint}</div>
+  `;
+
+  // Click to copy CA + open DexScreener
+  card.addEventListener("click", () => {
+    navigator.clipboard?.writeText(token.mint).catch(() => {});
+    document.getElementById("ms-ca-input").value = token.mint;
+    if (token.pair_url) window.open(token.pair_url, "_blank");
+  });
+
+  return card;
+}
+
+async function loadAutoScans() {
+  const grid   = document.getElementById("ms-auto-grid");
+  const status = document.getElementById("ms-auto-status");
+  if (!grid) return;
+  try {
+    const d = await fetch(`${API}?view=autoscans`).then(r => r.json());
+    const tokens = d.tokens || [];
+    const lastScan = d.lastScan;
+    if (lastScan) {
+      const mins = Math.floor((Date.now() - lastScan) / 60000);
+      status.textContent = `Last scan: ${mins < 1 ? "just now" : mins + "m ago"} · ${tokens.length} detected`;
+    } else {
+      status.textContent = "No scan yet — runs on next cron tick";
+    }
+    grid.innerHTML = "";
+    if (!tokens.length) {
+      grid.innerHTML = `<div class="ms-auto-empty">No tokens detected yet. Check back after the next hourly scan, or trigger <code>/api/cron-scan</code> manually.</div>`;
+      return;
+    }
+    for (const t of tokens) grid.appendChild(renderAutoCard(t));
+  } catch (e) {
+    status.textContent = "Failed to load";
+    grid.innerHTML = `<div class="ms-auto-empty">Error: ${e.message}</div>`;
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   bindAll();
   loadSettings();
+  loadAutoScans();
+  document.getElementById("ms-auto-refresh")?.addEventListener("click", loadAutoScans);
 });

@@ -1,0 +1,16 @@
+name: Hourly Scan
+
+on:
+  schedule:
+    - cron: "0 * * * *"   # every hour at :00
+  workflow_dispatch:        # manual trigger from GitHub Actions UI
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger cron scan
+        run: |
+          response=$(curl -sf --max-time 90 https://soloris-signals.vercel.app/api/cron-scan)
+          echo "$response" | python3 -m json.tool || echo "$response"
