@@ -359,20 +359,49 @@ function fmtPrice(v) {
   return isNaN(n) ? "—" : `$${n.toExponential(3)}`;
 }
 
+function fmtTimeAgo(ts) {
+  if (!ts) return "—";
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 60)  return `${s}s ago`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
+}
+
 function renderAutoCard(token) {
   const score = token.composite_score;
   const scorePct = score != null ? Math.round(score * 100) : null;
   const scoreClass = scorePct == null ? "" : scorePct >= 70 ? "green" : scorePct >= 50 ? "amber" : "red";
   const source = token.source === "pumpfun" ? "🎰 Pump.fun" : "📡 DexScreener";
-  const age = token.age_minutes != null ? `${token.age_minutes}m ago` : "—";
-  const ratio = token.vol_liq_ratio != null ? `${token.vol_liq_ratio.toFixed(1)}×` : "—";
-  const top10 = token.top10_holder_pct != null ? `${token.top10_holder_pct.toFixed(1)}%` : "—";
+  const top10  = token.top10_holder_pct != null ? `${token.top10_holder_pct.toFixed(1)}%` : "—";
+  const p5m    = token.price_change_5m  != null
+    ? `${token.price_change_5m > 0 ? "+" : ""}${token.price_change_5m.toFixed(1)}%` : "—";
+  const p5mClass = token.price_change_5m > 0 ? "green" : token.price_change_5m < 0 ? "red" : "";
+  const vol5mRatio = token.vol_5m_to_1h_pct != null ? `${token.vol_5m_to_1h_pct.toFixed(0)}%` : "—";
+  const bundleStr  = token.likely_bundled ? "⚠️ Bundled" : "✅ Clean";
+  const bundleCls  = token.likely_bundled ? "red" : "green";
+  const narrativeTags = (token.narrative || []).map(n =>
+    `<span class="ms-auto-badge" style="background:rgba(167,139,250,0.15)">#${n}</span>`).join(" ");
+
+  // When we detected this token
+  const detectedAgo = fmtTimeAgo(token.detectedAt);
+
+  // Price change since detection
+  const dp = token.detected_price ? parseFloat(token.detected_price) : null;
+  const cp = token.current_price  ? parseFloat(token.current_price)  : null;
+  let pctChangeStr = null, pctChangeClass = "";
+  if (dp && cp && dp > 0) {
+    const pct = ((cp - dp) / dp) * 100;
+    const sign = pct >= 0 ? "+" : "";
+    pctChangeStr  = `${sign}${pct.toFixed(1)}%`;
+    pctChangeClass = pct >= 0 ? "up" : "down";
+  }
 
   // Milestone display
   const milestones = token.milestones_hit || [];
   const milestoneBadges = milestones.map(m => `<span class="ms-milestone-badge">${m}</span>`).join("");
 
-  // Current multiplier vs detection price
+  // Current multiplier
   const mult = token.current_multiple;
   const multStr = mult != null ? `${mult}×` : "—";
   const multClass = mult == null ? "" : mult >= 3 ? "green" : mult >= 1.5 ? "amber" : "";
@@ -387,16 +416,21 @@ function renderAutoCard(token) {
         <span class="ms-auto-badge">${source}</span>
       </div>
     </div>
+    <div class="ms-auto-detected-row">
+      <span class="ms-auto-detected-time">Detected ${detectedAgo}</span>
+      ${pctChangeStr ? `<span class="ms-pct-change ${pctChangeClass}">${pctChangeStr} since call</span>` : ""}
+    </div>
     ${milestones.length ? `<div class="ms-milestones-row">${milestoneBadges}</div>` : ""}
+    ${narrativeTags ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:2px">${narrativeTags}</div>` : ""}
     <div class="ms-auto-stats">
       <div class="ms-auto-stat"><span class="ms-auto-stat-label">MC at Detection</span><span class="ms-auto-stat-val">${fmtUsd(token.detected_mc)}</span></div>
       <div class="ms-auto-stat"><span class="ms-auto-stat-label">Current ×</span><span class="ms-auto-stat-val ms-auto-score ${multClass}" style="background:none;padding:0">${multStr}</span></div>
+      <div class="ms-auto-stat"><span class="ms-auto-stat-label">5m Price</span><span class="ms-auto-stat-val ms-score-${p5mClass}">${p5m}</span></div>
+      <div class="ms-auto-stat"><span class="ms-auto-stat-label">Vol 5m</span><span class="ms-auto-stat-val">${fmtUsd(token.vol_5m_usd)}</span></div>
+      <div class="ms-auto-stat"><span class="ms-auto-stat-label">5m of 1h</span><span class="ms-auto-stat-val">${vol5mRatio}</span></div>
       <div class="ms-auto-stat"><span class="ms-auto-stat-label">Liquidity</span><span class="ms-auto-stat-val">${fmtUsd(token.liquidity_usd)}</span></div>
-      <div class="ms-auto-stat"><span class="ms-auto-stat-label">Vol 1h</span><span class="ms-auto-stat-val">${fmtUsd(token.vol_h1_usd)}</span></div>
-      <div class="ms-auto-stat"><span class="ms-auto-stat-label">Vol/Liq</span><span class="ms-auto-stat-val">${ratio}</span></div>
-      <div class="ms-auto-stat"><span class="ms-auto-stat-label">Age detected</span><span class="ms-auto-stat-val">${age}</span></div>
       <div class="ms-auto-stat"><span class="ms-auto-stat-label">Top 10%</span><span class="ms-auto-stat-val">${top10}</span></div>
-      <div class="ms-auto-stat"><span class="ms-auto-stat-label">Buyers</span><span class="ms-auto-stat-val">${token.unique_buyers ?? "—"}</span></div>
+      <div class="ms-auto-stat"><span class="ms-auto-stat-label">Bundle</span><span class="ms-auto-stat-val ms-score-${bundleCls}">${bundleStr}</span></div>
     </div>
     <div class="ms-auto-mint">${token.mint}</div>
   `;

@@ -450,6 +450,35 @@
   color: var(--tx-1);
 }
 
+.ms-auto-detected-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ms-auto-detected-time {
+  font-size: 0.7rem;
+  color: var(--tx-3);
+}
+
+.ms-pct-change {
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.ms-pct-change.up {
+  background: rgba(34, 197, 94, 0.12);
+  color: var(--long, #22c55e);
+}
+
+.ms-pct-change.down {
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--short, #ef4444);
+}
+
 .ms-milestones-row {
   display: flex;
   gap: 5px;
