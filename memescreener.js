@@ -378,8 +378,15 @@ function renderAutoCard(token) {
     ? `${token.price_change_5m > 0 ? "+" : ""}${token.price_change_5m.toFixed(1)}%` : "—";
   const p5mClass = token.price_change_5m > 0 ? "green" : token.price_change_5m < 0 ? "red" : "";
   const vol5mRatio = token.vol_5m_to_1h_pct != null ? `${token.vol_5m_to_1h_pct.toFixed(0)}%` : "—";
-  const bundleStr  = token.likely_bundled ? "⚠️ Bundled" : "✅ Clean";
-  const bundleCls  = token.likely_bundled ? "red" : "green";
+  let bundleStr, bundleCls;
+  if (token.insider_count != null) {
+    if (token.insider_count === 0)       { bundleStr = "✅ 0 insiders"; bundleCls = "green"; }
+    else if (token.insider_count <= 5)   { bundleStr = `🟡 ${token.insider_count} insiders`; bundleCls = "yellow"; }
+    else                                  { bundleStr = `🔴 ${token.insider_count} insiders`; bundleCls = "red"; }
+  } else {
+    bundleStr = token.likely_bundled ? "⚠️ Concentrated" : "✅ Clean";
+    bundleCls = token.likely_bundled ? "red" : "green";
+  }
   const narrativeTags = (token.narrative || []).map(n =>
     `<span class="ms-auto-badge" style="background:rgba(167,139,250,0.15)">#${n}</span>`).join(" ");
 
