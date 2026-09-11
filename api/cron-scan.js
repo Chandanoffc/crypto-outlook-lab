@@ -129,8 +129,10 @@ module.exports = async function handler(req, res) {
       const summary = await runZenStrategy_Scan(stratState, { webhook, ptState });
       if (hasDatabase()) await upsertRuntimeState("zencalls-strategy", stratState);
       // Check open paper trades for TP/SL hits
-      const ptSummary = await checkPaperTrades(ptState, { webhook });
+      const ptSummary = await checkPaperTrades(ptState, { webhook, stratState });
       if (hasDatabase()) await upsertRuntimeState("zencalls-papertrades", ptState);
+      // Save strategy state again if any signals were marked closed by the PT checker
+      if (hasDatabase()) await upsertRuntimeState("zencalls-strategy", stratState);
       results.zencalls_strategy = { ok: true, summary, papertrades: ptSummary };
     }
   } catch (err) {
