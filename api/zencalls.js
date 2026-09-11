@@ -12,6 +12,7 @@
  */
 const crypto = require("crypto");
 const { hasDatabase, getRuntimeState, upsertRuntimeState } = require("../lib/neon-db");
+const { calcStats } = require("../lib/zencalls-papertrades");
 
 const ENGINE_KEY = "zencalls";
 
@@ -124,10 +125,14 @@ module.exports = async function handler(req, res) {
     if (req.method === "GET") {
       const url = new URL(req.url, "http://localhost");
       if (url.searchParams.get("view") === "strategy") {
-        // Strategy scanner signals
         const row = hasDatabase() ? await getRuntimeState("zencalls-strategy") : null;
         const st = row?.state || { signals: [], lastScan: 0 };
         return buildJsonResponse(res, 200, { ok: true, signals: st.signals || [], lastScan: st.lastScan || 0 });
+      }
+      if (url.searchParams.get("view") === "papertrades") {
+        const row = hasDatabase() ? await getRuntimeState("zencalls-papertrades") : null;
+        const trades = row?.state?.trades || [];
+        return buildJsonResponse(res, 200, { ok: true, trades, stats: calcStats(trades) });
       }
       const { available, state } = await loadState();
       return buildJsonResponse(res, 200, { ok: true, available, calls: state.calls, settings: state.settings });

@@ -480,6 +480,109 @@ async function loadStratSignals() {
   } catch { /* non-fatal */ }
 }
 
+// ── Paper Trades ──────────────────────────────────────────
+
+const PT_API = "./api/zencalls?view=papertrades";
+let ptFilter = "all";
+
+function ptStatusLabel(status) {
+  return { open: "Open", tp1_hit: "TP1 ✅", tp2_hit: "TP2 🎯", sl_hit: "SL ❌", expired: "Expired ⏱" }[status] || status;
+}
+function ptStatusClass(status) {
+  return { tp1_hit: "pt-win", tp2_hit: "pt-win", sl_hit: "pt-loss", open: "pt-open", expired: "pt-exp" }[status] || "";
+}
+function ptDuration(t) {
+  if (!t.detectedAt) return "—";
+  const end = t.closedAt || Date.now();
+  const h = Math.floor((end - t.detectedAt) / 3600000);
+  if (h < 24) return `${h}h`;
+  return `${Math.floor(h / 24)}d ${h % 24}h`;
+}
+function ptPnlStr(t) {
+  if (t.pnl_pct == null) return "—";
+  const sign = t.pnl_pct >= 0 ? "+" : "";
+  return `${sign}${t.pnl_pct.toFixed(2)}%`;
+}
+function ptPnlClass(t) {
+  if (t.pnl_pct == null) return "";
+  return t.pnl_pct >= 0 ? "pt-win" : "pt-loss";
+}
+
+function renderPtRows(trades) {
+  const filtered = trades.filter(t => {
+    if (ptFilter === "open") return t.status === "open";
+    if (ptFilter === "won")  return t.status === "tp1_hit" || t.status === "tp2_hit";
+    if (ptFilter === "lost") return t.status === "sl_hit";
+    return true;
+  });
+
+  const tbody = document.getElementById("zc-pt-tbody");
+  const empty = document.getElementById("zc-pt-empty");
+  if (!filtered.length) {
+    tbody.innerHTML = "";
+    empty.hidden = false;
+    return;
+  }
+  empty.hidden = true;
+  tbody.innerHTML = filtered.map(t => `
+    <tr class="${ptStatusClass(t.status)}">
+      <td class="pt-sym">${t.symbol}</td>
+      <td class="pt-pattern">${t.pattern || "—"}</td>
+      <td class="pt-num">${fmt(t.entry)}</td>
+      <td class="pt-num">${fmt(t.tp1)}</td>
+      <td class="pt-num">${fmt(t.tp2)}</td>
+      <td class="pt-num">${fmt(t.sl)}</td>
+      <td class="pt-num">${t.rr_target != null ? "1:" + t.rr_target : "—"}</td>
+      <td><span class="pt-badge ${ptStatusClass(t.status)}">${ptStatusLabel(t.status)}</span></td>
+      <td class="pt-num ${ptPnlClass(t)}">${ptPnlStr(t)}</td>
+      <td class="pt-num">${ptDuration(t)}</td>
+    </tr>`).join("");
+}
+
+function renderPtStats(stats) {
+  const bar = document.getElementById("zc-pt-stats");
+  if (!stats || !stats.total) { bar.hidden = true; return; }
+  bar.hidden = false;
+
+  const setVal = (id, val, cls) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = val;
+    if (cls) el.className = `zc-pt-stat-val ${cls}`;
+  };
+
+  setVal("pt-stat-total",   stats.total);
+  setVal("pt-stat-open",    stats.open);
+  setVal("pt-stat-wins",    stats.wins,    "zc-pt-win");
+  setVal("pt-stat-losses",  stats.losses,  "zc-pt-loss");
+  setVal("pt-stat-wr",      stats.win_rate != null ? stats.win_rate + "%" : "—");
+  setVal("pt-stat-avgpnl",  stats.avg_pnl  != null
+    ? (stats.avg_pnl >= 0 ? "+" : "") + stats.avg_pnl.toFixed(2) + "%" : "—",
+    stats.avg_pnl >= 0 ? "zc-pt-stat-val zc-pt-win" : "zc-pt-stat-val zc-pt-loss");
+  setVal("pt-stat-totalpnl", stats.total_pnl != null
+    ? (stats.total_pnl >= 0 ? "+" : "") + stats.total_pnl.toFixed(2) + "%" : "—",
+    stats.total_pnl >= 0 ? "zc-pt-stat-val zc-pt-win" : "zc-pt-stat-val zc-pt-loss");
+  setVal("pt-stat-rr",      stats.avg_rr != null ? "1:" + stats.avg_rr : "—");
+}
+
+async function loadPaperTrades() {
+  try {
+    const data = await fetch(PT_API).then(r => r.json());
+    if (!data.ok) return;
+    renderPtStats(data.stats);
+    renderPtRows(data.trades || []);
+    // bind filter tabs
+    document.querySelectorAll("[data-pt-filter]").forEach(btn => {
+      btn.onclick = () => {
+        document.querySelectorAll("[data-pt-filter]").forEach(b => b.classList.remove("is-active"));
+        btn.classList.add("is-active");
+        ptFilter = btn.dataset.ptFilter;
+        renderPtRows(data.trades || []);
+      };
+    });
+  } catch { /* non-fatal */ }
+}
+
 // ── Init ──────────────────────────────────────────────────
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -489,6 +592,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setStatus("neutral", "Loading…");
   loadCalls();
   loadStratSignals();
-  // Refresh strategy signals every 60s
+  loadPaperTrades();
   setInterval(loadStratSignals, 60_000);
+  setInterval(loadPaperTrades, 60_000);
 });

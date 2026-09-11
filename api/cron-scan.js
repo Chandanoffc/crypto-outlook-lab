@@ -13,6 +13,7 @@ const { defaultRuntimeState: epDefault, sanitizeRuntimeState: epSanitize, runEma
 const { runZenCalls_Scan } = require("../lib/zencalls-scan");
 const { runZenStrategy_Scan, defaultState: zcStratDefault } = require("../lib/zencalls-strategy");
 const { runMemeAutoScan, checkMemeMilestones, defaultState: memeDefault } = require("../lib/meme-autoscan");
+const { checkPaperTrades, calcStats, defaultState: ptDefault } = require("../lib/zencalls-papertrades");
 
 function buildJsonResponse(res, statusCode, payload) {
   res.statusCode = statusCode;
@@ -116,12 +117,21 @@ module.exports = async function handler(req, res) {
         const row = await getRuntimeState("zencalls-strategy");
         if (row && row.state) stratState = { ...zcStratDefault(), ...row.state };
       }
+      // Load paper trades state so new signals auto-open trades
+      let ptState = ptDefault();
+      if (hasDatabase()) {
+        const ptRow = await getRuntimeState("zencalls-papertrades");
+        if (ptRow?.state) ptState = { ...ptDefault(), ...ptRow.state };
+      }
       // Read Discord webhook from ZenCalls settings
       const zcRow = hasDatabase() ? await getRuntimeState("zencalls") : null;
       const webhook = zcRow?.state?.settings?.discordWebhook || "";
-      const summary = await runZenStrategy_Scan(stratState, { webhook });
+      const summary = await runZenStrategy_Scan(stratState, { webhook, ptState });
       if (hasDatabase()) await upsertRuntimeState("zencalls-strategy", stratState);
-      results.zencalls_strategy = { ok: true, summary };
+      // Check open paper trades for TP/SL hits
+      const ptSummary = await checkPaperTrades(ptState, { webhook });
+      if (hasDatabase()) await upsertRuntimeState("zencalls-papertrades", ptState);
+      results.zencalls_strategy = { ok: true, summary, papertrades: ptSummary };
     }
   } catch (err) {
     results.zencalls_strategy = { ok: false, error: String(err.message) };
