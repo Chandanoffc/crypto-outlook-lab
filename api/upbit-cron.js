@@ -11,8 +11,8 @@
  *     entries.  Uses seen-IDs rather than time-window freshness so no alert
  *     is ever missed or duplicated across restarts.
  *
- *  2. PERPS BACKGROUND SCANS (claudeperps + emaperps)
- *     Piggybacks on this cron to keep the strategies running when the site
+ *  2. PERPS BACKGROUND SCANS (emaperps)
+ *     Piggybacks on this cron to keep the strategy running when the site
  *     has no visitors.
  *
  *  3. ALWAYS RETURNS 200
@@ -23,11 +23,6 @@
 
 const { getUpbitMarkets, findNewListings } = require("./upbit-notices");
 const { hasDatabase, getRuntimeState, upsertRuntimeState } = require("../lib/neon-db");
-const {
-  defaultRuntimeState: defaultClaudeState,
-  sanitizeRuntimeState: sanitizeClaudeState,
-  runClaudePerps_Scan,
-} = require("../lib/claudeperps-runtime");
 const {
   defaultRuntimeState: defaultEmaState,
   sanitizeRuntimeState: sanitizeEmaState,
@@ -187,27 +182,6 @@ async function runUpbitMonitor(destinations) {
 
 // ─── Perps background scans ───────────────────────────────────────────────────
 
-async function runClaudePerpsBackground(baseUrl) {
-  if (!hasDatabase()) return { ok: true, skipped: true, reason: "No database." };
-  try {
-    const stored = await getRuntimeState("claudeperps");
-    const state = stored.found && stored.state ? sanitizeClaudeState(stored.state) : defaultClaudeState();
-    // Always stamp lastCronAt so the dashboard can detect when the cron goes silent,
-    // even on "scan is fresh" cycles where we skip the actual scan work.
-    state.lastCronAt = Date.now();
-    if (scannedRecently(state.lastScanAt)) {
-      await upsertRuntimeState("claudeperps", state);
-      return { ok: true, skipped: true, reason: "Scan is fresh." };
-    }
-    const result = await runClaudePerps_Scan(state, { manual: false, baseUrl });
-    result.state.lastCronAt = state.lastCronAt;
-    const saved = await upsertRuntimeState("claudeperps", result.state);
-    return { ok: true, updatedAt: saved.updatedAt, summary: result.summary };
-  } catch (err) {
-    return { ok: false, error: err.message };
-  }
-}
-
 async function runEmaPerpsBackground(baseUrl) {
   if (!hasDatabase()) return { ok: true, skipped: true, reason: "No database." };
   try {
@@ -245,9 +219,8 @@ module.exports = async function handler(req, res) {
   const destinations = getDestinations();
 
   // Run everything concurrently; each piece is internally error-safe.
-  const [upbitResult, claudeResult, emaResult] = await Promise.all([
+  const [upbitResult, emaResult] = await Promise.all([
     runUpbitMonitor(destinations),
-    runClaudePerpsBackground(baseUrl),
     runEmaPerpsBackground(baseUrl),
   ]);
 
@@ -256,7 +229,6 @@ module.exports = async function handler(req, res) {
     ok: true,
     runAt: new Date().toISOString(),
     upbit: upbitResult,
-    claudeperps: claudeResult,
     emaperps: emaResult,
   });
 };

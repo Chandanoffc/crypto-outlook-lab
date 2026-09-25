@@ -1,14 +1,13 @@
 "use strict";
 /**
  * cron-scan.js — triggered by Vercel Cron (vercel.json) or an external cron
- * service (e.g. cron-job.org). Runs a full scan on both engines sequentially.
+ * service (e.g. cron-job.org). Runs a full scan on all engines sequentially.
  *
  * Runs SEQUENTIALLY (not concurrently) so only one scan executes at a time —
  * the previous auto-scan approach fired concurrently on every GET request and
  * caused duplicate Discord alerts when multiple frontend polls overlapped.
  */
 const { hasDatabase, getRuntimeState, upsertRuntimeState, tryClaimScanLock } = require("../lib/neon-db");
-const { defaultRuntimeState: cpDefault, sanitizeRuntimeState: cpSanitize, runClaudePerps_Scan } = require("../lib/claudeperps-runtime");
 const { defaultRuntimeState: epDefault, sanitizeRuntimeState: epSanitize, runEmaPerps_Scan } = require("../lib/emaperps-runtime");
 const { runZenCalls_Scan } = require("../lib/zencalls-scan");
 const { runZenStrategy_Scan, defaultState: zcStratDefault } = require("../lib/zencalls-strategy");
@@ -47,25 +46,6 @@ module.exports = async function handler(req, res) {
   const results = {};
 
   const now = Date.now();
-
-  // ClaudePerps scan — atomic lock prevents overlap with manual scan button
-  try {
-    const claimed = await tryClaimScanLock("claudeperps", now, 60_000);
-    if (!claimed) {
-      results.claudeperps = { ok: true, skipped: true };
-    } else {
-      const { available, state } = await loadState("claudeperps", cpDefault, cpSanitize);
-      if (available) {
-        const result = await runClaudePerps_Scan(state, { manual: false, baseUrl });
-        if (hasDatabase()) await upsertRuntimeState("claudeperps", result.state);
-        results.claudeperps = { ok: true, summary: result.summary };
-      } else {
-        results.claudeperps = { ok: false, reason: "no-db" };
-      }
-    }
-  } catch (err) {
-    results.claudeperps = { ok: false, error: String(err.message) };
-  }
 
   // EMAPerps scan — sequential, same lock pattern
   try {

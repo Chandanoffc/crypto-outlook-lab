@@ -1,9 +1,9 @@
 "use strict";
 
 /**
- * api/backtest.js — on-demand historical replay for claudeperps / emaperps.
+ * api/backtest.js — on-demand historical replay for emaperps.
  *
- * GET  /api/backtest?engine=claudeperps&days=60&symbols=BTCUSDT,ETHUSDT
+ * GET  /api/backtest?engine=emaperps&days=60&symbols=BTCUSDT,ETHUSDT
  * POST /api/backtest  { engine, days, symbols, stepHours, startingBalance }
  *
  * Runs lib/backtest-runtime.js#runBacktest, which replays the *exact* live

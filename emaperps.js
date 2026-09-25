@@ -495,97 +495,52 @@ function renderPaperTab() {
   // Mark prices are refreshed by the independent markTimer (every 10s) — no call here.
 }
 
-// ─── 24H Comparison ──────────────────────────────────────────────────────────
+// ─── EMA Perps Stats ─────────────────────────────────────────────────────────
 async function loadComparison() {
   if (!dom.comparison) return;
-  dom.comparison.innerHTML = `<div class="compare-loading">Loading comparison data…</div>`;
-  if (dom.compareMeta) dom.compareMeta.textContent = "Fetching both strategies…";
+  dom.comparison.innerHTML = `<div class="compare-loading">Loading stats…</div>`;
+  if (dom.compareMeta) dom.compareMeta.textContent = "Fetching…";
 
   try {
-    const [cpRes, epRes] = await Promise.all([
-      fetch("/api/claudeperps").then(r => r.json()),
-      fetch("/api/emaperps").then(r => r.json()),
-    ]);
+    const epRes = await fetch("/api/emaperps").then(r => r.json());
+    const paper = epRes.state?.paper || {};
 
-    const cpPaper = cpRes.state?.paper || {};
-    const epPaper = epRes.state?.paper || {};
-
-    function stratStats(paper) {
-      const balance  = paper.balance ?? 100;
-      const starting = paper.startingBalance ?? 100;
-      const closed   = paper.closedTrades || [];
-      const open     = paper.openPositions || [];
-      const pnl      = balance - starting;
-      const pnlPct   = starting > 0 ? ((balance - starting) / starting) * 100 : 0;
-      const wins     = closed.filter(t => t.pnl != null && t.pnl > 0).length;
-      const losses   = closed.filter(t => t.pnl != null && t.pnl <= 0).length;
-      const winrate  = closed.length ? Math.round((wins / closed.length) * 100) : null;
-      const avgPnl   = closed.length && closed.some(t => t.pnl != null)
-        ? closed.reduce((s, t) => s + (t.pnl ?? 0), 0) / closed.length
-        : null;
-      return { balance, starting, pnl, pnlPct, wins, losses, winrate, avgPnl, totalTrades: closed.length, openCount: open.length };
-    }
-
-    const cp = stratStats(cpPaper);
-    const ep = stratStats(epPaper);
-
-    const cpWinner = cp.pnlPct > ep.pnlPct;
-    const epWinner = ep.pnlPct > cp.pnlPct;
-    const tie      = cp.pnlPct === ep.pnlPct;
+    const balance  = paper.balance ?? 100;
+    const starting = paper.startingBalance ?? 100;
+    const closed   = paper.closedTrades || [];
+    const open     = paper.openPositions || [];
+    const pnl      = balance - starting;
+    const pnlPct   = starting > 0 ? ((balance - starting) / starting) * 100 : 0;
+    const wins     = closed.filter(t => t.pnl != null && t.pnl > 0).length;
+    const losses   = closed.filter(t => t.pnl != null && t.pnl <= 0).length;
+    const winrate  = closed.length ? Math.round((wins / closed.length) * 100) : null;
+    const avgPnl   = closed.length && closed.some(t => t.pnl != null)
+      ? closed.reduce((s, t) => s + (t.pnl ?? 0), 0) / closed.length
+      : null;
 
     const fmtPnl = (v) => v == null ? "–" : (v >= 0 ? "+" : "") + fmt$(v);
     const fmtPct = (v) => (v >= 0 ? "+" : "") + v.toFixed(2) + "%";
     const fmtWr  = (v) => v != null ? `${v}%` : "–";
     const fmtAvg = (v) => v == null ? "–" : (v >= 0 ? "+" : "") + fmt$(v);
 
-    let bannerText, bannerClass;
-    if (tie) {
-      bannerText = "🤝 Tied — both strategies are performing equally";
-      bannerClass = "compare-winner-banner--tie";
-    } else if (cpWinner) {
-      bannerText = `🏆 Claudeperps is leading with ${fmtPct(cp.pnlPct - ep.pnlPct)} more return`;
-      bannerClass = "compare-winner-banner--claude";
-    } else {
-      bannerText = `🏆 EMA Perps is leading with ${fmtPct(ep.pnlPct - cp.pnlPct)} more return`;
-      bannerClass = "compare-winner-banner--ema";
-    }
-
     dom.comparison.innerHTML = `
       <div class="compare-card">
         <div class="compare-card-title">
-          <span class="compare-badge compare-badge--claude">Claudeperps</span>
-          ${cpWinner ? `<span class="compare-badge compare-badge--winner">Leading</span>` : ""}
-        </div>
-        <div class="compare-rows">
-          <div class="compare-row"><span class="compare-row-label">Balance</span><span class="compare-row-value">${fmt$(cp.balance)}</span></div>
-          <div class="compare-row"><span class="compare-row-label">Total P&L</span><span class="compare-row-value ${cp.pnl >= 0 ? "compare-row-value--pos" : "compare-row-value--neg"}">${fmtPnl(cp.pnl)} (${fmtPct(cp.pnlPct)})</span></div>
-          <div class="compare-row"><span class="compare-row-label">Win Rate</span><span class="compare-row-value">${fmtWr(cp.winrate)}</span></div>
-          <div class="compare-row"><span class="compare-row-label">Trades</span><span class="compare-row-value">${cp.totalTrades} closed · ${cp.openCount} open</span></div>
-          <div class="compare-row"><span class="compare-row-label">Avg Trade</span><span class="compare-row-value ${cp.avgPnl != null && cp.avgPnl >= 0 ? "compare-row-value--pos" : "compare-row-value--neg"}">${fmtAvg(cp.avgPnl)}</span></div>
-          <div class="compare-row"><span class="compare-row-label">W / L</span><span class="compare-row-value">${cp.wins} / ${cp.losses}</span></div>
-        </div>
-      </div>
-
-      <div class="compare-card">
-        <div class="compare-card-title">
           <span class="compare-badge compare-badge--ema">EMA Perps</span>
-          ${epWinner ? `<span class="compare-badge compare-badge--winner">Leading</span>` : ""}
         </div>
         <div class="compare-rows">
-          <div class="compare-row"><span class="compare-row-label">Balance</span><span class="compare-row-value">${fmt$(ep.balance)}</span></div>
-          <div class="compare-row"><span class="compare-row-label">Total P&L</span><span class="compare-row-value ${ep.pnl >= 0 ? "compare-row-value--pos" : "compare-row-value--neg"}">${fmtPnl(ep.pnl)} (${fmtPct(ep.pnlPct)})</span></div>
-          <div class="compare-row"><span class="compare-row-label">Win Rate</span><span class="compare-row-value">${fmtWr(ep.winrate)}</span></div>
-          <div class="compare-row"><span class="compare-row-label">Trades</span><span class="compare-row-value">${ep.totalTrades} closed · ${ep.openCount} open</span></div>
-          <div class="compare-row"><span class="compare-row-label">Avg Trade</span><span class="compare-row-value ${ep.avgPnl != null && ep.avgPnl >= 0 ? "compare-row-value--pos" : "compare-row-value--neg"}">${fmtAvg(ep.avgPnl)}</span></div>
-          <div class="compare-row"><span class="compare-row-label">W / L</span><span class="compare-row-value">${ep.wins} / ${ep.losses}</span></div>
+          <div class="compare-row"><span class="compare-row-label">Balance</span><span class="compare-row-value">${fmt$(balance)}</span></div>
+          <div class="compare-row"><span class="compare-row-label">Total P&L</span><span class="compare-row-value ${pnl >= 0 ? "compare-row-value--pos" : "compare-row-value--neg"}">${fmtPnl(pnl)} (${fmtPct(pnlPct)})</span></div>
+          <div class="compare-row"><span class="compare-row-label">Win Rate</span><span class="compare-row-value">${fmtWr(winrate)}</span></div>
+          <div class="compare-row"><span class="compare-row-label">Trades</span><span class="compare-row-value">${closed.length} closed · ${open.length} open</span></div>
+          <div class="compare-row"><span class="compare-row-label">Avg Trade</span><span class="compare-row-value ${avgPnl != null && avgPnl >= 0 ? "compare-row-value--pos" : "compare-row-value--neg"}">${fmtAvg(avgPnl)}</span></div>
+          <div class="compare-row"><span class="compare-row-label">W / L</span><span class="compare-row-value">${wins} / ${losses}</span></div>
         </div>
-      </div>
-
-      <div class="compare-winner-banner ${bannerClass}">${bannerText}</div>`;
+      </div>`;
 
     if (dom.compareMeta) dom.compareMeta.textContent = `Updated: ${timeAgo(Date.now())}`;
   } catch (err) {
-    if (dom.comparison) dom.comparison.innerHTML = `<div class="compare-loading">Failed to load comparison: ${err.message}</div>`;
+    if (dom.comparison) dom.comparison.innerHTML = `<div class="compare-loading">Failed to load stats: ${err.message}</div>`;
   }
 }
 

@@ -301,27 +301,20 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    // Load both strategy states
-    const [cpStored, epStored] = await Promise.all([
-      getRuntimeState("claudeperps").catch(() => ({ found: false })),
-      getRuntimeState("emaperps").catch(() => ({ found: false })),
-    ]);
+    // Load EMAPerps strategy state
+    const epStored = await getRuntimeState("emaperps").catch(() => ({ found: false }));
 
-    const cpState = cpStored.found ? (cpStored.state || {}) : {};
     const epState = epStored.found ? (epStored.state || {}) : {};
 
     // Compute metrics
-    const cpSig      = computeSignalStats(cpState.signals || []);
-    const cpPaper    = computePaperStats(cpState.paper   || {});
     const epSig      = computeSignalStats(epState.signals || []);
     const epPaper    = computePaperStats(epState.paper   || {});
     const epPatterns = patternBreakdown(epState.signals || []);
-    const cpTiers    = qualityTierBreakdown(cpState.signals || []);
     const epTiers    = qualityTierBreakdown(epState.signals || []);
 
-    const suggestions = generateSuggestions(cpSig, cpPaper, epSig, epPaper, epPatterns, cpTiers, epTiers);
+    const suggestions = generateSuggestions({}, {}, epSig, epPaper, epPatterns, {}, epTiers);
     const runDate     = new Date().toISOString().slice(0, 10);
-    const message     = buildDiscordMessage(cpSig, cpPaper, epSig, epPaper, epPatterns, suggestions, runDate);
+    const message     = buildDiscordMessage({}, {}, epSig, epPaper, epPatterns, suggestions, runDate);
 
     // Send to Discord
     const webhook = String(process.env.UPBIT_DISCORD_WEBHOOK || process.env.DISCORD_WEBHOOK || "").trim();
@@ -348,10 +341,6 @@ module.exports = async function handler(req, res) {
       suggestionCount: suggestions.length,
       suggestions: suggestions.map(s => `${s.severity} [${s.strategy}] ${s.text}`),
       metrics: {
-        claudeperps: {
-          signals: { alerted: cpSig.alerted.length, resolved: cpSig.resolved.length, winRate: cpSig.winRate, tp2Rate: cpSig.tp2Rate },
-          paper: { balance: cpPaper.balance, totalReturn: cpPaper.totalReturn, winRate: cpPaper.winRate, pf: cpPaper.pf },
-        },
         emaperps: {
           signals: { alerted: epSig.alerted.length, resolved: epSig.resolved.length, winRate: epSig.winRate, tp2Rate: epSig.tp2Rate },
           paper: { balance: epPaper.balance, totalReturn: epPaper.totalReturn, winRate: epPaper.winRate, pf: epPaper.pf },
