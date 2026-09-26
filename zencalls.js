@@ -541,7 +541,6 @@ function renderPtRows(trades) {
 
 function renderPtStats(stats) {
   const bar = document.getElementById("zc-pt-stats");
-  if (!stats || !stats.total) { bar.hidden = true; return; }
   bar.hidden = false;
 
   const setVal = (id, val, cls) => {
