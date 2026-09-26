@@ -480,17 +480,10 @@ async function loadStratSignals() {
   } catch { /* non-fatal */ }
 }
 
-// ── Paper Trades ──────────────────────────────────────────
+// ── Paper Trade Dashboard ─────────────────────────────────
 
 const PT_API = "./api/zencalls?view=papertrades";
-let ptFilter = "all";
 
-function ptStatusLabel(status) {
-  return { open: "Open", tp1_hit: "TP1 ✅", tp2_hit: "TP2 🎯", sl_hit: "SL ❌", expired: "Expired ⏱" }[status] || status;
-}
-function ptStatusClass(status) {
-  return { tp1_hit: "pt-win", tp2_hit: "pt-win", sl_hit: "pt-loss", open: "pt-open", expired: "pt-exp" }[status] || "";
-}
 function ptDuration(t) {
   if (!t.detectedAt) return "—";
   const end = t.closedAt || Date.now();
@@ -498,87 +491,136 @@ function ptDuration(t) {
   if (h < 24) return `${h}h`;
   return `${Math.floor(h / 24)}d ${h % 24}h`;
 }
-function ptPnlStr(t) {
-  if (t.pnl_pct == null) return "—";
-  const sign = t.pnl_pct >= 0 ? "+" : "";
-  return `${sign}${t.pnl_pct.toFixed(2)}%`;
-}
-function ptPnlClass(t) {
-  if (t.pnl_pct == null) return "";
-  return t.pnl_pct >= 0 ? "pt-win" : "pt-loss";
+
+function fmtPrice(v) {
+  if (v == null) return "—";
+  return v >= 100 ? v.toFixed(2) : v >= 1 ? v.toFixed(4) : v.toPrecision(4);
 }
 
-function renderPtRows(trades) {
-  const filtered = trades.filter(t => {
-    if (ptFilter === "open") return t.status === "open";
-    if (ptFilter === "won")  return t.status === "tp1_hit" || t.status === "tp2_hit";
-    if (ptFilter === "lost") return t.status === "sl_hit";
-    return true;
-  });
+function renderPtCard(t, markPrice) {
+  const isLong  = t.side === "long";
+  const dir     = isLong ? "long" : "short";
+  const isClosed = t.status !== "open";
 
-  const tbody = document.getElementById("zc-pt-tbody");
-  const empty = document.getElementById("zc-pt-empty");
-  if (!filtered.length) {
-    tbody.innerHTML = "";
-    empty.hidden = false;
-    return;
+  // Card colour
+  let cardClass = `paper-pos-card paper-pos-card--${dir}`;
+  let reasonHtml = "";
+  if (isClosed) {
+    if (t.status === "tp2_hit")  cardClass = "paper-pos-card paper-pos-card--win";
+    else if (t.status === "tp1_hit") cardClass = "paper-pos-card paper-pos-card--win";
+    else if (t.status === "sl_hit")  cardClass = "paper-pos-card paper-pos-card--loss";
+    else cardClass = "paper-pos-card paper-pos-card--expired";
+    const reasonMap = { tp2_hit: "TP2", tp1_hit: "TP1", sl_hit: "SL", expired: "EXP" };
+    const reasonCls = { tp2_hit: "tp2", tp1_hit: "tp1", sl_hit: "sl", expired: "exp" };
+    const label = reasonMap[t.status] || t.status.toUpperCase();
+    reasonHtml = `<span class="paper-pos-reason paper-pos-reason--${reasonCls[t.status] || "exp"}">${label}</span>`;
   }
-  empty.hidden = true;
-  tbody.innerHTML = filtered.map(t => `
-    <tr class="${ptStatusClass(t.status)}">
-      <td class="pt-sym">${t.symbol}</td>
-      <td class="pt-pattern">${t.pattern || "—"}</td>
-      <td class="pt-num">${fmt(t.entry)}</td>
-      <td class="pt-num">${fmt(t.tp1)}</td>
-      <td class="pt-num">${fmt(t.tp2)}</td>
-      <td class="pt-num">${fmt(t.sl)}</td>
-      <td class="pt-num">${t.rr_target != null ? "1:" + t.rr_target : "—"}</td>
-      <td><span class="pt-badge ${ptStatusClass(t.status)}">${ptStatusLabel(t.status)}</span></td>
-      <td class="pt-num ${ptPnlClass(t)}">${ptPnlStr(t)}</td>
-      <td class="pt-num">${ptDuration(t)}</td>
-    </tr>`).join("");
+
+  // P&L string
+  let pnlStr = "—", pnlClass = "paper-pos-pnl--zero";
+  if (isClosed && t.pnl_pct != null) {
+    pnlClass = t.pnl_pct > 0 ? "paper-pos-pnl--pos" : t.pnl_pct < 0 ? "paper-pos-pnl--neg" : "paper-pos-pnl--zero";
+    pnlStr = `${t.pnl_pct >= 0 ? "+" : ""}${t.pnl_pct.toFixed(2)}%`;
+  } else if (!isClosed && markPrice && t.entry) {
+    const diff = isLong ? markPrice - t.entry : t.entry - markPrice;
+    const pct  = (diff / t.entry) * 100;
+    pnlClass   = pct > 0 ? "paper-pos-pnl--pos" : pct < 0 ? "paper-pos-pnl--neg" : "paper-pos-pnl--zero";
+    pnlStr     = `${pct >= 0 ? "+" : ""}${pct.toFixed(2)}% (live)`;
+  }
+
+  // Live level distances for open positions
+  let liveLevelsHtml = "";
+  if (!isClosed && markPrice && t.entry) {
+    const movePct = ((isLong ? markPrice - t.entry : t.entry - markPrice) / t.entry * 100).toFixed(1);
+    const toTP1 = t.tp1 ? ((isLong ? t.tp1 - markPrice : markPrice - t.tp1) / markPrice * 100) : null;
+    const toTP2 = t.tp2 ? ((isLong ? t.tp2 - markPrice : markPrice - t.tp2) / markPrice * 100) : null;
+    const toSL  = t.sl  ? ((isLong ? markPrice - t.sl  : t.sl - markPrice)  / markPrice * 100) : null;
+    const fDist = (v, label, cls) => v != null
+      ? `<span class="pos-level-row ${cls}"><span class="pos-level-tag">${label}</span><span class="pos-level-dist">${v > 0 ? v.toFixed(1) + "% away" : "REACHED"}</span><span class="pos-level-price">${fmtPrice(label === "TP1" ? t.tp1 : label === "TP2" ? t.tp2 : t.sl)}</span></span>`
+      : "";
+    liveLevelsHtml = `
+      <div class="pos-live-row">
+        <span class="pos-live-now">Now <strong>${fmtPrice(markPrice)}</strong></span>
+        <span class="pos-live-move ${Number(movePct) >= 0 ? "tone-up" : "tone-down"}">${Number(movePct) >= 0 ? "+" : ""}${movePct}% from entry</span>
+      </div>
+      <div class="pos-levels-strip">
+        ${fDist(toSL,  "SL",  "pos-level--sl")}
+        ${fDist(toTP1, "TP1", "pos-level--tp1")}
+        ${fDist(toTP2, "TP2", "pos-level--tp2")}
+      </div>`;
+  }
+
+  return `
+    <div class="${cardClass}">
+      <div class="paper-pos-head">
+        <div class="paper-pos-ident">
+          <span class="paper-pos-symbol">${t.symbol}</span>
+          <span class="paper-pos-side paper-pos-side--${dir}">${isLong ? "LONG" : "SHORT"}</span>
+          ${!isClosed ? `<span class="paper-pos-status">LIVE</span>` : ""}
+        </div>
+        <div class="paper-pos-right">
+          <span class="paper-pos-pnl ${pnlClass}">${pnlStr}</span>
+          ${reasonHtml}
+        </div>
+      </div>
+      ${liveLevelsHtml}
+      <div class="paper-pos-meta">
+        <span>Entry ${fmtPrice(t.entry)} · Pattern: ${t.pattern || "—"}</span>
+        <span>${isClosed ? ptDuration(t) + " · " + new Date(t.closedAt).toLocaleDateString() : "Opened " + ptDuration(t) + " ago"}</span>
+      </div>
+      <div class="paper-pos-meta">
+        <span>TP1 ${fmtPrice(t.tp1)} · TP2 ${fmtPrice(t.tp2)} · SL ${fmtPrice(t.sl)}${t.rr_target != null ? " · R:R 1:" + t.rr_target : ""}</span>
+        ${isClosed && t.exit_price ? `<span>Exit ${fmtPrice(t.exit_price)}</span>` : ""}
+      </div>
+    </div>`;
 }
 
 function renderPtStats(stats) {
-  const bar = document.getElementById("zc-pt-stats");
-  bar.hidden = false;
-
-  const setVal = (id, val, cls) => {
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  const setColor = (id, val, num) => {
     const el = document.getElementById(id);
     if (!el) return;
     el.textContent = val;
-    if (cls) el.className = `zc-pt-stat-val ${cls}`;
+    el.style.color = num > 0 ? "var(--long, #22c55e)" : num < 0 ? "var(--short, #ef4444)" : "";
   };
-
-  setVal("pt-stat-total",   stats.total);
-  setVal("pt-stat-open",    stats.open);
-  setVal("pt-stat-wins",    stats.wins,    "zc-pt-win");
-  setVal("pt-stat-losses",  stats.losses,  "zc-pt-loss");
-  setVal("pt-stat-wr",      stats.win_rate != null ? stats.win_rate + "%" : "—");
-  setVal("pt-stat-avgpnl",  stats.avg_pnl  != null
-    ? (stats.avg_pnl >= 0 ? "+" : "") + stats.avg_pnl.toFixed(2) + "%" : "—",
-    stats.avg_pnl >= 0 ? "zc-pt-stat-val zc-pt-win" : "zc-pt-stat-val zc-pt-loss");
-  setVal("pt-stat-totalpnl", stats.total_pnl != null
-    ? (stats.total_pnl >= 0 ? "+" : "") + stats.total_pnl.toFixed(2) + "%" : "—",
-    stats.total_pnl >= 0 ? "zc-pt-stat-val zc-pt-win" : "zc-pt-stat-val zc-pt-loss");
-  setVal("pt-stat-rr",      stats.avg_rr != null ? "1:" + stats.avg_rr : "—");
+  set("pt-stat-total", stats.total ?? "—");
+  set("pt-stat-wr",    stats.win_rate != null ? stats.win_rate + "%" : "—");
+  set("pt-stat-open",  stats.open ?? "—");
+  const wl = document.getElementById("pt-stat-wl");
+  if (wl) wl.innerHTML = `<span style="color:var(--long,#22c55e)">${stats.wins ?? 0}W</span> / <span style="color:var(--short,#ef4444)">${stats.losses ?? 0}L</span>`;
+  setColor("pt-stat-avgpnl",   stats.avg_pnl   != null ? (stats.avg_pnl >= 0 ? "+" : "") + stats.avg_pnl.toFixed(2) + "%" : "—",   stats.avg_pnl ?? 0);
+  setColor("pt-stat-totalpnl", stats.total_pnl != null ? (stats.total_pnl >= 0 ? "+" : "") + stats.total_pnl.toFixed(2) + "%" : "—", stats.total_pnl ?? 0);
 }
 
 async function loadPaperTrades() {
   try {
     const data = await fetch(PT_API).then(r => r.json());
     if (!data.ok) return;
-    renderPtStats(data.stats);
-    renderPtRows(data.trades || []);
-    // bind filter tabs
-    document.querySelectorAll("[data-pt-filter]").forEach(btn => {
-      btn.onclick = () => {
-        document.querySelectorAll("[data-pt-filter]").forEach(b => b.classList.remove("is-active"));
-        btn.classList.add("is-active");
-        ptFilter = btn.dataset.ptFilter;
-        renderPtRows(data.trades || []);
-      };
-    });
+    const trades = data.trades || [];
+    renderPtStats(data.stats || {});
+
+    // Fetch live prices for open trades
+    const open   = trades.filter(t => t.status === "open");
+    const closed = trades.filter(t => t.status !== "open");
+    const markPrices = {};
+    if (open.length) {
+      try {
+        const syms = [...new Set(open.map(t => t.symbol))];
+        const prices = await fetch("https://fapi.binance.com/fapi/v1/ticker/price").then(r => r.json());
+        for (const p of prices) { if (syms.includes(p.symbol)) markPrices[p.symbol] = parseFloat(p.price); }
+      } catch { /* price fetch best-effort */ }
+    }
+
+    const openEl   = document.getElementById("zc-pt-open");
+    const closedEl = document.getElementById("zc-pt-closed");
+
+    openEl.innerHTML = open.length
+      ? open.map(t => renderPtCard(t, markPrices[t.symbol] || null)).join("")
+      : `<div class="zc-empty-state"><div class="zc-empty-icon">📭</div><p class="zc-empty-title">No open trades</p><p class="zc-empty-sub">Waiting for next strategy signal.</p></div>`;
+
+    closedEl.innerHTML = closed.length
+      ? closed.slice(0, 50).map(t => renderPtCard(t, null)).join("")
+      : `<div class="zc-empty-state"><div class="zc-empty-icon">📊</div><p class="zc-empty-title">No closed trades yet</p><p class="zc-empty-sub">Results appear here when TP or SL is hit.</p></div>`;
   } catch { /* non-fatal */ }
 }
 

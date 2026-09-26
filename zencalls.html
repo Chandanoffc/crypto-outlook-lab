@@ -122,58 +122,82 @@
         </div>
       </div>
 
-      <!-- ── Paper Trades ───────────────────────────────────── -->
+      <!-- ── Paper Trade Dashboard ─────────────────────────── -->
       <div class="zc-pt-section">
         <div class="zc-strategy-header">
           <div>
-            <h2 class="zc-strategy-title">Paper Trade Tracker</h2>
+            <h2 class="zc-strategy-title">Paper Trade Dashboard</h2>
             <p class="zc-strategy-sub">Every strategy signal is auto paper-traded. TP1 / TP2 / SL checked hourly via Binance prices.</p>
           </div>
         </div>
 
-        <!-- Stats bar -->
-        <div id="zc-pt-stats" class="zc-pt-stats-bar">
-          <div class="zc-pt-stat"><span class="zc-pt-stat-label">Total</span><span class="zc-pt-stat-val" id="pt-stat-total">—</span></div>
-          <div class="zc-pt-stat"><span class="zc-pt-stat-label">Open</span><span class="zc-pt-stat-val" id="pt-stat-open">—</span></div>
-          <div class="zc-pt-stat"><span class="zc-pt-stat-label">Wins</span><span class="zc-pt-stat-val zc-pt-win" id="pt-stat-wins">—</span></div>
-          <div class="zc-pt-stat"><span class="zc-pt-stat-label">Losses</span><span class="zc-pt-stat-val zc-pt-loss" id="pt-stat-losses">—</span></div>
-          <div class="zc-pt-stat"><span class="zc-pt-stat-label">Win Rate</span><span class="zc-pt-stat-val" id="pt-stat-wr">—</span></div>
-          <div class="zc-pt-stat"><span class="zc-pt-stat-label">Avg P&amp;L</span><span class="zc-pt-stat-val" id="pt-stat-avgpnl">—</span></div>
-          <div class="zc-pt-stat"><span class="zc-pt-stat-label">Total P&amp;L</span><span class="zc-pt-stat-val" id="pt-stat-totalpnl">—</span></div>
-          <div class="zc-pt-stat"><span class="zc-pt-stat-label">Avg R:R</span><span class="zc-pt-stat-val" id="pt-stat-rr">—</span></div>
-        </div>
-
-        <!-- Filter tabs -->
-        <div class="zc-pt-filter-tabs">
-          <button class="zc-pt-tab is-active" data-pt-filter="all">All</button>
-          <button class="zc-pt-tab" data-pt-filter="open">Open</button>
-          <button class="zc-pt-tab" data-pt-filter="won">Won</button>
-          <button class="zc-pt-tab" data-pt-filter="lost">Lost</button>
-        </div>
-
-        <div id="zc-pt-table-wrap" class="zc-pt-table-wrap">
-          <table class="zc-pt-table">
-            <thead>
-              <tr>
-                <th>Symbol</th>
-                <th>Pattern</th>
-                <th>Entry</th>
-                <th>TP1</th>
-                <th>TP2</th>
-                <th>SL</th>
-                <th>R:R</th>
-                <th>Status</th>
-                <th>P&amp;L</th>
-                <th>Duration</th>
-              </tr>
-            </thead>
-            <tbody id="zc-pt-tbody"></tbody>
-          </table>
-          <div id="zc-pt-empty" class="zc-empty-state" hidden>
-            <div class="zc-empty-icon">📊</div>
-            <p class="zc-empty-title">No paper trades yet</p>
-            <p class="zc-empty-sub">Trades open automatically when the strategy scanner finds a signal.</p>
+        <!-- Stat cards -->
+        <div class="paper-stats-row">
+          <div class="paper-stat">
+            <span class="stat-label">Total Trades</span>
+            <strong id="pt-stat-total" class="stat-value">—</strong>
+            <span class="stat-sub">All time</span>
           </div>
+          <div class="paper-stat">
+            <span class="stat-label">Win Rate</span>
+            <strong id="pt-stat-wr" class="stat-value">—</strong>
+            <span class="stat-sub">TP1 + TP2 hits</span>
+          </div>
+          <div class="paper-stat">
+            <span class="stat-label">Wins / Losses</span>
+            <strong id="pt-stat-wl" class="stat-value">—</strong>
+            <span class="stat-sub">Closed trades</span>
+          </div>
+          <div class="paper-stat">
+            <span class="stat-label">Avg P&amp;L</span>
+            <strong id="pt-stat-avgpnl" class="stat-value">—</strong>
+            <span class="stat-sub">Per closed trade</span>
+          </div>
+          <div class="paper-stat">
+            <span class="stat-label">Total P&amp;L</span>
+            <strong id="pt-stat-totalpnl" class="stat-value">—</strong>
+            <span class="stat-sub">Sum of all closes</span>
+          </div>
+          <div class="paper-stat">
+            <span class="stat-label">Open Positions</span>
+            <strong id="pt-stat-open" class="stat-value">—</strong>
+            <span class="stat-sub">Live now</span>
+          </div>
+        </div>
+
+        <!-- Position cards grid -->
+        <div class="paper-grid">
+          <section class="panel">
+            <div class="panel-hd">
+              <div>
+                <p class="panel-label">Open Positions</p>
+                <h2>Live paper trades</h2>
+              </div>
+            </div>
+            <div id="zc-pt-open" class="paper-positions">
+              <div class="zc-empty-state">
+                <div class="zc-empty-icon">📭</div>
+                <p class="zc-empty-title">No open trades</p>
+                <p class="zc-empty-sub">Waiting for next strategy signal.</p>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-hd">
+              <div>
+                <p class="panel-label">Trade History</p>
+                <h2>Closed paper trades</h2>
+              </div>
+            </div>
+            <div id="zc-pt-closed" class="paper-positions">
+              <div class="zc-empty-state">
+                <div class="zc-empty-icon">📊</div>
+                <p class="zc-empty-title">No closed trades yet</p>
+                <p class="zc-empty-sub">Results appear here when TP or SL is hit.</p>
+              </div>
+            </div>
+          </section>
         </div>
       </div>
 
