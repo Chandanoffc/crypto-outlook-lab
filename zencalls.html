@@ -134,19 +134,14 @@
         <!-- Stat cards -->
         <div class="paper-stats-row">
           <div class="paper-stat">
-            <span class="stat-label">Total Trades</span>
-            <strong id="pt-stat-total" class="stat-value">—</strong>
-            <span class="stat-sub">All time</span>
-          </div>
-          <div class="paper-stat">
             <span class="stat-label">Win Rate</span>
             <strong id="pt-stat-wr" class="stat-value">—</strong>
             <span class="stat-sub">TP1 + TP2 hits</span>
           </div>
           <div class="paper-stat">
-            <span class="stat-label">Wins / Losses</span>
-            <strong id="pt-stat-wl" class="stat-value">—</strong>
-            <span class="stat-sub">Closed trades</span>
+            <span class="stat-label">Total P&amp;L</span>
+            <strong id="pt-stat-totalpnl" class="stat-value">—</strong>
+            <span class="stat-sub">All closed trades</span>
           </div>
           <div class="paper-stat">
             <span class="stat-label">Avg P&amp;L</span>
@@ -154,14 +149,19 @@
             <span class="stat-sub">Per closed trade</span>
           </div>
           <div class="paper-stat">
-            <span class="stat-label">Total P&amp;L</span>
-            <strong id="pt-stat-totalpnl" class="stat-value">—</strong>
-            <span class="stat-sub">Sum of all closes</span>
+            <span class="stat-label">Open Positions</span>
+            <strong id="pt-stat-open" class="stat-value">0</strong>
+            <span class="stat-sub">Live paper trades</span>
           </div>
           <div class="paper-stat">
-            <span class="stat-label">Open Positions</span>
-            <strong id="pt-stat-open" class="stat-value">—</strong>
-            <span class="stat-sub">Live now</span>
+            <span class="stat-label">Closed Trades</span>
+            <strong id="pt-stat-closed" class="stat-value">0</strong>
+            <span class="stat-sub">Completed trades</span>
+          </div>
+          <div class="paper-stat">
+            <span class="stat-label">Wins / Losses</span>
+            <strong id="pt-stat-wl" class="stat-value">—</strong>
+            <span class="stat-sub">W / L breakdown</span>
           </div>
         </div>
 
@@ -173,6 +173,7 @@
                 <p class="panel-label">Open Positions</p>
                 <h2>Live paper trades</h2>
               </div>
+              <button id="zc-pt-reset" class="btn btn-ghost" style="height:32px;padding:0 14px;font-size:12px" type="button">Reset trades</button>
             </div>
             <div id="zc-pt-open" class="paper-positions">
               <div class="zc-empty-state">

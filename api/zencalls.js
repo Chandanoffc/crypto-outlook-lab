@@ -197,6 +197,11 @@ module.exports = async function handler(req, res) {
       return buildJsonResponse(res, 200, { ok: true, calls: state.calls });
     }
 
+    if (action === "paper-reset") {
+      if (hasDatabase()) await upsertRuntimeState("zencalls-papertrades", { trades: [] });
+      return buildJsonResponse(res, 200, { ok: true });
+    }
+
     if (action === "settings") {
       const { available, state } = await loadState();
       if (body.discordWebhook !== undefined) state.settings.discordWebhook = String(body.discordWebhook).trim();

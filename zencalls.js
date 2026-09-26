@@ -484,51 +484,53 @@ async function loadStratSignals() {
 
 const PT_API = "./api/zencalls?view=papertrades";
 
-function ptDuration(t) {
-  if (!t.detectedAt) return "—";
-  const end = t.closedAt || Date.now();
-  const h = Math.floor((end - t.detectedAt) / 3600000);
-  if (h < 24) return `${h}h`;
-  return `${Math.floor(h / 24)}d ${h % 24}h`;
+function ptTimeAgo(ms) {
+  if (!ms) return "—";
+  const s = Math.floor((Date.now() - ms) / 1000);
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
 }
 
-function fmtPrice(v) {
+function fmtPt(v, prec = 2) {
   if (v == null) return "—";
-  return v >= 100 ? v.toFixed(2) : v >= 1 ? v.toFixed(4) : v.toPrecision(4);
+  if (v >= 1000) return v.toFixed(prec);
+  if (v >= 1)    return v.toFixed(Math.max(prec, 4));
+  return v.toPrecision(4);
 }
 
 function renderPtCard(t, markPrice) {
-  const isLong  = t.side === "long";
-  const dir     = isLong ? "long" : "short";
+  const isLong   = t.side === "long";
+  const dir      = isLong ? "long" : "short";
   const isClosed = t.status !== "open";
 
-  // Card colour
+  // Card class + outcome badge (mirrors EMAPerps exactly)
   let cardClass = `paper-pos-card paper-pos-card--${dir}`;
   let reasonHtml = "";
   if (isClosed) {
-    if (t.status === "tp2_hit")  cardClass = "paper-pos-card paper-pos-card--win";
+    if      (t.status === "tp2_hit") cardClass = "paper-pos-card paper-pos-card--win";
     else if (t.status === "tp1_hit") cardClass = "paper-pos-card paper-pos-card--win";
     else if (t.status === "sl_hit")  cardClass = "paper-pos-card paper-pos-card--loss";
-    else cardClass = "paper-pos-card paper-pos-card--expired";
+    else                             cardClass = "paper-pos-card paper-pos-card--expired";
     const reasonMap = { tp2_hit: "TP2", tp1_hit: "TP1", sl_hit: "SL", expired: "EXP" };
     const reasonCls = { tp2_hit: "tp2", tp1_hit: "tp1", sl_hit: "sl", expired: "exp" };
-    const label = reasonMap[t.status] || t.status.toUpperCase();
-    reasonHtml = `<span class="paper-pos-reason paper-pos-reason--${reasonCls[t.status] || "exp"}">${label}</span>`;
+    reasonHtml = `<span class="paper-pos-reason paper-pos-reason--${reasonCls[t.status] || "exp"}">${reasonMap[t.status] || "CLOSED"}</span>`;
   }
 
-  // P&L string
+  // P&L
   let pnlStr = "—", pnlClass = "paper-pos-pnl--zero";
   if (isClosed && t.pnl_pct != null) {
     pnlClass = t.pnl_pct > 0 ? "paper-pos-pnl--pos" : t.pnl_pct < 0 ? "paper-pos-pnl--neg" : "paper-pos-pnl--zero";
-    pnlStr = `${t.pnl_pct >= 0 ? "+" : ""}${t.pnl_pct.toFixed(2)}%`;
+    pnlStr   = `${t.pnl_pct >= 0 ? "+" : ""}${t.pnl_pct.toFixed(2)}%`;
   } else if (!isClosed && markPrice && t.entry) {
     const diff = isLong ? markPrice - t.entry : t.entry - markPrice;
     const pct  = (diff / t.entry) * 100;
     pnlClass   = pct > 0 ? "paper-pos-pnl--pos" : pct < 0 ? "paper-pos-pnl--neg" : "paper-pos-pnl--zero";
-    pnlStr     = `${pct >= 0 ? "+" : ""}${pct.toFixed(2)}% (live)`;
+    pnlStr     = `${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%`;
   }
 
-  // Live level distances for open positions
+  // Live levels block (open positions only) — identical to EMAPerps
   let liveLevelsHtml = "";
   if (!isClosed && markPrice && t.entry) {
     const movePct = ((isLong ? markPrice - t.entry : t.entry - markPrice) / t.entry * 100).toFixed(1);
@@ -536,11 +538,11 @@ function renderPtCard(t, markPrice) {
     const toTP2 = t.tp2 ? ((isLong ? t.tp2 - markPrice : markPrice - t.tp2) / markPrice * 100) : null;
     const toSL  = t.sl  ? ((isLong ? markPrice - t.sl  : t.sl - markPrice)  / markPrice * 100) : null;
     const fDist = (v, label, cls) => v != null
-      ? `<span class="pos-level-row ${cls}"><span class="pos-level-tag">${label}</span><span class="pos-level-dist">${v > 0 ? v.toFixed(1) + "% away" : "REACHED"}</span><span class="pos-level-price">${fmtPrice(label === "TP1" ? t.tp1 : label === "TP2" ? t.tp2 : t.sl)}</span></span>`
+      ? `<span class="pos-level-row ${cls}"><span class="pos-level-tag">${label}</span><span class="pos-level-dist">${v > 0 ? v.toFixed(1) + "% away" : "REACHED"}</span><span class="pos-level-price">${fmtPt(label === "TP1" ? t.tp1 : label === "TP2" ? t.tp2 : t.sl)}</span></span>`
       : "";
     liveLevelsHtml = `
       <div class="pos-live-row">
-        <span class="pos-live-now">Now <strong>${fmtPrice(markPrice)}</strong></span>
+        <span class="pos-live-now">Now <strong>${fmtPt(markPrice)}</strong></span>
         <span class="pos-live-move ${Number(movePct) >= 0 ? "tone-up" : "tone-down"}">${Number(movePct) >= 0 ? "+" : ""}${movePct}% from entry</span>
       </div>
       <div class="pos-levels-strip">
@@ -565,31 +567,33 @@ function renderPtCard(t, markPrice) {
       </div>
       ${liveLevelsHtml}
       <div class="paper-pos-meta">
-        <span>Entry ${fmtPrice(t.entry)} · Pattern: ${t.pattern || "—"}</span>
-        <span>${isClosed ? ptDuration(t) + " · " + new Date(t.closedAt).toLocaleDateString() : "Opened " + ptDuration(t) + " ago"}</span>
+        <span>Entry ${fmtPt(t.entry)} · ${t.pattern || "—"}</span>
+        <span>${isClosed ? ptTimeAgo(t.closedAt) : "Opened " + ptTimeAgo(t.detectedAt)}</span>
       </div>
       <div class="paper-pos-meta">
-        <span>TP1 ${fmtPrice(t.tp1)} · TP2 ${fmtPrice(t.tp2)} · SL ${fmtPrice(t.sl)}${t.rr_target != null ? " · R:R 1:" + t.rr_target : ""}</span>
-        ${isClosed && t.exit_price ? `<span>Exit ${fmtPrice(t.exit_price)}</span>` : ""}
+        <span>TP1 ${fmtPt(t.tp1)} · TP2 ${fmtPt(t.tp2)} · SL ${fmtPt(t.sl)}${t.rr_target != null ? " · R:R 1:" + t.rr_target : ""}</span>
+        ${isClosed && t.exit_price ? `<span>Exit ${fmtPt(t.exit_price)}</span>` : ""}
       </div>
     </div>`;
 }
 
 function renderPtStats(stats) {
   const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-  const setColor = (id, val, num) => {
+  const setColored = (id, val, num) => {
     const el = document.getElementById(id);
     if (!el) return;
     el.textContent = val;
     el.style.color = num > 0 ? "var(--long, #22c55e)" : num < 0 ? "var(--short, #ef4444)" : "";
   };
-  set("pt-stat-total", stats.total ?? "—");
-  set("pt-stat-wr",    stats.win_rate != null ? stats.win_rate + "%" : "—");
-  set("pt-stat-open",  stats.open ?? "—");
+  set("pt-stat-wr",     stats.win_rate != null ? stats.win_rate + "%" : "—");
+  set("pt-stat-open",   stats.open   ?? 0);
+  set("pt-stat-closed", stats.closed ?? 0);
+  setColored("pt-stat-totalpnl", stats.total_pnl != null ? (stats.total_pnl >= 0 ? "+" : "") + stats.total_pnl.toFixed(2) + "%" : "—", stats.total_pnl ?? 0);
+  setColored("pt-stat-avgpnl",   stats.avg_pnl   != null ? (stats.avg_pnl   >= 0 ? "+" : "") + stats.avg_pnl.toFixed(2)   + "%" : "—", stats.avg_pnl   ?? 0);
   const wl = document.getElementById("pt-stat-wl");
-  if (wl) wl.innerHTML = `<span style="color:var(--long,#22c55e)">${stats.wins ?? 0}W</span> / <span style="color:var(--short,#ef4444)">${stats.losses ?? 0}L</span>`;
-  setColor("pt-stat-avgpnl",   stats.avg_pnl   != null ? (stats.avg_pnl >= 0 ? "+" : "") + stats.avg_pnl.toFixed(2) + "%" : "—",   stats.avg_pnl ?? 0);
-  setColor("pt-stat-totalpnl", stats.total_pnl != null ? (stats.total_pnl >= 0 ? "+" : "") + stats.total_pnl.toFixed(2) + "%" : "—", stats.total_pnl ?? 0);
+  if (wl) wl.innerHTML = stats.wins != null
+    ? `<span style="color:var(--long,#22c55e)">${stats.wins}W</span> / <span style="color:var(--short,#ef4444)">${stats.losses ?? 0}L</span>`
+    : "—";
 }
 
 async function loadPaperTrades() {
@@ -599,29 +603,39 @@ async function loadPaperTrades() {
     const trades = data.trades || [];
     renderPtStats(data.stats || {});
 
-    // Fetch live prices for open trades
     const open   = trades.filter(t => t.status === "open");
     const closed = trades.filter(t => t.status !== "open");
+
+    // Fetch live Binance prices for open positions
     const markPrices = {};
     if (open.length) {
       try {
-        const syms = [...new Set(open.map(t => t.symbol))];
+        const syms = new Set(open.map(t => t.symbol));
         const prices = await fetch("https://fapi.binance.com/fapi/v1/ticker/price").then(r => r.json());
-        for (const p of prices) { if (syms.includes(p.symbol)) markPrices[p.symbol] = parseFloat(p.price); }
-      } catch { /* price fetch best-effort */ }
+        for (const p of prices) { if (syms.has(p.symbol)) markPrices[p.symbol] = parseFloat(p.price); }
+      } catch { /* best-effort */ }
     }
 
     const openEl   = document.getElementById("zc-pt-open");
     const closedEl = document.getElementById("zc-pt-closed");
 
     openEl.innerHTML = open.length
-      ? open.map(t => renderPtCard(t, markPrices[t.symbol] || null)).join("")
-      : `<div class="zc-empty-state"><div class="zc-empty-icon">📭</div><p class="zc-empty-title">No open trades</p><p class="zc-empty-sub">Waiting for next strategy signal.</p></div>`;
+      ? open.map(t => renderPtCard(t, markPrices[t.symbol] ?? null)).join("")
+      : `<div class="paper-empty">No open positions.</div>`;
 
     closedEl.innerHTML = closed.length
       ? closed.slice(0, 50).map(t => renderPtCard(t, null)).join("")
-      : `<div class="zc-empty-state"><div class="zc-empty-icon">📊</div><p class="zc-empty-title">No closed trades yet</p><p class="zc-empty-sub">Results appear here when TP or SL is hit.</p></div>`;
+      : `<div class="paper-empty">No closed trades yet.</div>`;
   } catch { /* non-fatal */ }
+}
+
+async function resetPaperTrades() {
+  if (!confirm("Reset all ZenCalls paper trades? This clears every open and closed trade.")) return;
+  try {
+    const res = await fetch("./api/zencalls", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "paper-reset" }) });
+    const data = await res.json();
+    if (data.ok) loadPaperTrades();
+  } catch (err) { alert(`Reset failed: ${err.message}`); }
 }
 
 // ── Init ──────────────────────────────────────────────────
@@ -634,6 +648,8 @@ document.addEventListener("DOMContentLoaded", () => {
   loadCalls();
   loadStratSignals();
   loadPaperTrades();
+  const resetBtn = document.getElementById("zc-pt-reset");
+  if (resetBtn) resetBtn.addEventListener("click", resetPaperTrades);
   setInterval(loadStratSignals, 60_000);
   setInterval(loadPaperTrades, 60_000);
 });
