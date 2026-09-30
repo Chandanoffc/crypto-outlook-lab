@@ -6,6 +6,9 @@
     },
     "api/cron-scan.js": {
       "maxDuration": 60
+    },
+    "api/meme-mark.js": {
+      "maxDuration": 30
     }
   },
   "crons": []
