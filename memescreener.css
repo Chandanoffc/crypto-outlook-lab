@@ -2,6 +2,32 @@
 
 [hidden] { display: none !important; }
 
+/* Internal section tab bar */
+.ms-section-tabs {
+  display: flex;
+  gap: 4px;
+  margin: 32px 0 0;
+  border-bottom: 1px solid var(--bd);
+  padding-bottom: 0;
+}
+.ms-section-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tx-3);
+  cursor: pointer;
+  margin-bottom: -1px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.ms-section-tab:hover { color: var(--tx-1); }
+.ms-section-tab.is-active {
+  color: var(--ac);
+  border-bottom-color: var(--ac);
+}
+
 /* CA input row */
 .ms-ca-row {
   display: flex;

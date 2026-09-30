@@ -478,9 +478,194 @@ async function loadAutoScans() {
   }
 }
 
+// ── Paper Trade Dashboard ─────────────────────────────────
+
+function fmtPct(v) {
+  if (v == null) return "—";
+  return (v >= 0 ? "+" : "") + v.toFixed(2) + "%";
+}
+
+function fmtPrice(v) {
+  if (v == null || v === 0) return "—";
+  if (v < 0.000001) return "$" + v.toExponential(3);
+  if (v < 0.01) return "$" + v.toFixed(6);
+  if (v < 1) return "$" + v.toFixed(4);
+  return "$" + v.toFixed(2);
+}
+
+function renderMsPtCard(t) {
+  const isClosed  = t.status !== "open";
+  const isWin     = t.status === "win";
+  const isLoss    = t.status === "loss";
+  const isExpired = t.status === "expired";
+
+  let cardMod = "--long";
+  if (isClosed) cardMod = isWin ? "--win" : "--loss";
+
+  let reasonLabel = "", reasonMod = "";
+  if (isClosed) {
+    if (isWin)     { reasonLabel = "TP Hit";  reasonMod = "paper-pos-reason--tp2"; }
+    if (isLoss)    { reasonLabel = "SL Hit";  reasonMod = "paper-pos-reason--sl";  }
+    if (isExpired) { reasonLabel = "Expired"; reasonMod = "paper-pos-reason--exp"; }
+  }
+
+  const currentPrice = isClosed ? t.closePrice : (t.currentPrice || null);
+  const livePct      = currentPrice && t.entryPrice
+    ? ((currentPrice - t.entryPrice) / t.entryPrice) * 100 : null;
+
+  const openDate  = t.openedAt  ? new Date(t.openedAt).toLocaleString()  : "—";
+  const closeDate = t.closedAt  ? new Date(t.closedAt).toLocaleString() : null;
+
+  const pnlPctVal = isClosed ? t.pnlPct : livePct;
+  const pnlClass  = pnlPctVal == null ? "paper-pos-pnl--zero" : pnlPctVal > 0 ? "paper-pos-pnl--pos" : pnlPctVal < 0 ? "paper-pos-pnl--neg" : "paper-pos-pnl--zero";
+  const pnlStr    = isClosed && t.pnl != null
+    ? `${t.pnl >= 0 ? "+" : ""}$${Math.abs(t.pnl).toFixed(2)} (${fmtPct(t.pnlPct)})`
+    : livePct != null ? fmtPct(livePct) : "–";
+
+  let liveLevelsHtml = "";
+  if (!isClosed && currentPrice && t.entryPrice) {
+    const movePct  = ((currentPrice - t.entryPrice) / t.entryPrice * 100).toFixed(1);
+    const toTP     = ((t.tp - currentPrice) / currentPrice * 100).toFixed(1);
+    const toSL     = ((currentPrice - t.sl) / currentPrice * 100).toFixed(1);
+    liveLevelsHtml = `
+      <div class="pos-live-row">
+        <span class="pos-live-now">Now <strong>${fmtPrice(currentPrice)}</strong></span>
+        <span class="pos-live-move ${Number(movePct) >= 0 ? "tone-up" : "tone-down"}">${Number(movePct) >= 0 ? "+" : ""}${movePct}% from entry</span>
+      </div>
+      <div class="pos-levels-strip">
+        <span class="pos-level-row pos-level--sl"><span class="pos-level-tag">SL</span><span class="pos-level-dist">${toSL > 0 ? toSL + "% away" : "REACHED"}</span><span class="pos-level-price">${fmtPrice(t.sl)}</span></span>
+        <span class="pos-level-row pos-level--tp1"><span class="pos-level-tag">TP</span><span class="pos-level-dist">${toTP > 0 ? toTP + "% away" : "REACHED"}</span><span class="pos-level-price">${fmtPrice(t.tp)}</span></span>
+      </div>`;
+  }
+
+  const el = document.createElement("div");
+  el.className = `paper-pos-card paper-pos-card${cardMod}`;
+  el.innerHTML = `
+    <div class="paper-pos-head">
+      <div class="paper-pos-ident">
+        <span class="paper-pos-symbol">${t.symbol || "?"}</span>
+        <span class="paper-pos-side paper-pos-side--long">LONG</span>
+        ${!isClosed ? `<span class="paper-pos-status">LIVE</span>` : ""}
+      </div>
+      <div class="paper-pos-right">
+        <span class="paper-pos-pnl ${pnlClass}">${pnlStr}</span>
+        ${isClosed ? `<span class="paper-pos-reason ${reasonMod}">${reasonLabel}</span>` : ""}
+      </div>
+    </div>
+    ${liveLevelsHtml}
+    <div class="paper-pos-meta">
+      <span>Entry ${fmtPrice(t.entryPrice)} · Size $${(t.size || 0).toFixed(2)}</span>
+      <span>${isClosed ? closeDate : "Opened " + openDate}</span>
+    </div>
+    <div class="paper-pos-meta">
+      <span>TP ${fmtPrice(t.tp)} (+60%) · SL ${fmtPrice(t.sl)} (-30%)</span>
+      ${isClosed && t.closePrice ? `<span>Close ${fmtPrice(t.closePrice)}</span>` : ""}
+    </div>
+    ${t.pair_url ? `<div class="paper-pos-meta"><a href="${t.pair_url}" target="_blank" rel="noopener" style="color:var(--ac)">View on DexScreener ↗</a></div>` : ""}
+  `;
+  return el;
+}
+
+function renderMsPtStats(stats, balance) {
+  const q = id => document.getElementById(id);
+  if (!stats) return;
+
+  const balEl = q("ms-pt-stat-balance");
+  if (balEl) {
+    balEl.textContent = "$" + (balance ?? 100).toFixed(2);
+    const diff = (balance ?? 100) - 100;
+    balEl.style.color = diff > 0 ? "var(--long)" : diff < 0 ? "var(--short)" : "";
+  }
+
+  const wr = q("ms-pt-stat-wr");
+  if (wr) {
+    wr.textContent = stats.winRate != null ? stats.winRate.toFixed(1) + "%" : "—";
+    wr.style.color = stats.winRate != null ? (stats.winRate >= 50 ? "var(--long)" : "var(--short)") : "";
+  }
+
+  const tpnl = q("ms-pt-stat-totalpnl");
+  if (tpnl) {
+    tpnl.textContent = stats.totalPnl != null ? (stats.totalPnl >= 0 ? "+$" : "-$") + Math.abs(stats.totalPnl).toFixed(2) : "—";
+    tpnl.style.color = stats.totalPnl > 0 ? "var(--long)" : stats.totalPnl < 0 ? "var(--short)" : "";
+  }
+
+  const avg = q("ms-pt-stat-avgpnl");
+  if (avg) {
+    avg.textContent = stats.avgPnl != null ? (stats.avgPnl >= 0 ? "+$" : "-$") + Math.abs(stats.avgPnl).toFixed(2) : "—";
+    avg.style.color = stats.avgPnl > 0 ? "var(--long)" : stats.avgPnl < 0 ? "var(--short)" : "";
+  }
+
+  const openEl = q("ms-pt-stat-open");
+  if (openEl) openEl.textContent = stats.open ?? 0;
+
+  const wl = q("ms-pt-stat-wl");
+  if (wl) wl.textContent = stats.closed > 0 ? `${stats.wins}W / ${stats.losses}L` : "—";
+}
+
+async function loadMsPaperTrades() {
+  try {
+    const d = await fetch(`${API}?view=papertrades`).then(r => r.json());
+    const trades  = d.trades  || [];
+    const stats   = d.stats   || {};
+    const balance = d.balance ?? 100;
+
+    renderMsPtStats(stats, balance);
+
+    const openEl   = document.getElementById("ms-pt-open");
+    const closedEl = document.getElementById("ms-pt-closed");
+    if (!openEl || !closedEl) return;
+
+    const openTrades   = trades.filter(t => t.status === "open");
+    const closedTrades = trades.filter(t => t.status !== "open");
+
+    if (openTrades.length) {
+      openEl.innerHTML = "";
+      openTrades.forEach(t => openEl.appendChild(renderMsPtCard(t)));
+    }
+
+    if (closedTrades.length) {
+      closedEl.innerHTML = "";
+      closedTrades.slice(0, 30).forEach(t => closedEl.appendChild(renderMsPtCard(t)));
+    }
+  } catch (e) {
+    console.error("paper trades load error", e);
+  }
+}
+
+async function resetMsPaperTrades() {
+  if (!confirm("Reset all MemeScreener paper trades? Balance returns to $100.")) return;
+  try {
+    await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "paper-reset" }) });
+    await loadMsPaperTrades();
+  } catch (e) {
+    alert("Reset failed: " + e.message);
+  }
+}
+
+function initSectionTabs() {
+  const tabs  = document.querySelectorAll(".ms-section-tab");
+  const panels = {
+    runners:     document.getElementById("ms-tab-runners"),
+    papertrades: document.getElementById("ms-tab-papertrades"),
+  };
+  tabs.forEach(btn => {
+    btn.addEventListener("click", () => {
+      tabs.forEach(t => t.classList.remove("is-active"));
+      btn.classList.add("is-active");
+      const key = btn.dataset.tab;
+      Object.entries(panels).forEach(([k, el]) => {
+        if (el) el.style.display = k === key ? "" : "none";
+      });
+    });
+  });
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   bindAll();
   loadSettings();
   loadAutoScans();
+  loadMsPaperTrades();
+  initSectionTabs();
   document.getElementById("ms-auto-refresh")?.addEventListener("click", loadAutoScans);
+  document.getElementById("ms-pt-reset")?.addEventListener("click", resetMsPaperTrades);
 });

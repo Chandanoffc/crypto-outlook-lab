@@ -8,6 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./zencalls.css" />
     <link rel="stylesheet" href="./memescreener.css" />
     <script src="./memescreener.js" defer></script>
   </head>
@@ -156,8 +157,14 @@
         </div>
       </div>
 
+      <!-- ── Internal tab bar ─────────────────────────────────── -->
+      <div class="ms-section-tabs">
+        <button class="ms-section-tab is-active" data-tab="runners" type="button">Auto-Detected Runners</button>
+        <button class="ms-section-tab" data-tab="papertrades" type="button">📊 Paper Trades</button>
+      </div>
+
       <!-- Auto-scan results -->
-      <div class="ms-auto-section">
+      <div id="ms-tab-runners" class="ms-auto-section">
         <div class="ms-auto-header">
           <div>
             <div class="ms-auto-title">Auto-Detected Runners</div>
@@ -170,6 +177,88 @@
         </div>
         <div id="ms-auto-grid" class="ms-auto-grid"></div>
       </div>
+
+      <!-- ── Paper Trade Dashboard ──────────────────────────── -->
+      <div id="ms-tab-papertrades" style="display:none">
+      <div class="zc-pt-section">
+        <div class="zc-strategy-header">
+          <div>
+            <h2 class="zc-strategy-title">Paper Trade Dashboard</h2>
+            <p class="zc-strategy-sub">Every auto-detected runner is paper-traded. TP at +60%, SL at -30%, 48h expiry. 10% of $100 balance per trade.</p>
+          </div>
+        </div>
+
+        <!-- Stat cards -->
+        <div class="paper-stats-row">
+          <div class="paper-stat">
+            <span class="stat-label">Balance</span>
+            <strong id="ms-pt-stat-balance" class="stat-value">$100.00</strong>
+            <span class="stat-sub">Started at $100</span>
+          </div>
+          <div class="paper-stat">
+            <span class="stat-label">Win Rate</span>
+            <strong id="ms-pt-stat-wr" class="stat-value">—</strong>
+            <span class="stat-sub">TP hits</span>
+          </div>
+          <div class="paper-stat">
+            <span class="stat-label">Total P&amp;L</span>
+            <strong id="ms-pt-stat-totalpnl" class="stat-value">—</strong>
+            <span class="stat-sub">All closed trades</span>
+          </div>
+          <div class="paper-stat">
+            <span class="stat-label">Avg P&amp;L</span>
+            <strong id="ms-pt-stat-avgpnl" class="stat-value">—</strong>
+            <span class="stat-sub">Per closed trade</span>
+          </div>
+          <div class="paper-stat">
+            <span class="stat-label">Open Positions</span>
+            <strong id="ms-pt-stat-open" class="stat-value">0</strong>
+            <span class="stat-sub">Live paper trades</span>
+          </div>
+          <div class="paper-stat">
+            <span class="stat-label">Wins / Losses</span>
+            <strong id="ms-pt-stat-wl" class="stat-value">—</strong>
+            <span class="stat-sub">W / L breakdown</span>
+          </div>
+        </div>
+
+        <!-- Position cards grid -->
+        <div class="paper-grid">
+          <section class="panel">
+            <div class="panel-hd">
+              <div>
+                <p class="panel-label">Open Positions</p>
+                <h2>Live paper trades</h2>
+              </div>
+              <button id="ms-pt-reset" class="btn btn-ghost" style="height:32px;padding:0 14px;font-size:12px" type="button">Reset trades</button>
+            </div>
+            <div id="ms-pt-open" class="paper-positions">
+              <div class="zc-empty-state">
+                <div class="zc-empty-icon">📭</div>
+                <p class="zc-empty-title">No open trades</p>
+                <p class="zc-empty-sub">Waiting for next auto-detected runner.</p>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-hd">
+              <div>
+                <p class="panel-label">Trade History</p>
+                <h2>Closed paper trades</h2>
+              </div>
+            </div>
+            <div id="ms-pt-closed" class="paper-positions">
+              <div class="zc-empty-state">
+                <div class="zc-empty-icon">📊</div>
+                <p class="zc-empty-title">No closed trades yet</p>
+                <p class="zc-empty-sub">Results appear here when TP or SL is hit.</p>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+      </div><!-- /ms-tab-papertrades -->
 
       <!-- History -->
       <div id="ms-history-wrap" class="ms-history-wrap" hidden>

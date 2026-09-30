@@ -1,6 +1,7 @@
 "use strict";
 const { hasDatabase, getRuntimeState, upsertRuntimeState } = require("../lib/neon-db");
 const { defaultState: memeAutoDefault } = require("../lib/meme-autoscan");
+const { calcStats: calcMemePtStats, defaultPaperState } = require("../lib/meme-papertrades");
 
 const STATE_KEY = "memescreener";
 const HELIUS_KEY = process.env.HELIUS_API_KEY || "";
@@ -272,6 +273,15 @@ module.exports = async function handler(req, res) {
       }
       return res.end(JSON.stringify({ ok: true, tokens: autoState.tokens || [], lastScan: autoState.lastScan || 0 }));
     }
+    if (url.searchParams.get("view") === "papertrades") {
+      let autoState = memeAutoDefault();
+      if (hasDatabase()) {
+        const row = await getRuntimeState("meme-autoscan");
+        if (row?.state) autoState = { ...memeAutoDefault(), ...row.state };
+      }
+      const pt = autoState.paperTrades || defaultPaperState();
+      return res.end(JSON.stringify({ ok: true, trades: pt.trades || [], balance: pt.balance ?? 100, stats: calcMemePtStats(pt.trades) }));
+    }
     return res.end(JSON.stringify({ ok: true, settings: state.settings, history: state.history }));
   }
   if (req.method !== "POST") { res.statusCode = 405; return res.end(JSON.stringify({ error: "Method not allowed" })); }
@@ -283,6 +293,16 @@ module.exports = async function handler(req, res) {
     if (body.discordWebhook !== undefined) state.settings.discordWebhook = String(body.discordWebhook).trim();
     await saveState(state);
     return res.end(JSON.stringify({ ok: true, settings: state.settings }));
+  }
+
+  if (action === "paper-reset") {
+    if (hasDatabase()) {
+      const row = await getRuntimeState("meme-autoscan");
+      const autoState = row?.state ? { ...memeAutoDefault(), ...row.state } : memeAutoDefault();
+      autoState.paperTrades = defaultPaperState();
+      await upsertRuntimeState("meme-autoscan", autoState);
+    }
+    return res.end(JSON.stringify({ ok: true }));
   }
 
   if (action === "scan") {

@@ -12,6 +12,7 @@ const { defaultRuntimeState: epDefault, sanitizeRuntimeState: epSanitize, runEma
 const { runZenCalls_Scan } = require("../lib/zencalls-scan");
 const { runZenStrategy_Scan, defaultState: zcStratDefault } = require("../lib/zencalls-strategy");
 const { runMemeAutoScan, checkMemeMilestones, defaultState: memeDefault } = require("../lib/meme-autoscan");
+const { checkPaperTrades: checkMemePaperTrades } = require("../lib/meme-papertrades");
 const { checkPaperTrades, calcStats, defaultState: ptDefault } = require("../lib/zencalls-papertrades");
 
 function buildJsonResponse(res, statusCode, payload) {
@@ -135,8 +136,11 @@ module.exports = async function handler(req, res) {
       const summary = await runMemeAutoScan(memeState, { webhook });
       // Check milestones for all previously detected tokens (2x/3x/4x/5x/10x)
       const milestoneSummary = await checkMemeMilestones(memeState, { webhook });
+      // Check paper trades — close TP/SL/expired trades, update prices
+      if (!memeState.paperTrades) memeState.paperTrades = { balance: 100, trades: [] };
+      const ptSummary = await checkMemePaperTrades(memeState.paperTrades);
       if (hasDatabase()) await upsertRuntimeState("meme-autoscan", memeState);
-      results.meme_autoscan = { ok: true, summary, milestones: milestoneSummary };
+      results.meme_autoscan = { ok: true, summary, milestones: milestoneSummary, papertrades: ptSummary };
     }
   } catch (err) {
     results.meme_autoscan = { ok: false, error: String(err.message) };
