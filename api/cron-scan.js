@@ -13,6 +13,7 @@ const { runZenCalls_Scan } = require("../lib/zencalls-scan");
 const { runZenStrategy_Scan, defaultState: zcStratDefault } = require("../lib/zencalls-strategy");
 const { runMemeAutoScan, checkMemeMilestones, defaultState: memeDefault } = require("../lib/meme-autoscan");
 const { checkPaperTrades: checkMemePaperTrades } = require("../lib/meme-papertrades");
+const { runPonsAutoScan, defaultState: ponsDefault } = require("../lib/pons-autoscan");
 const { checkPaperTrades, calcStats, defaultState: ptDefault } = require("../lib/zencalls-papertrades");
 
 function buildJsonResponse(res, statusCode, payload) {
@@ -144,6 +145,27 @@ module.exports = async function handler(req, res) {
     }
   } catch (err) {
     results.meme_autoscan = { ok: false, error: String(err.message) };
+  }
+
+  // Pons / Robinhood Chain — scan for recently graduated tokens
+  try {
+    const claimed = await tryClaimScanLock("pons-autoscan", now, 60_000);
+    if (!claimed) {
+      results.pons_autoscan = { ok: true, skipped: true };
+    } else {
+      let ponsState = ponsDefault();
+      if (hasDatabase()) {
+        const row = await getRuntimeState("pons-autoscan");
+        if (row?.state) ponsState = { ...ponsDefault(), ...row.state };
+      }
+      const msRow   = hasDatabase() ? await getRuntimeState("memescreener") : null;
+      const webhook = msRow?.state?.settings?.discordWebhook || "";
+      const summary = await runPonsAutoScan(ponsState, { webhook });
+      if (hasDatabase()) await upsertRuntimeState("pons-autoscan", ponsState);
+      results.pons_autoscan = { ok: true, summary };
+    }
+  } catch (err) {
+    results.pons_autoscan = { ok: false, error: String(err.message) };
   }
 
   return buildJsonResponse(res, 200, { ok: true, scannedAt: Date.now(), results });

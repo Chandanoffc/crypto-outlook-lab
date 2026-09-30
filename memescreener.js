@@ -372,7 +372,10 @@ function renderAutoCard(token) {
   const score = token.composite_score;
   const scorePct = score != null ? Math.round(score * 100) : null;
   const scoreClass = scorePct == null ? "" : scorePct >= 70 ? "green" : scorePct >= 50 ? "amber" : "red";
-  const source = token.source === "pumpfun" ? "🎰 Pump.fun" : "📡 DexScreener";
+  const source = token.source === "pumpfun"     ? "🎰 Pump.fun"
+               : token.source === "pons"        ? "🤖 Pons · Robinhood"
+               : token.source === "dexscreener" ? "📡 Multi-Launchpad"
+               : "📡 DexScreener";
   const top10  = token.top10_holder_pct != null ? `${token.top10_holder_pct.toFixed(1)}%` : "—";
   const p5m    = token.price_change_5m  != null
     ? `${token.price_change_5m > 0 ? "+" : ""}${token.price_change_5m.toFixed(1)}%` : "—";

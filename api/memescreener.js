@@ -2,6 +2,7 @@
 const { hasDatabase, getRuntimeState, upsertRuntimeState } = require("../lib/neon-db");
 const { defaultState: memeAutoDefault } = require("../lib/meme-autoscan");
 const { calcStats: calcMemePtStats, defaultPaperState } = require("../lib/meme-papertrades");
+const { defaultState: ponsDefault } = require("../lib/pons-autoscan");
 
 const STATE_KEY = "memescreener";
 const HELIUS_KEY = process.env.HELIUS_API_KEY || "";
@@ -271,7 +272,17 @@ module.exports = async function handler(req, res) {
         const row = await getRuntimeState("meme-autoscan");
         if (row?.state) autoState = { ...memeAutoDefault(), ...row.state };
       }
-      return res.end(JSON.stringify({ ok: true, tokens: autoState.tokens || [], lastScan: autoState.lastScan || 0 }));
+      // Merge Pons (Robinhood Chain) tokens
+      let ponsState = ponsDefault();
+      if (hasDatabase()) {
+        const row = await getRuntimeState("pons-autoscan");
+        if (row?.state) ponsState = { ...ponsDefault(), ...row.state };
+      }
+      const allTokens = [
+        ...(autoState.tokens || []),
+        ...(ponsState.tokens || []),
+      ].sort((a, b) => (b.detectedAt || 0) - (a.detectedAt || 0));
+      return res.end(JSON.stringify({ ok: true, tokens: allTokens, lastScan: autoState.lastScan || 0 }));
     }
     if (url.searchParams.get("view") === "papertrades") {
       let autoState = memeAutoDefault();
