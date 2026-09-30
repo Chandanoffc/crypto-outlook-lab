@@ -8,5 +8,10 @@
       "maxDuration": 60
     }
   },
-  "crons": []
+  "crons": [
+    {
+      "path": "/api/cron-scan",
+      "schedule": "0 * * * *"
+    }
+  ]
 }

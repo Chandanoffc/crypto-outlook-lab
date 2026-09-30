@@ -455,11 +455,19 @@ function renderAutoCard(token) {
   return card;
 }
 
-async function loadAutoScans() {
-  const grid   = document.getElementById("ms-auto-grid");
-  const status = document.getElementById("ms-auto-status");
+async function loadAutoScans({ triggerScan = false } = {}) {
+  const grid    = document.getElementById("ms-auto-grid");
+  const status  = document.getElementById("ms-auto-status");
+  const refresh = document.getElementById("ms-auto-refresh");
   if (!grid) return;
+  if (refresh) refresh.disabled = true;
   try {
+    if (triggerScan) {
+      status.textContent = "Scanning… (may take ~30s)";
+      await fetch("/api/cron-scan").catch(() => {});
+    } else {
+      status.textContent = "Loading…";
+    }
     const d = await fetch(`${API}?view=autoscans`).then(r => r.json());
     const tokens = d.tokens || [];
     const lastScan = d.lastScan;
@@ -467,17 +475,19 @@ async function loadAutoScans() {
       const mins = Math.floor((Date.now() - lastScan) / 60000);
       status.textContent = `Last scan: ${mins < 1 ? "just now" : mins + "m ago"} · ${tokens.length} detected`;
     } else {
-      status.textContent = "No scan yet — runs on next cron tick";
+      status.textContent = "No scan yet";
     }
     grid.innerHTML = "";
     if (!tokens.length) {
-      grid.innerHTML = `<div class="ms-auto-empty">No tokens detected yet. Check back after the next hourly scan, or trigger <code>/api/cron-scan</code> manually.</div>`;
+      grid.innerHTML = `<div class="ms-auto-empty">No tokens detected yet. Click "↻ Scan Now" to run a manual scan.</div>`;
       return;
     }
     for (const t of tokens) grid.appendChild(renderAutoCard(t));
   } catch (e) {
     status.textContent = "Failed to load";
     grid.innerHTML = `<div class="ms-auto-empty">Error: ${e.message}</div>`;
+  } finally {
+    if (refresh) refresh.disabled = false;
   }
 }
 
@@ -669,6 +679,6 @@ document.addEventListener("DOMContentLoaded", () => {
   loadAutoScans();
   loadMsPaperTrades();
   initSectionTabs();
-  document.getElementById("ms-auto-refresh")?.addEventListener("click", loadAutoScans);
+  document.getElementById("ms-auto-refresh")?.addEventListener("click", () => loadAutoScans({ triggerScan: true }));
   document.getElementById("ms-pt-reset")?.addEventListener("click", resetMsPaperTrades);
 });
