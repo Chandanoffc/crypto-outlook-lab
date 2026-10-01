@@ -137,11 +137,10 @@ module.exports = async function handler(req, res) {
       const summary = await runMemeAutoScan(memeState, { webhook });
       // Check milestones for all previously detected tokens (2x/3x/4x/5x/10x)
       const milestoneSummary = await checkMemeMilestones(memeState, { webhook });
-      // Check paper trades — close TP/SL/expired trades, update prices
-      if (!memeState.paperTrades) memeState.paperTrades = { balance: 100, trades: [] };
-      const ptSummary = await checkMemePaperTrades(memeState.paperTrades);
+      // NOTE: paper trade price checks run ONLY from /api/meme-mark (every 5 min via cron-job.org)
+      // Checking here in the same tick as detection would SL trades before they have a chance to run.
       if (hasDatabase()) await upsertRuntimeState("meme-autoscan", memeState);
-      results.meme_autoscan = { ok: true, summary, milestones: milestoneSummary, papertrades: ptSummary };
+      results.meme_autoscan = { ok: true, summary, milestones: milestoneSummary };
     }
   } catch (err) {
     results.meme_autoscan = { ok: false, error: String(err.message) };
