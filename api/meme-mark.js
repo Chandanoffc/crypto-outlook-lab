@@ -21,12 +21,16 @@ function buildJsonResponse(res, statusCode, payload) {
 module.exports = async function handler(req, res) {
   if (req.method !== "GET") return buildJsonResponse(res, 405, { error: "GET only" });
 
-  try {
-    const now     = Date.now();
-    // Lock: only one concurrent mark runs at a time, 4-minute cooldown
-    const claimed = await tryClaimMarkLock("meme-papertrades", now, 4 * 60 * 1000);
-    if (!claimed) return buildJsonResponse(res, 200, { ok: true, skipped: true });
+  const now     = Date.now();
+  const claimed = await tryClaimMarkLock("meme-papertrades", now, 4 * 60 * 1000);
+  if (!claimed) return buildJsonResponse(res, 200, { ok: true, skipped: true });
 
+  // Respond immediately so cron-job.org (30s max timeout) always sees a 200.
+  // Vercel keeps the async function alive for up to maxDuration (60s) after the
+  // response is sent, so the actual price-checking work continues in the background.
+  buildJsonResponse(res, 200, { ok: true, async: true });
+
+  try {
     let memeState = memeDefault();
     if (hasDatabase()) {
       const row = await getRuntimeState("meme-autoscan");
@@ -42,9 +46,7 @@ module.exports = async function handler(req, res) {
     if (hasDatabase() && (result.closed > 0 || openBefore !== openAfter)) {
       await upsertRuntimeState("meme-autoscan", memeState);
     }
-
-    return buildJsonResponse(res, 200, { ok: true, checked: result.checked, closed: result.closed, openNow: openAfter });
   } catch (err) {
-    return buildJsonResponse(res, 500, { ok: false, error: err.message });
+    console.error("[meme-mark] background error:", err.message);
   }
 };
