@@ -8,7 +8,7 @@
       "maxDuration": 60
     },
     "api/meme-mark.js": {
-      "maxDuration": 30
+      "maxDuration": 60
     }
   },
   "crons": []
