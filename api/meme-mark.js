@@ -1,14 +1,12 @@
 "use strict";
 /**
- * meme-mark.js — lightweight price mark for MemeScreener paper trades.
+ * meme-mark.js — 5-minute price mark for MemeScreener.
  * Runs every 5 minutes via external cron (cron-job.org).
- * Only checks DexScreener prices for open paper trades — no heavy scanning.
- *
- * Separate from /api/cron-scan so the full scan (Helius, RugCheck, Pump.fun)
- * still runs hourly while TP/SL checks happen every 5 minutes.
+ * Checks paper trade TP/SL AND milestone alerts (2x/3x/etc) every 5 min
+ * so fast-moving meme coins don't slip through between hourly scans.
  */
 const { hasDatabase, getRuntimeState, upsertRuntimeState, tryClaimMarkLock } = require("../lib/neon-db");
-const { defaultState: memeDefault } = require("../lib/meme-autoscan");
+const { defaultState: memeDefault, checkMemeMilestones } = require("../lib/meme-autoscan");
 const { checkPaperTrades } = require("../lib/meme-papertrades");
 
 function buildJsonResponse(res, statusCode, payload) {
@@ -32,6 +30,9 @@ module.exports = async function handler(req, res) {
 
   try {
     let memeState = memeDefault();
+    const msRow   = hasDatabase() ? await getRuntimeState("memescreener") : null;
+    const webhook = msRow?.state?.settings?.discordWebhook || "";
+
     if (hasDatabase()) {
       const row = await getRuntimeState("meme-autoscan");
       if (row?.state) memeState = { ...memeDefault(), ...row.state };
@@ -39,11 +40,16 @@ module.exports = async function handler(req, res) {
 
     if (!memeState.paperTrades) memeState.paperTrades = { balance: 100, trades: [] };
 
+    // Run both in parallel — milestone alerts + paper trade TP/SL checks
     const openBefore = memeState.paperTrades.trades.filter(t => t.status === "open").length;
-    const result     = await checkPaperTrades(memeState.paperTrades);
-    const openAfter  = memeState.paperTrades.trades.filter(t => t.status === "open").length;
+    const [ptResult, msResult] = await Promise.all([
+      checkPaperTrades(memeState.paperTrades),
+      checkMemeMilestones(memeState, { webhook }),
+    ]);
+    const openAfter = memeState.paperTrades.trades.filter(t => t.status === "open").length;
 
-    if (hasDatabase() && (result.closed > 0 || openBefore !== openAfter)) {
+    // Save if paper trades closed OR new milestones were hit (to avoid re-alerting)
+    if (hasDatabase() && (ptResult.closed > 0 || openBefore !== openAfter || msResult.milestones > 0)) {
       await upsertRuntimeState("meme-autoscan", memeState);
     }
   } catch (err) {
