@@ -42,14 +42,14 @@ module.exports = async function handler(req, res) {
 
     // Run both in parallel — milestone alerts + paper trade TP/SL checks
     const openBefore = memeState.paperTrades.trades.filter(t => t.status === "open").length;
-    const [ptResult, msResult] = await Promise.all([
+    const [, msResult] = await Promise.all([
       checkPaperTrades(memeState.paperTrades),
       checkMemeMilestones(memeState, { webhook }),
     ]);
-    const openAfter = memeState.paperTrades.trades.filter(t => t.status === "open").length;
 
-    // Save if paper trades closed OR new milestones were hit (to avoid re-alerting)
-    if (hasDatabase() && (ptResult.closed > 0 || openBefore !== openAfter || msResult.milestones > 0)) {
+    // Always save — currentPrice on open trades changes every tick and must
+    // be persisted so the dashboard shows live P&L, not stale/null prices.
+    if (hasDatabase()) {
       await upsertRuntimeState("meme-autoscan", memeState);
     }
   } catch (err) {
