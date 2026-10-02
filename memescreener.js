@@ -549,6 +549,8 @@ function renderMsPtCard(t) {
         <span class="pos-level-row pos-level--sl"><span class="pos-level-tag">SL</span><span class="pos-level-dist">${toSL > 0 ? toSL + "% away" : "REACHED"}</span><span class="pos-level-price">${fmtPrice(t.sl)}</span></span>
         <span class="pos-level-row pos-level--tp1"><span class="pos-level-tag">TP</span><span class="pos-level-dist">${toTP > 0 ? toTP + "% away" : "REACHED"}</span><span class="pos-level-price">${fmtPrice(t.tp)}</span></span>
       </div>`;
+  } else if (!isClosed) {
+    liveLevelsHtml = `<div class="pos-live-row" style="color:var(--tx-3);font-size:0.75rem">Price unavailable — token may be illiquid or delisted</div>`;
   }
 
   const el = document.createElement("div");
