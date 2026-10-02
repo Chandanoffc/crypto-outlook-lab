@@ -46,8 +46,12 @@ module.exports = async function handler(req, res) {
 
   const baseUrl = inferBaseUrl(req);
   const results = {};
-
   const now = Date.now();
+
+  // Respond immediately so cron-job.org (30s max timeout) always sees a 200.
+  // Vercel keeps the async function alive for up to maxDuration (60s) after the
+  // response is sent, so all scan work continues in the background.
+  buildJsonResponse(res, 200, { ok: true, async: true, startedAt: now });
 
   // EMAPerps scan — sequential, same lock pattern
   try {
@@ -167,5 +171,6 @@ module.exports = async function handler(req, res) {
     results.pons_autoscan = { ok: false, error: String(err.message) };
   }
 
-  return buildJsonResponse(res, 200, { ok: true, scannedAt: Date.now(), results });
+  // Response already sent above — log results for Vercel function logs only
+  console.log("[cron-scan] completed", JSON.stringify({ scannedAt: Date.now(), results }));
 };
