@@ -20,7 +20,7 @@ module.exports = async function handler(req, res) {
   if (req.method !== "GET") return buildJsonResponse(res, 405, { error: "GET only" });
 
   const now     = Date.now();
-  const claimed = await tryClaimMarkLock("meme-papertrades", now, 4 * 60 * 1000);
+  const claimed = await tryClaimMarkLock("meme-papertrades", now, 90 * 1000);
   if (!claimed) return buildJsonResponse(res, 200, { ok: true, skipped: true });
 
   // Respond immediately so cron-job.org (30s max timeout) always sees a 200.
