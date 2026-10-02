@@ -19,16 +19,11 @@ function buildJsonResponse(res, statusCode, payload) {
 module.exports = async function handler(req, res) {
   if (req.method !== "GET") return buildJsonResponse(res, 405, { error: "GET only" });
 
-  const now     = Date.now();
-  const claimed = await tryClaimMarkLock("meme-papertrades", now, 90 * 1000);
-  if (!claimed) return buildJsonResponse(res, 200, { ok: true, skipped: true });
-
-  // Respond immediately so cron-job.org (30s max timeout) always sees a 200.
-  // Vercel keeps the async function alive for up to maxDuration (60s) after the
-  // response is sent, so the actual price-checking work continues in the background.
-  buildJsonResponse(res, 200, { ok: true, async: true });
-
   try {
+    const now     = Date.now();
+    const claimed = await tryClaimMarkLock("meme-papertrades", now, 90 * 1000);
+    if (!claimed) return buildJsonResponse(res, 200, { ok: true, skipped: true });
+
     let memeState = memeDefault();
     const msRow   = hasDatabase() ? await getRuntimeState("memescreener") : null;
     const webhook = msRow?.state?.settings?.discordWebhook || "";
@@ -40,19 +35,17 @@ module.exports = async function handler(req, res) {
 
     if (!memeState.paperTrades) memeState.paperTrades = { balance: 100, trades: [] };
 
-    // Run both in parallel — milestone alerts + paper trade TP/SL checks
-    const openBefore = memeState.paperTrades.trades.filter(t => t.status === "open").length;
+    // Run milestone alerts + paper trade TP/SL checks in parallel
     const [, msResult] = await Promise.all([
       checkPaperTrades(memeState.paperTrades),
       checkMemeMilestones(memeState, { webhook }),
     ]);
 
-    // Always save — currentPrice on open trades changes every tick and must
-    // be persisted so the dashboard shows live P&L, not stale/null prices.
-    if (hasDatabase()) {
-      await upsertRuntimeState("meme-autoscan", memeState);
-    }
+    // Always save — currentPrice on open trades changes every tick
+    if (hasDatabase()) await upsertRuntimeState("meme-autoscan", memeState);
+
+    return buildJsonResponse(res, 200, { ok: true, milestones: msResult?.milestones ?? 0 });
   } catch (err) {
-    console.error("[meme-mark] background error:", err.message);
+    return buildJsonResponse(res, 500, { ok: false, error: err.message });
   }
 };
