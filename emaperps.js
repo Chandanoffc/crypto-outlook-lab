@@ -617,6 +617,11 @@ function renderReasoningPanel(signal) {
 
   // Position sizing calculator
   const slDistRaw = signal.entryPrice && signal.sl ? Math.abs(signal.entryPrice - signal.sl) : 0;
+  // R-multiples derived live from the signal's own levels rather than hardcoded,
+  // so the label stays correct if the SL/TP sizing rules change (see FIXED_SL_PCT
+  // etc. in emaperps-runtime.js — currently 1.5% SL / 3% TP1 / 6% TP2 = 2R / 4R).
+  const tp1RMult = slDistRaw > 0 && signal.tp1 ? (Math.abs(signal.tp1 - signal.entryPrice) / slDistRaw).toFixed(1) : null;
+  const tp2RMult = slDistRaw > 0 && signal.tp2 ? (Math.abs(signal.tp2 - signal.entryPrice) / slDistRaw).toFixed(1) : null;
   const calcId = `ps-${signal.id.replace(/[^a-z0-9]/gi, "")}`;
 
   // Pre-trade checklist
@@ -650,8 +655,8 @@ function renderReasoningPanel(signal) {
       <div class="reasoning-section-title">Trade Levels</div>
       <div class="reasoning-rows">
         <div class="reasoning-row"><span class="reasoning-row-label">Entry</span><span class="reasoning-row-value">${fp(signal.entryPrice, prec)}</span></div>
-        <div class="reasoning-row"><span class="reasoning-row-label">TP1 (+2.5R)</span><span class="reasoning-row-value up">${fp(signal.tp1, prec)}</span></div>
-        <div class="reasoning-row"><span class="reasoning-row-label">TP2 (+5R)</span><span class="reasoning-row-value up">${fp(signal.tp2, prec)}</span></div>
+        <div class="reasoning-row"><span class="reasoning-row-label">TP1${tp1RMult ? ` (+${tp1RMult}R)` : ""}</span><span class="reasoning-row-value up">${fp(signal.tp1, prec)}</span></div>
+        <div class="reasoning-row"><span class="reasoning-row-label">TP2${tp2RMult ? ` (+${tp2RMult}R)` : ""}</span><span class="reasoning-row-value up">${fp(signal.tp2, prec)}</span></div>
         <div class="reasoning-row"><span class="reasoning-row-label">SL (−${slDist}%)</span><span class="reasoning-row-value down">${fp(signal.sl, prec)}</span></div>
       </div>
     </div>

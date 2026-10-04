@@ -123,46 +123,8 @@ function patternBreakdown(signals = []) {
 
 // ─── Suggestion engine ────────────────────────────────────────────────────────
 
-function generateSuggestions(cpSig, cpPaper, epSig, epPaper, epPatterns, cpTiers, epTiers) {
+function generateSuggestions(epSig, epPaper, epPatterns, epTiers) {
   const suggestions = [];
-
-  // ── Claudeperps signal quality ──
-  if (cpSig.winRate != null && cpSig.winRate < 40 && cpSig.resolved.length >= 5) {
-    suggestions.push({ strategy: "Claudeperps", severity: "⚠️", text: `Win rate is ${cpSig.winRate}% on ${cpSig.resolved.length} resolved signals — consider raising MIN_ALERT_QUALITY from 78 to 82.` });
-  }
-  if (cpSig.winRate != null && cpSig.winRate >= 65 && cpSig.resolved.length >= 5) {
-    suggestions.push({ strategy: "Claudeperps", severity: "✅", text: `Strong win rate ${cpSig.winRate}% — strategy is performing well. No changes needed.` });
-  }
-  if (cpSig.tp2Rate != null && cpSig.tp2Rate >= 50) {
-    suggestions.push({ strategy: "Claudeperps", severity: "💡", text: `TP2 hit rate is ${cpSig.tp2Rate}% — price is consistently reaching the full target. Consider raising TP2 from 5× to 6×ATR for bigger wins.` });
-  }
-  if (cpSig.tp2Rate != null && cpSig.tp2Rate <= 20 && cpSig.resolved.length >= 6) {
-    suggestions.push({ strategy: "Claudeperps", severity: "💡", text: `TP2 hit rate is only ${cpSig.tp2Rate}% — price rarely reaches the full target. Consider tightening TP2 from 5×ATR to 4×ATR to capture more wins.` });
-  }
-  if (cpSig.pending.length > 5) {
-    suggestions.push({ strategy: "Claudeperps", severity: "💡", text: `${cpSig.pending.length} signals pending outcome — outcome tracking is working but many signals haven't resolved yet. Normal if recently deployed.` });
-  }
-  if (cpSig.last24h.length === 0) {
-    suggestions.push({ strategy: "Claudeperps", severity: "⚠️", text: `No new signals in the last 24h — check that the background scanner is running and ATR filter isn't too restrictive.` });
-  }
-
-  // ── Claudeperps paper trade ──
-  if (cpPaper.pf != null && cpPaper.pf < 1.0 && cpPaper.closed.length >= 5) {
-    suggestions.push({ strategy: "Claudeperps", severity: "⚠️", text: `Profit factor is ${cpPaper.pf.toFixed(2)} — losing more than winning. Review SL placement; current SL at ~1×ATR may be too tight for the 3-5×ATR targets.` });
-  }
-  if (cpPaper.winRate != null && cpPaper.winRate < 35 && cpPaper.closed.length >= 8) {
-    suggestions.push({ strategy: "Claudeperps", severity: "⚠️", text: `Paper win rate ${cpPaper.winRate}% on ${cpPaper.closed.length} trades. With 3:1 R:R you need >25% to profit, but 35%+ is healthier. Consider adding volume confirmation as a hard filter.` });
-  }
-
-  // ── Claudeperps quality tiers ──
-  cpTiers.forEach(t => {
-    if (t.winRate != null && t.winRate <= 30 && t.count >= 3) {
-      suggestions.push({ strategy: "Claudeperps", severity: "⚠️", text: `Quality tier ${t.label}: only ${t.winRate}% win rate on ${t.count} signals (${t.wins}W/${t.losses}L). These low-quality signals are dragging down results — raise the floor.` });
-    }
-    if (t.winRate != null && t.winRate >= 70 && t.count >= 3) {
-      suggestions.push({ strategy: "Claudeperps", severity: "✅", text: `Quality tier ${t.label}: ${t.winRate}% win rate on ${t.count} signals. Elite tier — consider increasing position sizing for these.` });
-    }
-  });
 
   // ── EMAPerps signal quality ──
   if (epSig.winRate != null && epSig.winRate < 40 && epSig.resolved.length >= 5) {
@@ -183,21 +145,16 @@ function generateSuggestions(cpSig, cpPaper, epSig, epPaper, epPatterns, cpTiers
   }
 
   // ── $100→$1000 challenge ──
-  if (cpPaper.daysToTarget != null && cpPaper.daysToTarget <= 14) {
-    suggestions.push({ strategy: "Challenge", severity: "🎯", text: `At current pace Claudeperps reaches $1000 in ~${cpPaper.daysToTarget} days. Stay consistent and avoid overriding signals.` });
-  }
   if (epPaper.daysToTarget != null && epPaper.daysToTarget <= 14) {
     suggestions.push({ strategy: "Challenge", severity: "🎯", text: `At current pace EMAPerps reaches $1000 in ~${epPaper.daysToTarget} days.` });
   }
-  if ((cpPaper.daysToTarget == null || cpPaper.daysToTarget > 30) &&
-      (epPaper.daysToTarget == null || epPaper.daysToTarget > 30) &&
-      (cpPaper.closed.length + epPaper.closed.length) > 5) {
+  if ((epPaper.daysToTarget == null || epPaper.daysToTarget > 30) && epPaper.closed.length > 5) {
     suggestions.push({ strategy: "Challenge", severity: "⚠️", text: `Current daily gain rate is too slow for the $100→$1000 target in 2 weeks. Signal quality and target sizing need to improve, or trade frequency needs to increase.` });
   }
 
   // Fallback if no data yet
-  if (cpSig.alerted.length === 0 && epSig.alerted.length === 0) {
-    suggestions.push({ strategy: "General", severity: "💡", text: `No alerted signals recorded yet — make sure Discord webhook is configured on both pages and the quality gate is passing. Run a manual scan to verify.` });
+  if (epSig.alerted.length === 0) {
+    suggestions.push({ strategy: "General", severity: "💡", text: `No alerted signals recorded yet — make sure Discord webhook is configured and the quality gate is passing. Run a manual scan to verify.` });
   }
 
   return suggestions;
@@ -217,20 +174,11 @@ function challengeBar(balance, target = CHALLENGE_TARGET, start = CHALLENGE_STAR
   return `[${bar}] ${Math.round(pct * 100)}%`;
 }
 
-function buildDiscordMessage(cpSig, cpPaper, epSig, epPaper, epPatterns, suggestions, runDate) {
+function buildDiscordMessage(epSig, epPaper, epPatterns, suggestions, runDate) {
   const lines = [];
 
   lines.push(`📊 **SOLORIS DAILY REPORT** — ${runDate}`);
   lines.push("```");
-
-  // ── Claudeperps ──
-  lines.push("CLAUDEPERPS (Multi-TF Momentum)");
-  lines.push(`  Alerted: ${cpSig.alerted.length}  Resolved: ${cpSig.resolved.length}  Pending: ${cpSig.pending.length}`);
-  lines.push(`  Win Rate: ${cpSig.winRate != null ? cpSig.winRate + "%" : "–"}  TP2 Rate: ${cpSig.tp2Rate != null ? cpSig.tp2Rate + "%" : "–"}  Avg Q: ${cpSig.avgQ != null ? "Q" + cpSig.avgQ : "–"}`);
-  lines.push(`  24h signals: ${cpSig.last24h.length}`);
-  lines.push(`  Paper: $${cpPaper.balance.toFixed(2)} (${fPct(cpPaper.totalReturn)})  Trades: ${cpPaper.closed.length}  WR: ${cpPaper.winRate != null ? cpPaper.winRate + "%" : "–"}  PF: ${cpPaper.pf != null ? (cpPaper.pf >= 99 ? "∞" : cpPaper.pf.toFixed(2)) : "–"}`);
-  if (cpPaper.avgWin != null)  lines.push(`  Avg Win: ${fPct(cpPaper.avgWin)}  Avg Loss: ${fPct(cpPaper.avgLoss)}`);
-  lines.push("");
 
   // ── EMAPerps ──
   lines.push("EMA PERPS (EMA Pullback)");
@@ -254,13 +202,7 @@ function buildDiscordMessage(cpSig, cpPaper, epSig, epPaper, epPatterns, suggest
   // ── $100→$1000 Challenge ──
   lines.push("🎯 **$100 → $1000 CHALLENGE**");
   lines.push("```");
-  lines.push(`Claudeperps: $${cpPaper.balance.toFixed(2)} / $${CHALLENGE_TARGET}`);
-  lines.push(challengeBar(cpPaper.balance));
-  if (cpPaper.daysToTarget != null && cpPaper.dailyAvgGain > 0) {
-    lines.push(`Projected: ~${cpPaper.daysToTarget} days at current rate ($${cpPaper.dailyAvgGain.toFixed(2)}/day)`);
-  }
-  lines.push("");
-  lines.push(`EMA Perps:    $${epPaper.balance.toFixed(2)} / $${CHALLENGE_TARGET}`);
+  lines.push(`EMA Perps: $${epPaper.balance.toFixed(2)} / $${CHALLENGE_TARGET}`);
   lines.push(challengeBar(epPaper.balance));
   if (epPaper.daysToTarget != null && epPaper.dailyAvgGain > 0) {
     lines.push(`Projected: ~${epPaper.daysToTarget} days at current rate ($${epPaper.dailyAvgGain.toFixed(2)}/day)`);
@@ -312,9 +254,9 @@ module.exports = async function handler(req, res) {
     const epPatterns = patternBreakdown(epState.signals || []);
     const epTiers    = qualityTierBreakdown(epState.signals || []);
 
-    const suggestions = generateSuggestions({}, {}, epSig, epPaper, epPatterns, {}, epTiers);
+    const suggestions = generateSuggestions(epSig, epPaper, epPatterns, epTiers);
     const runDate     = new Date().toISOString().slice(0, 10);
-    const message     = buildDiscordMessage({}, {}, epSig, epPaper, epPatterns, suggestions, runDate);
+    const message     = buildDiscordMessage(epSig, epPaper, epPatterns, suggestions, runDate);
 
     // Send to Discord
     const webhook = String(process.env.UPBIT_DISCORD_WEBHOOK || process.env.DISCORD_WEBHOOK || "").trim();
