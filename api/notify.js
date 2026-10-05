@@ -517,7 +517,7 @@ function createPerpsEntryFrame(event) {
   if (reasonRaw) drawCenteredText(frame, sanitizeBannerText(reasonRaw), 258, 1, 7);
 
   // Footer right: strategy label
-  const ftLabel = sanitizeBannerText(event?.strategy || "CLAUDEPERPS", "CLAUDEPERPS");
+  const ftLabel = sanitizeBannerText(event?.strategy || "EMA PERPS", "EMA PERPS");
   const ftw = measureTextWidth(ftLabel, 1);
   drawText(frame, ftLabel, BANNER_WIDTH - 92 - ftw, BANNER_HEIGHT - 51, 1, 4);
 
@@ -554,7 +554,7 @@ function createTp1Frame(event) {
     drawCenteredText(frame, priceStr, 264, 1, 7);
   }
 
-  const ftLabel = sanitizeBannerText(event?.strategy || "CLAUDEPERPS", "CLAUDEPERPS");
+  const ftLabel = sanitizeBannerText(event?.strategy || "EMA PERPS", "EMA PERPS");
   drawText(frame, ftLabel, BANNER_WIDTH - 92 - measureTextWidth(ftLabel, 1), BANNER_HEIGHT - 51, 1, 14);
   return frame;
 }
@@ -594,7 +594,7 @@ function createTp2Frame(event) {
     drawCenteredText(frame, pnlDisp, 258, 1, 8);
   }
 
-  const ftLabel = sanitizeBannerText(event?.strategy || "CLAUDEPERPS", "CLAUDEPERPS");
+  const ftLabel = sanitizeBannerText(event?.strategy || "EMA PERPS", "EMA PERPS");
   drawText(frame, ftLabel, BANNER_WIDTH - 92 - measureTextWidth(ftLabel, 1), BANNER_HEIGHT - 51, 1, 8);
   return frame;
 }
@@ -646,7 +646,7 @@ function createSlFrame(event) {
     drawCenteredText(frame, priceStr, 252, 1, 7);
   }
 
-  const ftLabel = sanitizeBannerText(event?.strategy || "CLAUDEPERPS", "CLAUDEPERPS");
+  const ftLabel = sanitizeBannerText(event?.strategy || "EMA PERPS", "EMA PERPS");
   drawText(frame, ftLabel, BANNER_WIDTH - 92 - measureTextWidth(ftLabel, 1), BANNER_HEIGHT - 51, 1, 9);
   return frame;
 }
