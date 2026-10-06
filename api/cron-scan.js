@@ -11,8 +11,8 @@ const { hasDatabase, getRuntimeState, upsertRuntimeState, tryClaimScanLock } = r
 const { defaultRuntimeState: epDefault, sanitizeRuntimeState: epSanitize, runEmaPerps_Scan } = require("../lib/emaperps-runtime");
 const { runZenCalls_Scan } = require("../lib/zencalls-scan");
 const { runZenStrategy_Scan, defaultState: zcStratDefault } = require("../lib/zencalls-strategy");
-const { runMemeAutoScan, checkMemeMilestones, defaultState: memeDefault } = require("../lib/meme-autoscan");
-const { checkPaperTrades: checkMemePaperTrades } = require("../lib/meme-papertrades");
+// NOTE: meme autoscan + paper trade checks moved to /api/meme-mark (runs every 2 min)
+// cron-scan no longer touches meme state.
 const { runPonsAutoScan, defaultState: ponsDefault } = require("../lib/pons-autoscan");
 const { checkPaperTrades, calcStats, defaultState: ptDefault } = require("../lib/zencalls-papertrades");
 
@@ -120,30 +120,7 @@ module.exports = async function handler(req, res) {
     results.zencalls_strategy = { ok: false, error: String(err.message) };
   }
 
-  // Meme auto-scan — scans Pump.fun graduates + DexScreener signals
-  try {
-    const claimed = await tryClaimScanLock("meme-autoscan", now, 60_000);
-    if (!claimed) {
-      results.meme_autoscan = { ok: true, skipped: true };
-    } else {
-      let memeState = memeDefault();
-      if (hasDatabase()) {
-        const row = await getRuntimeState("meme-autoscan");
-        if (row?.state) memeState = { ...memeDefault(), ...row.state };
-      }
-      const msRow = hasDatabase() ? await getRuntimeState("memescreener") : null;
-      const webhook = msRow?.state?.settings?.discordWebhook || "";
-      const summary = await runMemeAutoScan(memeState, { webhook });
-      // Check milestones for all previously detected tokens (2x/3x/4x/5x/10x)
-      const milestoneSummary = await checkMemeMilestones(memeState, { webhook });
-      // NOTE: paper trade price checks run ONLY from /api/meme-mark (every 5 min via cron-job.org)
-      // Checking here in the same tick as detection would SL trades before they have a chance to run.
-      if (hasDatabase()) await upsertRuntimeState("meme-autoscan", memeState);
-      results.meme_autoscan = { ok: true, summary, milestones: milestoneSummary };
-    }
-  } catch (err) {
-    results.meme_autoscan = { ok: false, error: String(err.message) };
-  }
+  // NOTE: meme autoscan moved to /api/meme-mark — runs every 2 min via cron-job.org
 
   // Pons / Robinhood Chain — scan for recently graduated tokens
   try {
