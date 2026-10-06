@@ -1,5 +1,61 @@
 # Soloris Signals — Daily Agent Log
 
+## 2026-10-06
+
+**EMAPerps**: ⚠️ Could not fetch live state — same network blocker as the last two days, unresolved. See below.
+
+**BTC**: ⚠️ Could not fetch — see blocker below.
+
+---
+
+### ⚠️ Blocker: network egress policy blocked the health check and performance analysis (day 3)
+
+Same denial as 2026-10-04 and 2026-10-05, confirmed via the agent-proxy status endpoint:
+
+```
+gateway answered 403 to CONNECT (policy denial or upstream failure)
+host: soloris-signals.vercel.app:443
+host: fapi.binance.com:443
+```
+
+Tasks 1 and 3 could not run — no live state, no BTC ticker, no closed-trade data to validate any quality-score or strategy change against. This time the block was broader than before: `WebFetch` to ordinary research articles (trader-dale.com, stratbase.ai, kucoin.com) was also `EGRESS_BLOCKED`, where on 2026-10-04/05 WebFetch had worked fine for research even while the platform/Binance hosts were blocked. `WebSearch` still worked, so Task 2 ran on search-result snippets only — no full-article reads this time.
+
+**Action needed (repeating ask, now a third day)**: in this environment's settings, set Network access to a broader level, or to Custom with `soloris-signals.vercel.app` and `fapi.binance.com` added under Allowed domains, so a future run can complete the health check and performance analysis instead of logging this same blocker again.
+
+---
+
+### Research findings (Task 2)
+
+- EMA-pullback + VWAP trend filter: one backtest source reported the plain EMA20 pullback strategy sits at 48.5% WR on its own, improving to 60% WR when a VWAP-above/below trend filter is added as a gate. This is the most concrete, quantified filter idea surfaced in three days of research — but WebFetch being blocked today meant the exact rule (price-vs-VWAP condition, timeframe, asset class) couldn't be read in full, and it still needs validation against this platform's own closed trades before being implemented. Flagging for backtesting once data access is restored.
+- RSI+MACD confluence: search snippets repeated the same combination this platform already implements in spirit (MACD-direction + RSI-not-overbought timing) — one source claims a 77% WR pairing RSI+MACD, another an EMA/MACD momentum variant at 62% WR / 1.95 PF. These numbers are far above what's realistic for a public strategy and read as marketing copy rather than rigorous backtests; treating with skepticism, not actioning.
+- ADX > 25 as a trend-confirmation gate before trusting MACD/RSI signals continues to be the most consistently-repeated, credible heuristic across all three days of research — matches the existing `adx4h >= 25` bonus and `<18` ranging-skip exactly. No change needed, already implemented.
+- Market structure: QNT (+300% after a tokenized-deposit-settlement selection), SUI, AAVE, and HYPE are the names with real catalysts this week; XRP/DOGE still showing the fastest OI growth. Nothing here changes the existing $200M volume floor or symbol universe — all already within scope of the scanned perp universe.
+- Funding rate edge: same conclusion as prior days — extreme funding (crowded positioning) precedes mean-reversion/squeezes, but there's no universal threshold and it needs OI/liquidation context to be reliable. `fundingRate` is already captured per-signal; still not confident enough to add as a standalone quality bonus without backtesting against real trade data.
+
+### Changes implemented
+
+No trading-logic or quality-score changes — three days running with no closed-trade data to validate any against (same constraint as yesterday and the day before). Found and fixed a real stale-value bug during code review instead:
+
+1. **The breakeven-trigger threshold display was wrong on two different panels and one backtest comment — all three said "25%", but the engine has run at 10% since an earlier commit.** Git history shows `PAPER_BE_TRIGGER_PCT` was lowered from 25 to 10 in a prior commit, but three downstream references were never updated:
+   - `emaperps.js` (open-position card) — the 🛡️ breakeven badge literally rendered `+25% SL→Breakeven` to users watching a live position, when the real trigger that had just fired was 10%. Fixed to `+10%`.
+   - `lib/emaperps-runtime.js` — the comment directly above the `PAPER_BE_TRIGGER_PCT` check still said "crosses +25%". Fixed to say +10% and reference the constant name directly so it can't drift silently again.
+   - `lib/backtest-runtime.js` — the `runtime.PAPER_BE_TRIGGER_PCT || 25` fallback default (dead in practice since the real export is always a truthy 10, but wrong if that ever changed) was corrected to `|| 10`, and a companion comment claiming "~25%/5x = 5% underlying move trigger" was fixed to the correct "~10%/5x = 2%". Also found and removed `beTriggerMovePct`, a variable computed from that same constant but never actually used anywhere in the file — dead code left over from an earlier version of the simulation logic.
+2. **Dead references to the deleted ClaudePerps engine, cleaned up again.** Two more comments in `lib/emaperps-runtime.js` ("identical implementation to claudeperps-runtime — see comments there", "same alignment filter as claudeperps") and two in `lib/backtest-runtime.js` pointed at a `claudeperps-runtime.js` file that was deleted on 2026-09-25 and no longer exists — the "see comments there" reference was actively misleading. Removed the dead pointers and rewrote the backtest-harness comment about dual `candles`/`candles1h` keys to describe it as forward-compatibility for a future second engine rather than referring to one that's gone.
+
+**Considered but deferred** (unchanged reasoning — still no trade data to validate against):
+- EMA-pullback volume-confirmation filter (pullback volume < impulse volume) as a new quality bonus.
+- VWAP-as-trend-filter idea from today's research — concrete and quantified (48%→60% WR in one source) but couldn't be read in full today (WebFetch blocked) and unvalidated against this platform's own trades regardless.
+- Funding-rate-extreme quality bonus.
+- RSI gate widening to a wider "momentum regime" band.
+
+### Watch tomorrow
+
+- **Priority, now repeated three times**: get network access to `soloris-signals.vercel.app` and `fapi.binance.com` restored. Until that happens, Tasks 1 and 3 cannot run and no data-driven strategy change can be made in good conscience.
+- Today's broader WebFetch block (research articles, not just the platform/Binance hosts) is new — worth checking tomorrow whether it's transient or whether the egress allowlist tightened further.
+- Once access is restored and trade data is available: backtest the VWAP-trend-filter idea (48%→60% WR claim) alongside the volume-confirmation filter, funding-rate bonus, and RSI-band widening ideas already queued from prior days — before implementing any of them.
+
+---
+
 ## 2026-10-05
 
 **EMAPerps**: ⚠️ Could not fetch live state — same network blocker as yesterday, unresolved. See below.

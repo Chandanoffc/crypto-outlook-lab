@@ -387,7 +387,7 @@ function renderPaperPositionCard(pos, isClosed = false) {
   const tp1Badge = pos.tp1Reached && !isClosed
     ? `<span class="paper-pos-tp1-badge">TP1 ✓  SL→Breakeven</span>` : "";
   const beBadge  = pos.slMovedToBE && !pos.tp1Reached && !isClosed
-    ? `<span class="paper-pos-tp1-badge paper-pos-be-badge">🛡️ +25%  SL→Breakeven</span>` : "";
+    ? `<span class="paper-pos-tp1-badge paper-pos-be-badge">🛡️ +10%  SL→Breakeven</span>` : "";
 
   return `
     <div class="${cardClass}">
