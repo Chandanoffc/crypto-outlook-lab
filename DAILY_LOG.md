@@ -1,5 +1,59 @@
 # Soloris Signals — Daily Agent Log
 
+## 2026-10-07
+
+**EMAPerps**: ⚠️ Could not fetch live state — same network blocker as the last three days, unresolved. See below.
+
+**BTC**: ⚠️ Could not fetch — see blocker below.
+
+---
+
+### ⚠️ Blocker: network egress policy blocked the health check and performance analysis (day 4)
+
+Same denial as 2026-10-04 through 2026-10-06, re-confirmed today via direct `curl`:
+
+```
+curl: (56) CONNECT tunnel failed, response 403
+host: soloris-signals.vercel.app:443
+host: fapi.binance.com:443
+```
+
+Tasks 1 and 3 could not run — no live state, no BTC ticker, no closed-trade data to validate any quality-score or strategy change against. `WebFetch` to ordinary research articles (kucoin.com, luxalgo.com) was also `EGRESS_BLOCKED` today, same as yesterday's broader block — this is not a one-off, the environment's allowlist is tighter than just the platform/Binance hosts. `WebSearch` still works, so Task 2 ran on search-result snippets only, no full-article reads.
+
+The GitHub Action status check (`gh run list --workflow=daily-digest.yml`) also failed today with a separate error: `HTTP 403: GitHub access to this repository is not enabled for this session` — the `gh` CLI needs the repo attached via `add_repo`, which plain `git clone`/`push` doesn't grant. Not able to confirm the digest workflow's run history today.
+
+**Action needed (repeating ask, now a fourth day)**: in this environment's settings, set Network access to a broader level, or to Custom with `soloris-signals.vercel.app` and `fapi.binance.com` added under Allowed domains. Separately, attaching this repo via `add_repo` with API access would let future runs check GitHub Actions status directly instead of relying on `git`-only access.
+
+---
+
+### Research findings (Task 2)
+
+- **Quantified volume-confirmation rule surfaced today**: one search snippet described a concrete entry filter — current volume ≥1.5× the 20-period volume average, combined with RSI ≥70/≤30 extremes and a minimum candle body (0.15% of price) to avoid doji/low-momentum entries. This is more specific than the vague "pullback volume < impulse volume" idea noted on prior days, but `WebFetch` being blocked meant the source (a LuxAlgo indicator listing) couldn't be read in full, and — importantly — this platform already tried and removed a volume-based quality bonus (see `lib/emaperps-runtime.js`, "Volume bonus removed: volume spikes at S/R are just as often breakdowns as bounces — they added noise and were strongly correlated with Q90 losses"). Any reintroduction needs to be validated against this platform's own closed trades before being added back, not assumed from an unrelated indicator's marketing page.
+- **MACD/RSI confluence**: KuCoin's 2026 guide (snippet only) reiterates combining MACD crossovers with RSI strength and 4H/daily timeframes — directionally consistent with what's already implemented (BTC 4H macro filter + RSI gate + ADX). No new actionable rule.
+- **ADX > 25 as trend confirmation**: continues to be the most consistently-repeated heuristic across four days of research. Matches the existing `adx4h >= 25` bonus / `<18` ranging-skip exactly — no change needed.
+- **Market structure**: HYPE, TRX, ZEC, XLM are the current standout performers; Aster (ASTER) and Avantis (AVNT) also posted strong gains on perp-DEX volume (~$1.1T September volume, +$340B in the first three days of October). Delphi Digital is on record saying the "synchronized altcoin growth" era is over and capital is concentrating in fewer, proven names — a reminder that the $200M volume floor and BTC-macro filter matter more in a narrower market, not less. Nothing here changes the existing volume floor or symbol universe.
+- **Funding rate edge**: same conclusion as the last four days — persistently high positive or deeply negative funding precedes mean-reversion/squeezes, but there's no universal threshold and it needs OI/liquidation context to be reliable alone. `fundingRate` is already captured per-signal; still withholding a standalone quality bonus pending real trade data.
+
+### Changes implemented
+
+No trading-logic or quality-score changes — four days running with no closed-trade data to validate any against. Found one real dead-code issue during code review instead:
+
+1. **`lib/emaperps-runtime.js`** (`detectSignal`, around the fixed-%-SL/TP block) — removed a 5-line comment describing a "guard" against fixed TP1 landing on the wrong side of a structural S/R level, followed by `const slDistance = Math.abs(price - sl);`. The guard logic itself was never implemented (there's no code after the comment that reads `slDistance` or blocks on it anywhere in the file — confirmed via a repo-wide search), and the variable is computed and discarded on every signal. Likely a leftover from an earlier version of the signal-filtering logic that was removed when SL/TP switched to the current fixed-% scheme. No behavior change — this code was already inert — but it was actively misleading (reads like a real filter is in effect when none is).
+
+**Considered but deferred** (unchanged reasoning — still no trade data to validate against):
+- Volume-confirmation filter (today's more specific ≥1.5×-average-volume version, or the earlier "pullback volume < impulse volume" version) — this platform already tested and removed a volume bonus for being noisy/correlated with losses; reintroducing any version needs backtest evidence, not research-article claims.
+- Funding-rate-extreme quality bonus.
+- RSI gate widening to a wider "momentum regime" band.
+
+### Watch tomorrow
+
+- **Priority, now repeated four times**: get network access to `soloris-signals.vercel.app` and `fapi.binance.com` restored. Until that happens, Tasks 1 and 3 cannot run and no data-driven strategy change can be made in good conscience.
+- The broader WebFetch block (research articles beyond the platform/Binance hosts) has now persisted two days in a row — worth flagging to the user as likely a deliberate/tightened policy rather than transient.
+- `gh` CLI has no API access to this repo in this session (`add_repo` needed) — can't check GitHub Actions run history until that's attached, separate from the network-egress issue.
+- Once access is restored and trade data is available: backtest the volume-confirmation filter (now with a concrete ≥1.5× threshold to test), funding-rate bonus, and RSI-band widening ideas before implementing any of them.
+
+---
+
 ## 2026-10-06
 
 **EMAPerps**: ⚠️ Could not fetch live state — same network blocker as the last two days, unresolved. See below.
