@@ -1,5 +1,60 @@
 # Soloris Signals — Daily Agent Log
 
+## 2026-10-08
+
+**EMAPerps**: ⚠️ Could not fetch live state — same network blocker as the last four days, unresolved (day 5). See below.
+
+**BTC**: ⚠️ Could not fetch — see blocker below.
+
+---
+
+### ⚠️ Blocker: network egress policy blocked the health check and performance analysis (day 5)
+
+Same denial as 2026-10-04 through 2026-10-07, reconfirmed today:
+
+```
+curl: (56)
+host: soloris-signals.vercel.app:443 — connect_rejected (gateway 403 to CONNECT, organization policy)
+host: fapi.binance.com:443 — connect_rejected (gateway 403 to CONNECT, organization policy)
+```
+
+`WebFetch` to `soloris-signals.vercel.app` also failed (`ENOTFOUND` — DNS never resolves because the proxy denies the CONNECT). `WebSearch` continues to work (different path), so Task 2 research ran normally. Tasks 1 and 3 could not run — no live state, no BTC ticker, no closed-trade data. `lib/backtest-runtime.js` also calls `fapi.binance.com` directly, so no local backtest was possible either (confirmed by reading the file — it has no offline/fixture data path).
+
+**New this run**: attached the repo via GitHub's `add_repo` (push-scoped), which fixed the `gh`-API 403 noted on 2026-10-07. Confirmed via `gh api .../actions/workflows/.../runs` that the `daily-digest.yml` workflow has run **success** every day 2026-10-04 → 2026-10-07 (runs #126–129) — the crash fix from 2026-10-04 is holding. This does not fix the network-egress block itself; that is a separate, still-unresolved container policy restricting the two hosts above (and apparently `WebFetch` generally, per 2026-10-06/07 notes).
+
+**Action needed (repeating ask, now a fifth day)**: in this environment's settings, set Network access to a broader level, or Custom with `soloris-signals.vercel.app` and `fapi.binance.com` added under Allowed domains, so a future run can complete the health check, performance analysis, and local backtesting instead of logging this same blocker a sixth time.
+
+---
+
+### Research findings (Task 2)
+
+- **EMA-pullback backtests (community, unverified)**: TradingView community scripts self-report 32–45% win rates on BTC/ETH with profit factors of 1.28–1.97, relying on R:R well above 1:1 rather than high hit rate — directionally consistent with this platform's own 2:1/4:1 fixed-% TP1/TP2 design, but none of these are independently verified or crypto-perps-specific for 2026.
+- **MACD+RSI confluence**: a Crypto.com Nov-2024 research note backtests "MACD cross + RSI<30 long / RSI>70 short" on BTC 2020–2024 with fees included and reports it as profitable; this is more rigorous than most TradingView marketing pages but is a vendor's own study, not independently reproduced, and is a mean-reversion RSI gate (extremes) rather than this platform's momentum-zone RSI gate (38–56 long / 44–62 short) — not directly comparable.
+- **ADX>25 as trend-confirmation**: continues to be the most consistently-repeated heuristic across every day of research this week. Matches the existing `adx4h >= 25` bonus / `<18` ranging-skip exactly — no change needed, again.
+- **Funding-rate edge**: same conclusion as every prior day — crowded/extreme funding precedes mean-reversion/squeezes but has no universal threshold and needs OI/liquidation context to be reliable alone. Still unvalidated against this platform's own trades, still not implemented.
+- **Market structure**: ZEC open interest hit a record $2.4B in early September on a price surge that tracked OI closely (leveraged/speculative, not spot-driven) — a textbook case for why a standalone OI/volume spike bonus would be noisy, matching why this platform already removed its old volume bonus. HYPE, TRX, ZEC, XLM, ARB continue to be named as the handful of alts actually showing strength in a narrower 2026 market. Nothing here changes the $200M volume floor or symbol universe.
+
+### Changes implemented
+
+Still no trading-logic or quality-score changes — five days running with no closed-trade data to validate any against. Found and fixed real staleness during code review instead, now that a careful read of the full 1,378-line engine file was possible:
+
+1. **`lib/emaperps-runtime.js` (`detectSignal`)** — removed the `slLevel` variable entirely. It was assigned in all 16 signal branches (A1/A2/B1/B2/C1/C2/D1/D2/E1/E2/F1/F2/P20/P50/Q20/Q50) but never read anywhere — confirmed via a full-file search. The actual SL/TP1/TP2 returned to callers have been flat fixed-% values (1.5%/3.0%/6.0% from entry, uniform across every signal type) since an earlier "fixed % SL/TP" commit; `slLevel` was leftover from before that change and, like the `slDistance` guard removed on 2026-10-07, was actively misleading — it reads like each signal type gets its own structural SL when none of them do. No behavior change (verified: the variable was write-only). Also rewrote the stale comment above the P/Q block, which claimed "SL: structural candle reference ± 0.3×ATR buffer" and referenced "The 1.5×ATR SL floor gate below" — neither of those ever existed in this file (confirmed via grep); replaced with an accurate note that `tp1`/`tp2` here only feed the minimum-target-distance gate, same as the A-F branches.
+2. **User-facing staleness from the same root cause** (`MIN_ALERT_QUALITY` was raised 80→83→95 over time but three "Q80+" labels were never updated): fixed `emaperps.html` (the "Strong Signals" stat-sub, and the Discord-note under the alert toggle — both now say "Q95+") and `emaperps.js` (the "Strong" tab's filter threshold and its empty-state message, `>=80` → `>=95`). Before this fix the "Strong" tab's filter was dead weight — nothing below Q95 is ever stored in `state.signals`, so `>=80` and `>=95` produced identical results today — but the displayed threshold was actively lying to anyone reading it. Also rewrote `emaperps.html`'s "Signal Rules" panel footnote, which told users "SL below S2/above R2 + 0.5 ATR buffer" — untrue since the fixed-% SL/TP change; it now states the real fixed 1.5%/3.0%/6.0% rule.
+3. **`.claude/daily-agent.md`** — the architecture section still documented `MIN_ALERT_QUALITY = 83` (stale since a prior raise to 95) and described TP/SL as ATR-multiple-based "with fixed-% equivalents" (backwards — fixed-% is the only rule now, ATR/structural levels only gate entry timing). Corrected both.
+4. **GitHub Actions visibility**: attached the repo via `add_repo` (see blocker section) so this and future runs can check workflow run history via `gh api` without the 403 noted yesterday.
+
+**Considered but deferred**:
+- `formatAlertMessage`'s quality-tier labels in `lib/emaperps-runtime.js` ("🔥 Elite Setup" ≥93, "⭐ Strong Signal" ≥85, else "Good Signal") have the same root problem as the "Strong Signals" tab: since `MIN_ALERT_QUALITY` is 95, every signal that ever reaches this function is ≥95, so the ≥85 and else branches are now unreachable — every Discord alert says "Elite Setup" regardless of whether it's a 95 or a 118. Fixing the *labels* was safe (above); picking new, meaningful tier boundaries for this 95–118 range is a judgment call that needs the real quality-score distribution of actual signals, which Task 1/3 data (still blocked) would provide. Left as-is rather than guess.
+- Funding-rate-extreme quality bonus, EMA-pullback volume-confirmation filter, RSI-band widening — same reasoning as every prior day: plausible per research, unproven against this platform's own trades, no data available to validate.
+
+### Watch tomorrow
+
+- **Priority, now repeated five times**: get network access to `soloris-signals.vercel.app` and `fapi.binance.com` restored (and confirm whether the broader `WebFetch` block noted 2026-10-06/07 is still in effect). Until that happens, Tasks 1, 3, and local backtesting cannot run.
+- Once access is restored and trade data is available: backtest the volume-confirmation filter, funding-rate bonus, and RSI-band widening ideas, and use the real quality-score distribution to pick new tier boundaries for the "Elite/Strong/Good" Discord labels (deferred above) before changing either.
+- `gh` API access to this repo is now attached for future sessions — workflow-run checks should no longer 403.
+
+---
+
 ## 2026-10-07
 
 **EMAPerps**: ⚠️ Could not fetch live state — same network blocker as the last three days, unresolved. See below.

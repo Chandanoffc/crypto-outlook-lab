@@ -234,7 +234,7 @@ function renderFeed() {
   if (currentTab === "active") {
     filtered = state.signals.filter(s => s.status === "active");
   } else if (currentTab === "strong") {
-    filtered = state.signals.filter(s => s.status === "active" && s.quality >= 80);
+    filtered = state.signals.filter(s => s.status === "active" && s.quality >= 95);
   } else if (currentTab === "all") {
     filtered = state.signals.filter(s => now - s.detectedAt < 86_400_000);
   }
@@ -242,7 +242,7 @@ function renderFeed() {
   if (!filtered.length) {
     const msgs = {
       active: "No active signals right now. Scanner runs every 5 min.",
-      strong: "No strong signals (Q80+) active right now.",
+      strong: "No strong signals (Q95+) active right now.",
       all:    "No signals in the last 24 hours.",
     };
     dom.signalFeed.innerHTML = `<div class="feed-empty"><p>${msgs[currentTab] || "No signals."}</p></div>`;

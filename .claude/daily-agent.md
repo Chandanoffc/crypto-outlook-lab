@@ -10,13 +10,13 @@ You are the daily platform agent for **Soloris Signals**, a crypto perpetuals pa
 - `lib/emaperps-runtime.js` — EMA Pullback: EMA20/50 + S/R confluence (A-F signals) OR pure EMA pullback with wick (P/Q signals)
 
 **Engine config:**
-- `MIN_ALERT_QUALITY = 83` — minimum quality to open a paper trade
+- `MIN_ALERT_QUALITY = 95` — minimum quality to open a paper trade (raised 83→95 after a Q90-94 bucket showed 10% WR / -$19 net across 10 trades; never go below 83 per the hard floor below — check `lib/emaperps-runtime.js`, it has drifted before)
 - `$200M volume floor` — only top-tier liquid perps
 - `5× leverage`, `$100 starting paper balance`
 - BTC 4H EMA20 vs EMA50 = macro filter (blocks counter-trend entries)
 - ADX(14): <18 = skip ranging market, ≥25 = +5 quality bonus
 - TP1 closes 50% of position + trails SL to breakeven. TP2 = full close.
-- SL=candle extreme, TP1=2.5×ATR, TP2=5×ATR (fixed-% equivalents: SL 1.5%, TP1 3.0%, TP2 6.0% — check `lib/emaperps-runtime.js` for current values, they have drifted before)
+- SL/TP1/TP2 are fixed % of entry for every signal type (SL 1.5%, TP1 3.0%, TP2 6.0%) — structural S/R and ATR-based levels only gate *entry* (minimum target distance, touch detection), they no longer set the actual SL/TP. Check `lib/emaperps-runtime.js` for current values, they have drifted before.
 
 **Frontend:** `emaperps.html`, `styles.css`, `emaperps.js`  
 **DB:** NeonDB via `lib/neon-db.js`  
