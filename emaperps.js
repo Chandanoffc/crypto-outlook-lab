@@ -147,7 +147,9 @@ function switchPage(page) {
 // ─── Metrics ─────────────────────────────────────────────────────────────────
 function renderMetrics() {
   const active = state.signals.filter(s => s.status === "active");
-  const strong = active.filter(s => s.quality >= 80);
+  // MIN_ALERT_QUALITY is 95 — every persisted active signal already clears that
+  // floor, so this must match the "Q95+" stat-sub label below it, not a stale 80.
+  const strong = active.filter(s => s.quality >= 95);
   const longs  = active.filter(s => s.side === "Long").length;
   const shorts = active.filter(s => s.side === "Short").length;
   const avgQ   = active.length
@@ -1240,11 +1242,17 @@ function renderStatsTab() {
 
   // Quality tier breakdown
   if (dom.statQTable) {
+    // MIN_ALERT_QUALITY is 95, and the scan loop purges any signal below that
+    // floor on every cycle (see runEmaPerps_Scan), so alertedSigs can only ever
+    // contain quality 95+ — the old 75–89 buckets below the floor were dead
+    // rows that could never show data. Max achievable quality is 85 (highest
+    // base, B2/E2) + 33 (every bonus: RSI+5, wick+5, htfEma+5, htfLevel+8,
+    // multiTested+5, ADX+5) = 118, so these buckets span the real 95–118 range.
     const tiers = [
-      { label: "Q75–79", min: 75, max: 79 },
-      { label: "Q80–84", min: 80, max: 84 },
-      { label: "Q85–89", min: 85, max: 89 },
-      { label: "Q90+",   min: 90, max: 999 },
+      { label: "Q95–99",  min: 95,  max: 99 },
+      { label: "Q100–104", min: 100, max: 104 },
+      { label: "Q105–109", min: 105, max: 109 },
+      { label: "Q110+",   min: 110, max: 999 },
     ];
     const rows = tiers.map(({ label, min, max }) => {
       const sigs = alertedSigs.filter(s => s.quality >= min && s.quality <= max);

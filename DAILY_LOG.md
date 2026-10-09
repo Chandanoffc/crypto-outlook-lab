@@ -1,5 +1,57 @@
 # Soloris Signals — Daily Agent Log
 
+## 2026-10-09
+
+**EMAPerps**: ⚠️ Could not fetch live state — same network blocker as the last five days, unresolved (day 6). See below.
+
+**BTC**: ⚠️ Could not fetch — see blocker below.
+
+---
+
+### ⚠️ Blocker: network egress policy blocked the health check and performance analysis (day 6)
+
+Same denial as 2026-10-04 through 2026-10-08, reconfirmed today via the agent-proxy status endpoint:
+
+```
+gateway answered 403 to CONNECT (policy denial or upstream failure)
+host: soloris-signals.vercel.app:443
+host: fapi.binance.com:443
+```
+
+`WebSearch` continues to work (different path), so Task 2 research ran normally. Tasks 1 and 3 could not run — no live state, no BTC ticker, no closed-trade data. `lib/backtest-runtime.js` calls `fapi.binance.com` directly with no offline/fixture path, so local backtesting was impossible again too.
+
+**This is now a full week of the identical block with no change.** Flagging to the user directly today (push notification) rather than just logging it again, since six consecutive days of "no data-driven change possible" is itself the most important finding of this run — every day's "changes implemented" section below has had to fall back to code-review-only fixes for the same structural reason.
+
+**Action needed (repeating ask, now a sixth day)**: in this environment's settings, set Network access to a broader level, or Custom with `soloris-signals.vercel.app` and `fapi.binance.com` added under Allowed domains, so a future run can complete the health check, performance analysis, and local backtesting instead of logging this same blocker a seventh time.
+
+---
+
+### Research findings (Task 2)
+
+- Reconfirmed across sources (TradingView community backtests, KuCoin's MACD/RSI guide, Kraken's funding-rate writeup): nothing new or more rigorous than what's already been surfaced on each of the past five days. EMA-pullback win rates in the 30–45% range with R:R above 1:1 remain directionally consistent with this platform's own fixed 2:1/4:1 TP1/TP2 design; ADX>25-as-trend-confirmation remains the most consistently-repeated heuristic and already matches `adx4h >= 25` / `<18` exactly; funding-rate extremes remain a crowding/reversal signal with no universal threshold, still unvalidated against this platform's own trades.
+- Live "trending coins this week" and "$500M+ volume altcoins" searches continue to return stale (July/August 2026) or unverifiable results — not a reliable source for real-time market-structure questions; this has been true every day this week. Nothing here changes the $200M volume floor or symbol universe.
+- No new, concrete, quantified filter idea surfaced today beyond what's already queued (volume-confirmation filter, funding-rate bonus, RSI-band widening) — all still blocked on trade-data validation per the reasoning logged every prior day.
+
+### Changes implemented
+
+Still no trading-logic or quality-score changes — six days running with no closed-trade data to validate any against. Found and fixed three real display/doc bugs during code review:
+
+1. **`emaperps.js` (`renderMetrics`)** — the "Strong Signals" header stat tile filtered `quality >= 80`, while its own HTML label (`emaperps.html`, fixed on 2026-10-08) says "Q95+". Since `MIN_ALERT_QUALITY` is 95 and the scan loop purges anything below that floor from `state.signals` every cycle, every persisted active signal is already ≥95 — so this tile has been silently rendering the *exact same number* as the "Active Signals" tile next to it, making it a dead, redundant metric rather than the meaningful subset its label promises. Yesterday's cleanup fixed the analogous tab-filter (`>=80`→`>=95`, line ~237) and the HTML label but missed this metric-tile computation. Fixed to `>= 95`.
+2. **`emaperps.js` (`renderStatsTab`, quality-tier breakdown table)** — the "Q75–79 / Q80–84 / Q85–89 / Q90+" buckets summarized `alertedSigs`, which is derived from `state.signals` — meaning (same root cause as #1) three of the four buckets were *permanently* empty: nothing below quality 95 can ever persist long enough to be counted. Only the catch-all "Q90+" bucket ever showed real data. Recomputed the max achievable quality directly from the scoring code (base 60–85 + every bonus: RSI+5, wick+5, htfEma+5, htfLevel+8, multiTested+5, ADX+5 = +33 → ceiling of 118) and replaced the dead buckets with ones that span the real 95–118 range: Q95–99 / Q100–104 / Q105–109 / Q110+. This is a data-independent fix (derived from the scoring formula, not from live trade correlations) — it doesn't guess at which quality band performs better, it just stops wasting three table rows on a range that can't exist anymore.
+3. **`lib/emaperps-runtime.js` (`formatAlertMessage`)** — the Discord alert's quality-tier label had the identical bug, deferred on 2026-10-08 for lack of a principled basis to pick new boundaries: cutoffs of ≥93 "Elite Setup" / ≥85 "Strong Signal" were both below the 95 floor, so every single Discord alert said "Elite Setup" regardless of whether the signal was a 95 or a 118. Using the same 95–118 range derived for fix #2 above, split it into equal thirds: ≥110 "Elite Setup", ≥100 "Strong Signal", else "Good Signal" (95–99). Same reasoning as #2 — evenly dividing the known valid range, not a performance-based guess.
+4. **`lib/engine-core.js`** — the file's header doc comment described shared utilities for "house-runtime" and "tradez-runtime", and listed five functions (`isClosingTradeEvent`, `hasGoodTradingVolume`, `logActivity`, `fetchUniverseTickers`, `analyzeOrderbook`) as "intentionally not here" because they supposedly differ between those two engines. Confirmed via repo-wide grep: none of `house-runtime.js`, `tradez-runtime.js`, or any of those five function names exist anywhere in this codebase — this was leftover documentation from a naming scheme that predates even ClaudePerps (which itself was removed 2026-09-25). Also confirmed only `emaperps-runtime.js` and `backtest-runtime.js` actually import this module. Rewrote the header to describe what's actually here.
+
+**Considered but deferred** (unchanged reasoning — still no trade data to validate against):
+- Volume-confirmation filter, funding-rate-extreme quality bonus, RSI-band widening — same status as every prior day this week.
+
+### Watch tomorrow
+
+- **Priority, now repeated six times, escalated to a push notification today**: get network access to `soloris-signals.vercel.app` and `fapi.binance.com` restored. Until that happens, Tasks 1, 3, and local backtesting cannot run, and every day's code changes will keep being confined to documentation/display fixes rather than the data-driven strategy work these instructions actually call for.
+- `daily-digest.yml` confirmed **success** every day 2026-10-04 → 2026-10-08 (runs up to #130) — no action needed there.
+- Once access is restored and trade data is available: backtest the volume-confirmation filter, funding-rate bonus, and RSI-band widening ideas queued since 2026-10-04, before implementing any of them.
+
+---
+
 ## 2026-10-08
 
 **EMAPerps**: ⚠️ Could not fetch live state — same network blocker as the last four days, unresolved (day 5). See below.
