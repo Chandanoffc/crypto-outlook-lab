@@ -626,14 +626,18 @@ function renderReasoningPanel(signal) {
   const tp2RMult = slDistRaw > 0 && signal.tp2 ? (Math.abs(signal.tp2 - signal.entryPrice) / slDistRaw).toFixed(1) : null;
   const calcId = `ps-${signal.id.replace(/[^a-z0-9]/gi, "")}`;
 
-  // Pre-trade checklist
+  // Pre-trade checklist — each check reflects the signal's actual data/thresholds
+  // (see emaperps-runtime.js detectSignal) rather than a hardcoded assumption.
   const frVal = signal.fundingRate ?? null;
+  const rsiZoneLabel = isLong ? "RSI in 38–56 zone (recovering, not overbought)" : "RSI in 44–62 zone (rolling off, not oversold)";
+  const rsiZonePass = signal.rsi != null && (isLong ? (signal.rsi >= 38 && signal.rsi <= 56) : (signal.rsi >= 44 && signal.rsi <= 62));
+  const htfAligned = signal.htfTrend != null && (isLong ? signal.htfTrend === "up" : signal.htfTrend === "down");
   const chkItems = [
-    { label: "4H trend aligned with trade direction",  pass: true },
+    { label: signal.htfTrend != null ? "4H trend aligned with trade direction" : "4H trend unconfirmed (data unavailable)", pass: htfAligned },
     { label: "Volume > $200M 24H",                    pass: (signal.volume24h || 0) >= 200e6 },
-    { label: "RSI in 40–65 zone",                     pass: true },
+    { label: rsiZoneLabel,                            pass: rsiZonePass },
     { label: "Funding neutral (< ±0.05%)",             pass: frVal == null || Math.abs(frVal) < 0.0005 },
-    { label: "Level has 2+ prior touches",             pass: true },
+    { label: "Level tested 3+ times",                 pass: reasons.some(r => /Level tested/.test(r)) },
     { label: "SL defined before entry",                pass: !!signal.sl },
     { label: "Position size calculated",               pass: false, interactive: true },
   ];

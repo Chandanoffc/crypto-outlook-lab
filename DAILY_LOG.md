@@ -1,5 +1,52 @@
 # Soloris Signals — Daily Agent Log
 
+## 2026-10-10
+
+**EMAPerps**: ⚠️ Could not fetch live state — same network blocker as the last six days, unresolved (day 7). See below.
+
+**BTC**: ⚠️ Could not fetch — same blocker.
+
+---
+
+### ⚠️ Blocker persists (day 7): network egress policy still blocks the health check and performance analysis
+
+Identical to the prior six days — `soloris-signals.vercel.app` and `fapi.binance.com` are both still denied with `connect_rejected` / "gateway answered 403 to CONNECT" (confirmed again via `/__agentproxy/status`). This also blocks `lib/backtest-runtime.js` / `/api/backtest` (checked today as a possible workaround — it also pulls historical klines from `fapi.binance.com`, so it can't run locally either while this host is denied). `WebSearch` works fine, so Task 2 ran; Tasks 1 and 3 did not, and no live-data-justified quality/strategy change was made, for the same reason as every prior day.
+
+**Action needed (repeating ask, now a full week unresolved)**: in this environment's settings, set Network access to a broader level, or Custom with `soloris-signals.vercel.app` and `fapi.binance.com` added under Allowed domains, so a future run can actually complete the health check, performance analysis, and a real backtest.
+
+### Research findings (Task 2)
+
+Today's searches returned mostly dateless/generic vendor and TradingView-script content — nothing with fresh (2026-10) backtested evidence strong enough to justify a quality/strategy change on its own:
+
+- Self-reported TradingView EMA-pullback scripts show a wide win-rate spread (32–45%) with no independent verification — a reminder that any "validated" backtest claim found via search should be treated as unverified until checked against this platform's own trade data (which is exactly what's blocked).
+- Reconfirmed consensus: combine one trend indicator + one momentum indicator + one volume indicator, avoid stacking overlapping ones — matches the existing EMA/RSI/ADX/volume-floor design, no change indicated.
+- Funding-rate-extreme-as-contrarian-signal claims keep surfacing but remain unquantified/unbacktested against real perps data; same caveat as every prior day.
+- No new market-structure signal found this run — results were mostly stale (2025 or early-2026) altcoin lists already covered in prior entries.
+
+### Changes implemented
+
+No trading-logic or quality-score changes — still no fresh closed-trade data to validate any against. One genuine display bug found and fixed during code review:
+
+1. **`emaperps.js`** (reasoning panel pre-trade checklist) — three of the seven checklist items were hardcoded to always show "pass" regardless of the signal's actual data, and one had a stale threshold:
+   - "RSI in 40–65 zone" was always marked passed and didn't match the engine's real RSI gate (`lib/emaperps-runtime.js`: 38–56 for Long, 44–62 for Short). Now computed from `signal.rsi` against the correct side-specific zone, with the label showing the real range.
+   - "4H trend aligned with trade direction" was always marked passed, even when 4H data was unavailable (the engine degrades gracefully in that case rather than confirming alignment). Now checks `signal.htfTrend` against the trade side, and the label says "unconfirmed (data unavailable)" when there's no 4H read.
+   - "Level has 2+ prior touches" was always marked passed and used the wrong threshold — the actual `multiTestedBonus` in the engine requires 3+ touches, not 2. Relabeled to "Level tested 3+ times" and wired to the signal's own `reasonLabels` (which only contains a "Level tested N×" entry when the real 3+ bonus fired).
+   
+   This is a trader-facing checklist meant to support manual review before taking a signal — showing false "pass" checks on it was actively misleading, independent of any trading-logic change.
+
+**Considered but deferred** (unchanged — still no trade data to validate against):
+- EMA-pullback volume-confirmation filter (pullback volume < impulse volume).
+- Funding-rate-extreme quality bonus.
+- RSI gate widening to the 60–80 "momentum regime" band some research keeps surfacing.
+
+### Watch tomorrow
+
+- **Priority, now unresolved for a full week**: get network access to `soloris-signals.vercel.app` and `fapi.binance.com` restored. This also blocks running `/api/backtest` locally, which was today's attempted workaround — it depends on the same host.
+- Once access is restored: run `/api/backtest` against the live engine before making any quality/strategy change, then cross-check against real closed-trade data from Task 1/3 once those are unblocked too.
+- Re-verify the `daily-digest.yml` GitHub Action is still succeeding (gh CLI lacked repo access this run to check directly; no evidence of a regression, just unconfirmed).
+
+---
+
 ## 2026-10-09
 
 **EMAPerps**: ⚠️ Could not fetch live state — same network blocker as the last five days, unresolved (day 6). See below.
