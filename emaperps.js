@@ -201,12 +201,12 @@ function renderSignalCard(signal) {
           <div class="level-row">
             <span class="level-label">TP1</span>
             <span class="level-value tone-up">${fp(signal.tp1, prec)}</span>
-            <span class="level-meta">${isLong ? "→ R1" : "→ S1"}</span>
+            <span class="level-meta">+3.0%</span>
           </div>
           <div class="level-row">
             <span class="level-label">TP2</span>
             <span class="level-value tone-up">${fp(signal.tp2, prec)}</span>
-            <span class="level-meta">${isLong ? "→ R2" : "→ S2"}</span>
+            <span class="level-meta">+6.0%</span>
           </div>
         </div>
 

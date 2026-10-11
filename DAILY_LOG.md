@@ -1,5 +1,52 @@
 # Soloris Signals — Daily Agent Log
 
+## 2026-10-11
+
+**EMAPerps**: ⚠️ Could not fetch live state — same network blocker, day 8 straight. See below.
+
+**BTC**: ⚠️ Could not fetch — same blocker.
+
+---
+
+### ⚠️ Blocker persists (day 8): network egress policy still blocks the health check and performance analysis
+
+Identical to the prior week — `curl` and `WebFetch` to `soloris-signals.vercel.app` and `fapi.binance.com` both still return `connect_rejected` / "gateway answered 403 to CONNECT" (reconfirmed via `/__agentproxy/status`). Tasks 1 and 3 could not run, and no live-data-justified quality/strategy change was made, for the same reason as every prior day.
+
+One new data point: with GitHub API access attached this run, `gh run list` on this repo shows **Hourly Scan**, **Upbit Listing Alerts**, and **Daily Strategy Digest** all completing with `success` through today — so the live platform itself is up and the cron jobs are running; only *this container's* egress to the platform/Binance hosts is denied, not the platform. Fetching the actual Daily Digest run's logs (to read the performance numbers it posts to Discord) was tried as a workaround but is blocked too — `results-receiver.actions.githubusercontent.com` is a different host and gets the same 403.
+
+**Action needed (repeating ask, now over a week unresolved)**: in this environment's settings, set Network access to a broader level, or Custom with `soloris-signals.vercel.app` and `fapi.binance.com` added under Allowed domains, so a future run can actually complete the health check and performance analysis instead of logging this same blocker an eighth time.
+
+---
+
+### Research findings (Task 2)
+
+- Nothing new and validated surfaced beyond what's already queued from prior days. ADX+MACD combos: one source today explicitly warned the combination "may not produce the expected results" and suggested ADX+Bollinger Bands instead — reinforces not adding an ADX×MACD quality bonus without our own backtest.
+- EMA-pullback backtests found today (TradingView community scripts, self-reported, unverified) cluster around 33-45% WR with profit factor ~1.3 at moderate R:R — consistent with this platform's own fixed 2:1/4:1 R:R design needing a win rate above ~33% breakeven, no new design implication.
+- Funding-rate research reinforced the existing caveat already in this log: no fixed threshold works reliably; the most credible sources recommend comparing current funding to its own 30-day/90-day average rather than an absolute cutoff. Still unvalidated against our own closed trades — not implemented.
+- Market structure research was dated (most recent dataset from August 2026) and conflicting — one source read August as "altcoin contraction," an earlier one read May as "early altseason." Nothing here changes the $200M volume floor or symbol universe.
+
+### Changes implemented
+
+No trading-logic or quality-score changes — still no fresh closed-trade data to validate against. Five surgical doc/display fixes found during code review (verified by a dedicated review pass before applying):
+
+1. **`lib/emaperps-runtime.js`** (module header) — the file's top doc-comment still described the old R1/R2-target, ATR-SL-buffer, 5%/10%-minimum-distance scheme and a "+5 volume" bonus that no longer exist in the code (the engine moved to fixed 1.5%/3.0%/6.0% SL/TP1/TP2 and dropped the volume bonus in earlier commits, per their own inline comments). Rewrote the header to match the real A-F/P-Q signal map, the real bonus list, and the real fixed-% exit scheme — the comment can't drift this far from the code again without someone also touching the header.
+2. **`emaperps.js`** (signal card TP1/TP2 labels) — the UI showed `→ R1`/`→ R2` (or `→ S1`/`→ S2`) next to TP1/TP2, implying the take-profit targets equal the structural S/R levels shown just below in the same card. They don't — TP1/TP2 are always entry ± 3%/6%, fully decoupled from the swing levels since the fixed-% exit scheme shipped. Changed the labels to `+3.0%`/`+6.0%` so the card shows what the trade will actually exit at.
+3. **`emaperps.html`** — the "Strong Signals" stat subtitle read "Q95+ (S2/R2 touch)", implying every Q95+ signal touched a S2/R2 level. False for P/Q EMA-pullback signals (base quality 78-82, no S/R check at all) and for several A-F base qualities that only clear 95 via bonuses. Changed to the accurate "Q95+ signals".
+4. **`api/daily-digest.js`** — the auto-generated low-win-rate Discord suggestion hardcoded "Consider raising MIN_ALERT_QUALITY from 75 to 78", but the live `MIN_ALERT_QUALITY` is 95 (raised from 83, logged 2026-10-08) — if this suggestion ever fires it would tell whoever reads the Discord digest to lower the real floor by 17 points. Imported the real constant from `lib/emaperps-runtime.js` and interpolated it instead of the stale hardcoded numbers.
+5. **`lib/emaperps-runtime.js`** — removed a dead import (`hasDatabase, getRuntimeState, upsertRuntimeState` from `./neon-db`); verified via full-file grep that none of the three are referenced anywhere in the file (state load/save is handled by `api/emaperps.js`, which imports them separately).
+
+**Considered but deferred** (unchanged — still no trade data to validate against):
+- EMA-pullback volume-confirmation filter (pullback volume < impulse volume).
+- Funding-rate-extreme quality bonus, now specifically as "distance from its own 30d/90d average" rather than a fixed threshold.
+- RSI gate widening to the 60–80 "momentum regime" band.
+
+### Watch tomorrow
+
+- **Priority, now 8 days running**: get network access to `soloris-signals.vercel.app` and `fapi.binance.com` restored so Tasks 1 and 3 can finally run. Confirmed today that the platform itself is healthy (cron Actions all green) — this is purely a container egress-policy gap, worth escalating as such.
+- Once access is restored and trade data is available: backtest the funding-rate-vs-own-average idea, the volume-confirmation filter, and the RSI-band widening before implementing any of them.
+
+---
+
 ## 2026-10-10
 
 **EMAPerps**: ⚠️ Could not fetch live state — same network blocker as the last six days, unresolved (day 7). See below.

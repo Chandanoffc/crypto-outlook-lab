@@ -19,6 +19,7 @@
  */
 
 const { hasDatabase, getRuntimeState } = require("../lib/neon-db");
+const { MIN_ALERT_QUALITY } = require("../lib/emaperps-runtime");
 
 const CHALLENGE_TARGET = 1000;
 const CHALLENGE_START  = 100;
@@ -128,7 +129,7 @@ function generateSuggestions(epSig, epPaper, epPatterns, epTiers) {
 
   // ── EMAPerps signal quality ──
   if (epSig.winRate != null && epSig.winRate < 40 && epSig.resolved.length >= 5) {
-    suggestions.push({ strategy: "EMAPerps", severity: "⚠️", text: `Win rate is ${epSig.winRate}% on ${epSig.resolved.length} resolved signals — below breakeven for 2:1 R:R. Consider raising MIN_ALERT_QUALITY from 75 to 78.` });
+    suggestions.push({ strategy: "EMAPerps", severity: "⚠️", text: `Win rate is ${epSig.winRate}% on ${epSig.resolved.length} resolved signals — below breakeven for 2:1 R:R. Consider raising MIN_ALERT_QUALITY from ${MIN_ALERT_QUALITY} further.` });
   }
   if (epSig.last24h.length === 0) {
     suggestions.push({ strategy: "EMAPerps", severity: "⚠️", text: `No new signals in the last 24h — the 10% R2 minimum distance filter may be too restrictive for current market conditions.` });
