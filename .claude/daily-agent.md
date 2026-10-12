@@ -29,7 +29,7 @@ You are the daily platform agent for **Soloris Signals**, a crypto perpetuals pa
 - Flat UI only — no gradients, no shadows, no blur
 
 **Key numbers:**
-- Q83 = minimum paper trade, Q90+ = elite setup (max size)
+- Q95 = minimum paper trade (MIN_ALERT_QUALITY), Q110+ = max conviction-weighted size (PAPER_SIZE_QUALITY_CEIL, fixed 2026-10-12 — it had drifted to 92, *below* the 95 floor, silently maxing out every trade's size for ~7 weeks)
 - EMAPerps: baseQuality 60–85 by signal type, +5 RSI, +5 wick, +5 HTF EMA, +8 HTF level, +5 multi-tested, +5 ADX
 
 ---

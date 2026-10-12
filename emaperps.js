@@ -110,6 +110,8 @@ function timeAgo(ts) {
   return new Date(ts).toLocaleDateString();
 }
 
+// Used by the Scanner/Analysis tabs, which can show raw detectSignal() output
+// below MIN_ALERT_QUALITY (95) — these thresholds span that full lower range.
 function qualityClass(q) {
   if (q >= 80) return "quality-high";
   if (q >= 70) return "quality-good";
@@ -120,6 +122,25 @@ function qualityLabel(q) {
   if (q >= 80) return "Strong Signal";
   if (q >= 70) return "Good Signal";
   return "Valid Signal";
+}
+
+// Used by the main signal feed card, which only ever shows state.signals —
+// always >= MIN_ALERT_QUALITY (95), since the scan loop purges anything below
+// that floor. qualityClass/qualityLabel's 70/80 thresholds are both beneath
+// that floor, so every feed card collapsed to the same "Strong Signal" label
+// regardless of actual quality (95 vs 118) — same dead-branch bug already
+// fixed in formatAlertMessage's Discord tier labels. Mirrors that fix's
+// Elite/Strong/Good split of the real 95–118 achievable range.
+function activeQualityClass(q) {
+  if (q >= 110) return "quality-high";
+  if (q >= 100) return "quality-good";
+  return "quality-ok";
+}
+
+function activeQualityLabel(q) {
+  if (q >= 110) return "Elite Setup";
+  if (q >= 100) return "Strong Signal";
+  return "Good Signal";
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -182,9 +203,9 @@ function renderSignalCard(signal) {
             <span class="sc-interval">${signal.interval || "1h"}</span>
             ${signal.htfTrend ? `<span class="sc-htf-badge sc-htf--${signal.htfTrend}">4H ${signal.htfTrend === "up" ? "↑" : "↓"}${signal.htfLevelBonus ? " S/R" : ""}${signal.htfEmaBonus ? " EMA" : ""}</span>` : ""}
           </div>
-          <div class="sc-quality ${qualityClass(signal.quality)}">
+          <div class="sc-quality ${activeQualityClass(signal.quality)}">
             <span class="quality-score">Q${signal.quality}</span>
-            <span class="quality-label">${qualityLabel(signal.quality)}</span>
+            <span class="quality-label">${activeQualityLabel(signal.quality)}</span>
           </div>
         </div>
 

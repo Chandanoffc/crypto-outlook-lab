@@ -1,5 +1,47 @@
 # Soloris Signals — Daily Agent Log
 
+## 2026-10-12
+
+**EMAPerps**: ⚠️ Could not fetch live state — same network blocker as the last eight days, unresolved (day 9). See below.
+
+**BTC**: ⚠️ Could not fetch — same blocker.
+
+---
+
+### ⚠️ Blocker persists (day 9): network egress policy still blocks the health check and performance analysis
+
+Identical to every prior day since 2026-10-04 — `curl` to both `soloris-signals.vercel.app:443` and `fapi.binance.com:443` returns `connect_rejected` ("gateway answered 403 to CONNECT"), reconfirmed via `/__agentproxy/status`. `WebSearch` still works; `WebFetch` to ordinary research articles also worked today. Tasks 1 and 3 could not run — no live state, no BTC ticker, no closed-trade data, for the ninth day running.
+
+This was already escalated with a push notification on day 6 (2026-10-09) with no apparent change. Not re-sending the identical ask today to avoid notification fatigue on an already-flagged issue — but noting here that it remains unresolved three days after that escalation, and today's run found something that makes the lack of real trade data more costly than a documentation gap: see below.
+
+**Action needed (still unresolved)**: in this environment's settings, set Network access to a broader level, or Custom with `soloris-signals.vercel.app` and `fapi.binance.com` added under Allowed domains.
+
+---
+
+### Research findings (Task 2)
+
+Nothing new and sufficiently rigorous to act on beyond what's already queued from the past eight days (same searches, same vendor/TradingView-script-quality sources, no fresh 2026-10 backtested evidence). Reconfirmed: ADX>25-as-trend-confirmation remains the most consistently-repeated, credible heuristic and already matches `adx4h >= 25`/`<18` exactly; funding-rate extremes remain a plausible but unquantified reversal signal; EMA-pullback public backtests continue to cluster in the 30-45% WR / R:R>1.5 range, consistent with this platform's fixed 2:1/4:1 design. No new market-structure or indicator-combination idea strong enough to implement without trade-data validation.
+
+### Changes implemented
+
+No trading-logic/quality-score changes (still no closed-trade data to validate against — ninth day). Found and fixed one **real, non-cosmetic bug** during code review, plus one related display fix:
+
+1. **`lib/emaperps-runtime.js` — conviction-weighted position sizing has been completely disabled since 2026-08-20.** `qualityWeightedSizePct()` linearly scales paper-trade size between `PAPER_SIZE_MIN_PCT` (7%) at the quality floor and `PAPER_SIZE_MAX_PCT` (14%) at `PAPER_SIZE_QUALITY_CEIL`, *if* `span = PAPER_SIZE_QUALITY_CEIL - MIN_ALERT_QUALITY > 0`. Commit `691d053` (2026-08-20) raised `MIN_ALERT_QUALITY` from 83→95 but never touched `PAPER_SIZE_QUALITY_CEIL`, which was still 92 — three points *below* the new floor. That makes `span` permanently negative, so the `span > 0` branch is always false and `t` is hardcoded to `1` for every signal: **every single paper trade for the past ~7 weeks has been sized at the maximum 14% of balance, regardless of whether it was a bare-floor Q95 setup or a maxed-out Q118 one.** This is derivable purely from the constants' own arithmetic (95 > 92), not from live trade data, so it was safe to fix without Task 1/3 access. Raised `PAPER_SIZE_QUALITY_CEIL` to **110** — the "Elite Setup" tier boundary (see #2 below), restoring real scaling across the quality range (verified: Q95→7.0%, Q100→9.3%, Q105→11.7%, Q110+→14.0%).
+2. **`emaperps.js` — the main signal feed card had the identical dead-branch bug** already fixed elsewhere (Discord tier labels on 2026-10-08, stat-tier buckets on 2026-10-09) but missed here: `qualityClass`/`qualityLabel` used 80/70 thresholds, both below the 95 alert floor, so every card on the primary dashboard showed "Strong Signal" (green) whether the signal was a 95 or a 118 — no differentiation at the only place most users actually look. Added `activeQualityClass`/`activeQualityLabel`, mirroring `formatAlertMessage`'s existing Elite(≥110)/Strong(≥100)/Good(else) split of the real 95–118 achievable range, and wired the feed card to use them. Left the original `qualityClass`/`qualityLabel` (70/80 thresholds) in place for the Scanner and Analysis tabs, which show raw `detectSignal()` output that can genuinely be below 95 — those thresholds are still meaningful there.
+3. **`.claude/daily-agent.md`** — "Key numbers" still said "Q83 = minimum paper trade, Q90+ = elite setup", stale on both counts (floor is 95, not 83; old sizing ceiling was 92, not 90, and is now 110). Corrected and noted the fix.
+
+Both fixes verified by running the actual functions (`node -e` against the live module, not just reading the code) — confirmed the sizing bug reproduced under the old constant and resolved under the new one.
+
+**Considered but deferred** (unchanged — still no trade data to validate against):
+- EMA-pullback volume-confirmation filter, funding-rate-extreme quality bonus (vs. 30d/90d own-average), RSI-band widening.
+- Whether 110 is the *right* ceiling (vs. e.g. 100 or 105) for the sizing fix — 110 was chosen principledly (matches the Elite tier already derived from the scoring formula) but is itself unvalidated against real win-rate-by-quality data. Worth revisiting once Task 1/3 access returns.
+
+### Watch tomorrow
+
+- Network blocker now 9 days unresolved; already escalated once (day 6). Will re-escalate if it crosses two full weeks with no action, rather than repeating the same push notification daily.
+- Once access is restored: the position-sizing bug fixed today means **every closed trade since 2026-08-20 was sized at max conviction** — when real trade data becomes available, keep that in mind when reading historical P&L (it doesn't reflect what sizing *should* have been for lower-quality signals in that window).
+- Re-validate the 110 sizing-ceiling choice against real quality-vs-win-rate data once available.
+
 ## 2026-10-11
 
 **EMAPerps**: ⚠️ Could not fetch live state — same network blocker, day 8 straight. See below.
