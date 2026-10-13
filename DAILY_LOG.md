@@ -1,5 +1,53 @@
 # Soloris Signals — Daily Agent Log
 
+## 2026-10-13
+
+**EMAPerps**: ⚠️ Could not fetch live state — same network blocker as the last nine days, unresolved (day 10). See below.
+
+**BTC**: ⚠️ Could not fetch — same blocker.
+
+---
+
+### ⚠️ Blocker persists (day 10): network egress policy still blocks the health check and performance analysis
+
+Identical to every prior day since 2026-10-04 — `curl` to both `soloris-signals.vercel.app:443` and `fapi.binance.com:443` returns `connect_rejected` ("gateway answered 403 to CONNECT", organization policy), confirmed again today. `WebSearch` still works; `WebFetch` to ordinary research articles (kraken.com, tradingview.com, kucoin.com) was `ENOTFOUND`/blocked today too — back to the narrower-research-access pattern seen on 2026-10-06/08, not the broader access seen on 2026-10-10/12. Tasks 1 and 3 could not run — no live state, no BTC ticker, no closed-trade data, for the tenth day running.
+
+Per the plan set in yesterday's entry, not re-escalating with another push notification today (last one was day 6, 2026-10-09) — will escalate again if this crosses two full weeks (2026-10-18) with still no change.
+
+**Action needed (still unresolved)**: in this environment's settings, set Network access to a broader level, or Custom with `soloris-signals.vercel.app` and `fapi.binance.com` added under Allowed domains.
+
+---
+
+### Research findings (Task 2)
+
+`WebFetch` being blocked again meant no full-article reads today — Task 2 ran on `WebSearch` result snippets only, same constraint as 2026-10-06/08:
+
+- Nothing new or rigorous enough to act on beyond what's queued from the past nine days. EMA-pullback community backtests (TradingView, self-reported, unverified) continue to cluster at 32–45% WR with profit factor 1.3–2.0 at R:R above 1.5:1 — still directionally consistent with this platform's fixed 2:1/4:1 TP1/TP2 design.
+- Funding-rate research reconfirmed the same caveat repeated all nine prior days: Kraken's own writeup (read in snippet form only) recommends comparing current funding to its 30-day/90-day average rather than a fixed threshold — still unvalidated against this platform's own trades, still not implemented.
+- ADX > 25 as a trend-confirmation gate remains the most consistently-repeated heuristic across ten days of research and already matches `adx4h >= 25` / `<18` exactly — no change needed, again.
+- Market-structure searches returned mostly dateless or stale (pre-2026, or already-covered May/August 2026) results — SUI/SWEAT/ZANO and BTC/ETH/SOL/TAO/FET/Nexo repeat prior days' findings. Nothing here changes the $200M volume floor or symbol universe.
+
+### Changes implemented
+
+No trading-logic or quality-score changes — tenth day running with no closed-trade data to validate any against. Found and fixed two real, non-cosmetic display bugs during code review, both in `emaperps.js`, both the same root-cause pattern as several bugs fixed on 2026-10-08/09/12 (code that pre-dates the `MIN_ALERT_QUALITY` 83→95 raise and the resulting 95–118 achievable-quality range, never updated to match):
+
+1. **`renderReasoningPanel`'s per-signal "Quality" bar** (the detail panel shown when a trader clicks a signal card) — labeled the score `${q}/100` and capped the fill bar at `Math.min(q,100)%`, implying 100 is the maximum possible score. It isn't: this panel only ever renders a signal from `state.signals`, which the scan loop guarantees is always ≥95 (`MIN_ALERT_QUALITY`), and the real achievable ceiling is 118 (85 highest base quality + 33 from every bonus stacking — RSI+5, wick+5, htfEma+5, htfLevel+8, multiTested+5, ADX+5). So every signal from Q100 to Q118 rendered as an identical maxed-out bar, and the color cutoffs (`q>=90` amber / `q>=85` green / else blue) had the same dead-branch problem as the already-fixed Discord tier labels and feed-card quality class — the 85 and "else" branches are unreachable once every signal is ≥95, so this panel's bar was *always* amber. Rescaled the bar to the real 95–118 range and reused the existing `activeQualityLabel()`/color split (Elite ≥110 green, Strong ≥100 amber, Good 95–99 gray) that was already fixed for the feed card on 2026-10-12, instead of maintaining a third, inconsistent quality-tier scheme in a third place.
+2. **The "Test Alerts" feature's fake signal** (`EP_TEST_FAKE_EVENT` / `EP_TEST_EVENT_OVERRIDES` / `EP_TEST_TITLES`) — this sends a real Discord message through the live `/api/notify` pipeline so an operator can confirm their webhook works and preview what an alert looks like. The fake signal was stale on two independent counts: (a) `qualityScore: 80` with the title saying "Q80", while the real floor is 95 — no genuine alert can ever be below 95, and the fixture's own `qualificationReason` text even said "Q85" internally, contradicting its own `qualityScore: 80`; (b) the fake entry/SL/TP1/TP2 prices (3750/3620/3920/4100) and their `pnlPct` overrides (4.53%/9.33%/-3.47%) were leftover from the old ATR/structural-level TP scheme — they don't match the engine's current fixed 1.5%/3.0%/6.0% SL/TP1/TP2 rule, and the pnlPct values were unleveraged raw price-moves instead of the leveraged (5×) figures `closePaperPos` actually computes and sends (real TP1/TP2/SL alerts show ±15%/±30%/-7.5%, not ±4.5%/±9.3%/-3.5%). Recomputed all five prices from entry×(1±fixed%) and the pnlPct values as leveraged moves, and changed the quality score/labels to Q100 (a value actually achievable and internally consistent with "strong signal"). Previously, clicking "Test Alert" would show an operator a preview that doesn't resemble any alert the live system can actually send.
+
+Both are derivable purely from reading the engine's own constants (`MIN_ALERT_QUALITY`, `FIXED_SL_PCT/TP1_PCT/TP2_PCT`, the bonus list, `closePaperPos`'s leveraged pnlPct formula) — no live trade data needed, consistent with every prior day's approach under this blocker.
+
+**Considered but deferred** (unchanged — still no trade data to validate against):
+- EMA-pullback volume-confirmation filter, funding-rate-extreme quality bonus (vs. 30d/90d own-average), RSI-band widening.
+- Re-validating the Q110 sizing-ceiling choice (fixed 2026-10-12) against real quality-vs-win-rate data, once available.
+
+### Watch tomorrow
+
+- Network blocker now 10 days unresolved. Holding to the plan set yesterday: next escalation (push notification) only if this reaches two full weeks (2026-10-18) with still no change.
+- Once access is restored and trade data is available: backtest the volume-confirmation filter, funding-rate bonus, and RSI-band widening ideas queued since 2026-10-04, before implementing any of them; also re-validate the Q110 sizing ceiling.
+- Worth a periodic check whether other UI surfaces still carry a pre-Q95-floor quality scale/threshold the way `renderReasoningPanel` did today — the same class of bug has now been found and fixed in four separate places (Discord tier labels, feed-card class, stat-tier buckets, and now the reasoning panel) across five different days, so a dedicated one-time sweep for any remaining `/100`-style or sub-95 quality cutoffs would be worthwhile once this file class of bug stops recurring.
+
+---
+
 ## 2026-10-12
 
 **EMAPerps**: ⚠️ Could not fetch live state — same network blocker as the last eight days, unresolved (day 9). See below.

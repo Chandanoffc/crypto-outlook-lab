@@ -625,7 +625,15 @@ function renderReasoningPanel(signal) {
   const reasons = signal.reasonLabels || [];
 
   const q = signal.quality || 0;
-  const qColor = q >= 90 ? "#F59E0B" : q >= 85 ? "#4ADE80" : "#38bdf8";
+  // This panel only ever renders a signal from the main feed (state.signals),
+  // which is always >= MIN_ALERT_QUALITY (95) — same constraint as the feed
+  // card's activeQualityClass/activeQualityLabel (fixed 2026-10-12). A 90/85
+  // cutoff and a "/100" scale below both collapsed to the same reading for
+  // every signal since the real achievable range is 95-118 (85 base + 33
+  // bonuses). Reuse the same Elite(110+)/Strong(100+)/Good(95-99) split/colors.
+  const qColor = q >= 110 ? "#4ADE80" : q >= 100 ? "#F59E0B" : "#6B7280";
+  const qRangeMin = 95, qRangeMax = 118;
+  const qFillPct = Math.max(0, Math.min(100, ((q - qRangeMin) / (qRangeMax - qRangeMin)) * 100));
 
   const chipHtml = reasons.map(r => {
     const isPos = /uptrend|aligned|pullback|wick|demand|supply|rsi|adx|4H|tested|conflu/i.test(r);
@@ -671,8 +679,8 @@ function renderReasoningPanel(signal) {
 
   dom.chartReasoning.innerHTML = `
     <div class="reasoning-section">
-      <div class="reasoning-section-title">Quality · ${q}/100</div>
-      <div class="reasoning-quality-bar"><div class="reasoning-quality-fill" style="width:${Math.min(q,100)}%;background:${qColor}"></div></div>
+      <div class="reasoning-section-title">Quality · Q${q} · ${activeQualityLabel(q)}</div>
+      <div class="reasoning-quality-bar"><div class="reasoning-quality-fill" style="width:${qFillPct}%;background:${qColor}"></div></div>
     </div>
     ${reasons.length ? `<div class="reasoning-section">
       <div class="reasoning-section-title">Confluences</div>
@@ -1331,6 +1339,10 @@ document.querySelectorAll("[data-ep-page]").forEach(btn => {
 });
 
 // ─── Test Alerts ─────────────────────────────────────────────────────────────
+// Entry/SL/TP1/TP2 here mirror the engine's real fixed-% exit rule (1.5% / 3.0% / 6.0%
+// of entry — see FIXED_SL_PCT/FIXED_TP1_PCT/FIXED_TP2_PCT in lib/emaperps-runtime.js),
+// and pnlPct values are the leveraged (5x) % the live alerts actually show
+// (closePaperPos computes pnlPct as price-move-% × leverage, not the raw price move).
 const EP_TEST_FAKE_EVENT = {
   type: "perps",
   pair: "ETHUSDT",
@@ -1338,23 +1350,23 @@ const EP_TEST_FAKE_EVENT = {
   direction: "LONG",
   side: "Long",
   entryPrice: 3750,
-  stopLoss: 3620,
-  tp1: 3920,
-  tp2: 4100,
-  qualityScore: 80,
-  qualificationReason: "EMA50 + Support 2 · Q85 strong signal · RSI 52 · HTF uptrend",
+  stopLoss: 3693.75,
+  tp1: 3862.50,
+  tp2: 3975.00,
+  qualityScore: 100,
+  qualificationReason: "EMA50 + Support 2 · Q100 strong signal · RSI 52 · HTF uptrend",
   strategy: "EMA PERPS",
 };
 
 const EP_TEST_EVENT_OVERRIDES = {
   entry_opened: {},
-  tp1_hit:  { closedPrice: 3920, pnlPct: 4.53, pnl:  4.53 },
-  tp2_hit:  { closedPrice: 4100, pnlPct: 9.33, pnl:  9.33 },
-  sl_hit:   { closedPrice: 3620, pnlPct: -3.47, pnl: -3.47 },
+  tp1_hit:  { closedPrice: 3862.50, pnlPct: 15.00, pnl: 15.00 },
+  tp2_hit:  { closedPrice: 3975.00, pnlPct: 30.00, pnl: 30.00 },
+  sl_hit:   { closedPrice: 3693.75, pnlPct: -7.50, pnl: -7.50 },
 };
 
 const EP_TEST_TITLES = {
-  entry_opened: "📡 ETHUSDT Q80 — EMA Perps · Test Entry",
+  entry_opened: "📡 ETHUSDT Q100 — EMA Perps · Test Entry",
   tp1_hit:      "✅ ETHUSDT — TP1 Hit — EMA Perps · Test",
   tp2_hit:      "🏆 ETHUSDT — TP2 Hit — EMA Perps · Test",
   sl_hit:       "🔴 ETHUSDT — SL Hit — EMA Perps · Test",
