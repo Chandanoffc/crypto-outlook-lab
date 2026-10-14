@@ -89,14 +89,16 @@ function computePaperStats(paper = {}) {
   return { closed, balance, starting, totalReturn, wins, losses, pf, winRate, avgWin, avgLoss, dailyAvgGain, daysToTarget };
 }
 
-// Quality-tier breakdown (used by both strategies)
+// Quality-tier breakdown. Every alerted signal is >= MIN_ALERT_QUALITY (95),
+// and the real achievable ceiling is 118 (85 highest base quality + 33 from
+// every bonus stacking) — mirrors the Good/Strong/Elite split used in
+// emaperps.js's activeQualityLabel().
 function qualityTierBreakdown(signals = []) {
   const alerted = signals.filter(s => s.alertedAt > 0);
   const tiers = [
-    { label: "Q75-79", min: 75, max: 79 },
-    { label: "Q80-84", min: 80, max: 84 },
-    { label: "Q85-89", min: 85, max: 89 },
-    { label: "Q90+",   min: 90, max: 999 },
+    { label: "Q95-99",  min: 95,  max: 99 },
+    { label: "Q100-109", min: 100, max: 109 },
+    { label: "Q110+",   min: 110, max: 999 },
   ];
   return tiers.map(({ label, min, max }) => {
     const sigs = alerted.filter(s => s.quality >= min && s.quality <= max);
@@ -144,6 +146,16 @@ function generateSuggestions(epSig, epPaper, epPatterns, epTiers) {
   if (strongPatterns.length > 0) {
     suggestions.push({ strategy: "EMAPerps", severity: "✅", text: `Strong patterns: ${strongPatterns.map(p => `${p.type} (${p.winRate}% WR, ${p.count} trades)`).join(", ")}. Focus on these signal types for best results.` });
   }
+
+  // ── EMAPerps quality tiers ──
+  epTiers.forEach(t => {
+    if (t.winRate != null && t.winRate <= 35 && t.count >= 3) {
+      suggestions.push({ strategy: "EMAPerps", severity: "⚠️", text: `Quality tier ${t.label}: only ${t.winRate}% win rate on ${t.count} signals (${t.wins}W/${t.losses}L). These low-quality signals are dragging down results — consider raising MIN_ALERT_QUALITY further.` });
+    }
+    if (t.winRate != null && t.winRate >= 65 && t.count >= 3) {
+      suggestions.push({ strategy: "EMAPerps", severity: "✅", text: `Quality tier ${t.label}: ${t.winRate}% win rate on ${t.count} signals. Elite tier — consider increasing conviction sizing for these.` });
+    }
+  });
 
   // ── $100→$1000 challenge ──
   if (epPaper.daysToTarget != null && epPaper.daysToTarget <= 14) {

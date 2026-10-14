@@ -1,5 +1,51 @@
 # Soloris Signals — Daily Agent Log
 
+## 2026-10-14
+
+**EMAPerps**: ⚠️ Could not fetch live state — same network blocker as the last ten days, unresolved (day 11).
+
+**BTC**: ⚠️ Could not fetch — same blocker.
+
+---
+
+### ⚠️ Blocker persists (day 11): network egress policy still blocks the health check and performance analysis
+
+Identical to every prior day since 2026-10-04 — `curl` to both `soloris-signals.vercel.app:443` and `fapi.binance.com:443` returns `connect_rejected` ("gateway answered 403 to CONNECT (organization policy)"), reconfirmed today via `/__agentproxy/status`. `WebSearch` worked fine; `WebFetch` (e.g. kraken.com) returned `ENOTFOUND` — same narrower-research-access pattern as 2026-10-06/08/13. Tasks 1 and 3 could not run — no live state, no BTC ticker, no closed-trade data, for the eleventh day running.
+
+Holding to the plan set on 2026-10-12/13: not re-escalating with another push notification today (last one was day 6, 2026-10-09; next planned check is day 14, 2026-10-18, if still unresolved by then).
+
+**Action needed (still unresolved)**: in this environment's settings, set Network access to a broader level, or Custom with `soloris-signals.vercel.app` and `fapi.binance.com` added under Allowed domains.
+
+---
+
+### Research findings (Task 2)
+
+`WebFetch` blocked again, so Task 2 ran on `WebSearch` snippets only:
+
+- EMA-pullback community backtests (self-reported, TradingView) continue to cluster at 32–45% WR with profit factor ~1.3–2.0, relying on R:R above 1.5:1 to stay profitable — directionally consistent with this platform's fixed 1.5%/3.0%/6.0% SL/TP1/TP2 design, no change indicated.
+- RSI+MACD confluence research again recommends higher-timeframe confirmation (4H+) and treating RSI divergence as the more reliable signal vs. static 70/30 thresholds — qualitative only, no sourced backtest numbers; nothing here beats what ADX(14) already encodes.
+- Funding-rate-extreme reversal signal: reconfirmed as a crowding indicator (extreme funding → crowded, leveraged positioning → faster unwind), but every source again stresses no universal threshold and recommends comparing against a rolling (30d/90d) average rather than a fixed cutoff — same unresolved caveat as every prior day; still not implemented, still needs this platform's own trade data to validate.
+- One search ("volume confirmation / wick size pullback entry") surfaced a trader's own A/B sample showing volume-gated entries beat non-gated by only +0.11R vs +0.06R — not a statistically meaningful difference on one sample, and a reminder that this specific idea (queued since 2026-10-04) is unproven even in its own source material, not just unvalidated against our trades.
+- Market-structure and trending-coin searches returned mostly dateless or pre-2026 results again today — nothing new changes the $200M volume floor or symbol universe.
+
+### Changes implemented
+
+No trading-logic or quality-score changes — eleventh day running with no closed-trade data to validate any against. Found and fixed one real, non-cosmetic bug during code review, in `api/daily-digest.js`:
+
+1. **`qualityTierBreakdown`/`epTiers` dead suggestion logic** — traced this back to the feature's original commit (`4cb1397`, the first version of the daily digest, long before the 2026-09-25 ClaudePerps removal). The ClaudePerps side had a `cpTiers.forEach(...)` block in `generateSuggestions()` that turned the quality-tier breakdown into "weak tier dragging down results" / "elite tier, size up" suggestions — but the equivalent `epTiers.forEach(...)` block for EMAPerps was never written. `epTiers` was computed every single day, threaded through as a function parameter, and silently discarded — a copy-paste omission from day one that survived every subsequent refactor, including the ClaudePerps removal itself (which deleted the dead `cpTiers` block along with everything else ClaudePerps, not noticing the `ep` counterpart was dead too). On top of that, the tier boundaries (`Q75-79`/`Q80-84`/`Q85-89`/`Q90+`) were also stale against today's 95 floor, same class of bug fixed in four other places across the last five days — every alerted signal is >= 95, so three of four tiers could never have any members even if the block had been wired up. Fixed both: rescaled the tiers to the real 95–118 achievable range (`Q95-99`/`Q100-109`/`Q110+`, matching the Good/Strong/Elite split already established in `emaperps.js`'s `activeQualityLabel`), and added the missing `epTiers.forEach` suggestion block using this file's own existing EMAPerps pattern-analysis thresholds (≤35%/≥65% WR at count≥3) instead of copying ClaudePerps' now-irrelevant 30%/70% cutoffs. Verified with a standalone simulation (empty signals array, and a populated array spanning both tiers) — both produce correct tier breakdowns and correct suggestion text with no crashes.
+
+**Considered but deferred** (unchanged — still no trade data to validate against):
+- EMA-pullback volume-confirmation filter, funding-rate-extreme quality bonus (vs. rolling own-average), RSI-band widening.
+- Re-validating the Q110 sizing-ceiling choice and the quality-tier suggestion cutoffs (35%/65%, carried over from pattern analysis) against real quality-vs-win-rate data, once available.
+
+### Watch tomorrow
+
+- Network blocker now 11 days unresolved. Holding to the plan: next escalation (push notification) only if this reaches two full weeks (2026-10-18) with still no change.
+- Once access is restored and trade data is available: backtest the volume-confirmation filter, funding-rate bonus, and RSI-band widening ideas queued since 2026-10-04, before implementing any of them; also re-validate the Q110 sizing ceiling and the new quality-tier suggestion thresholds.
+- The `epTiers` fix means the daily Discord digest can now actually surface a "Quality tier Q95-99 only had a 20% WR" style warning once real trade data exists — worth checking tomorrow's (or the first post-blocker) digest output to confirm it renders as expected in practice, not just in the standalone simulation.
+
+---
+
 ## 2026-10-13
 
 **EMAPerps**: ⚠️ Could not fetch live state — same network blocker as the last nine days, unresolved (day 10). See below.
