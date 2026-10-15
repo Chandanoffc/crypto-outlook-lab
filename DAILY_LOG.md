@@ -1,5 +1,49 @@
 # Soloris Signals — Daily Agent Log
 
+## 2026-10-15
+
+**EMAPerps**: ⚠️ Could not fetch live state — same network blocker as the last eleven days, unresolved (day 12).
+
+**BTC**: ⚠️ Could not fetch — same blocker.
+
+---
+
+### ⚠️ Blocker persists (day 12): network egress policy still blocks the health check and performance analysis
+
+Identical to every prior day since 2026-10-04 — reconfirmed via `/__agentproxy/status`, both `soloris-signals.vercel.app:443` and `fapi.binance.com:443` show `connect_rejected` ("gateway answered 403 to CONNECT (policy denial or upstream failure)") at today's timestamp. `WebSearch` worked fine; `WebFetch` failed with `ENOTFOUND` on every external article URL tried (bitmex.com, tradingview.com, kucoin.com) — same narrower-research-access pattern as prior days. Tasks 1 and 3 could not run — no live state, no BTC ticker, no closed-trade data, for the twelfth day running.
+
+Holding to the plan set on 2026-10-12/13/14: not re-escalating with another push notification today (last one was day 6, 2026-10-09; next planned check is 2026-10-18 if still unresolved by then).
+
+**Action needed (still unresolved)**: in this environment's settings, set Network access to a broader level, or Custom with `soloris-signals.vercel.app` and `fapi.binance.com` added under Allowed domains.
+
+---
+
+### Research findings (Task 2)
+
+`WebFetch` blocked again, so Task 2 ran on `WebSearch` snippets only:
+
+- EMA-pullback community backtests (self-reported, TradingView) again cluster well under 50% WR (32–45% / 44.8% BTCUSD samples seen today), relying on R:R materially above 1:1 to stay profitable — directionally consistent with this platform's fixed 1.5%/3.0%/6.0% SL/TP1/TP2 design (2R/4R), no change indicated.
+- A concrete volume-confirmation filter surfaced again (RSI(21) > 55 AND MFI(21) > 55 for longs, requiring both price *and* volume momentum) — same idea queued since 2026-10-04 as a possible quality bonus. Still not implemented: this exact class of filter (a volume-based quality bonus) was already tried on this platform and removed because it correlated with the Q90 loss cluster (see the file header comment in `lib/emaperps-runtime.js`), so re-adding a volume bonus needs this platform's own trade data to justify, not just outside research.
+- Funding-rate-extreme reversal signal: today's best source (BitMEX's own XBTUSD research) reports **no significant predictive power** for raw funding rate in a regression against next-period returns — the most rigorous source found on this topic to date, and it argues against adding a funding-rate quality bonus at all, not just for deferring it. `fundingRate` stays informational-only in the UI, which this result actually supports rather than just leaves unresolved.
+- Market-structure/trending-coin searches returned mostly stale or non-current results again (ZEC/BNB/ARB/XRP/SOL open-interest surge coverage dated September 2026; HYPE/TRX/XLM relative-strength coverage dated August 2026) — nothing current enough to justify a symbol-universe change, and the $200M volume floor already structurally covers the kind of liquid, trending names these searches surfaced.
+
+### Changes implemented
+
+No trading-logic or quality-score changes — twelfth day running with no closed-trade data to validate any against. Reviewed `lib/emaperps-runtime.js` (quality scoring, constants), `emaperps.html` (Signal Rules panel — Q85/Q80/Q75/Q70/Q60 badges still match the runtime's baseQuality values exactly), `emaperps.js` (Q95–99/Q100–104/Q105–109/Q110+ tier table — already rescaled and correct after 2026-10-12's fix), and `api/notify.js` (the previously-deferred `"CLAUDEPERPS"` fallback label is gone — all banner fallbacks now correctly read `"EMA PERPS"` / `"DLMM"` / `"SOLORIS"`, so that item is resolved, no longer needs tracking). No new display bugs or dead code found today — the last several days' cleanup pass appears to have caught the drift that had accumulated since the ClaudePerps removal.
+
+**Considered but deferred** (unchanged — still no trade data to validate against):
+- EMA-pullback volume-confirmation filter (RSI+MFI or similar) — now leaning against, not just deferred: this platform tried a volume bonus before and removed it for correlating with losses, so outside research alone isn't sufficient justification to reintroduce it.
+- Funding-rate-extreme quality bonus — now leaning against: today's most rigorous source found no predictive power in the raw signal.
+- RSI-band widening to 60–80 "momentum regime" — still genuinely open, needs backtest against real closed-trade data once available.
+
+### Watch tomorrow
+
+- Network blocker now 12 days unresolved. Holding to the plan: next escalation (push notification) only if this reaches 2026-10-18 with still no change.
+- Once access is restored and trade data is available: backtest the RSI-band widening idea (the only volume/funding-rate ideas still genuinely open are now leaning "don't implement" per today's research — see above).
+- Nothing else currently flagged for tomorrow; today's code review turned up no new bugs, which is itself a useful signal that the backlog from the ClaudePerps removal is now largely cleared.
+
+---
+
 ## 2026-10-14
 
 **EMAPerps**: ⚠️ Could not fetch live state — same network blocker as the last ten days, unresolved (day 11).
