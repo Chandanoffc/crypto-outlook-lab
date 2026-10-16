@@ -1,5 +1,51 @@
 # Soloris Signals — Daily Agent Log
 
+## 2026-10-16
+
+**EMAPerps**: ⚠️ Could not fetch live state — same network blocker as the last twelve days, unresolved (day 13).
+
+**BTC**: ⚠️ Could not fetch — same blocker.
+
+---
+
+### ⚠️ Blocker persists (day 13): network egress policy still blocks the health check and performance analysis
+
+Identical to every prior day since 2026-10-04 — reconfirmed via `/__agentproxy/status`: both `soloris-signals.vercel.app:443` and `fapi.binance.com:443` show `connect_rejected` ("gateway answered 403 to CONNECT (policy denial or upstream failure)") at today's timestamp. `WebSearch` worked fine; `WebFetch` failed with `ENOTFOUND` on an external article URL tried (kucoin.com) — same narrower-research-access pattern as recent days. Tasks 1 and 3 could not run — no live state, no BTC ticker, no closed-trade data, for the thirteenth day running.
+
+Holding to the plan set on 2026-10-12 through 15: not re-escalating with another push notification today (last one was day 6, 2026-10-09; next planned check is 2026-10-18 if still unresolved by then — two days away).
+
+**Action needed (still unresolved)**: in this environment's settings, set Network access to a broader level, or Custom with `soloris-signals.vercel.app` and `fapi.binance.com` added under Allowed domains.
+
+---
+
+### Research findings (Task 2)
+
+`WebFetch` blocked again, so Task 2 ran on `WebSearch` snippets only:
+
+- EMA-pullback community backtests (self-reported, TradingView) again cluster well under 50% WR (32–45%, one 44.8% BTCUSD sample) and rely on R:R above 1:1 to stay profitable — still directionally consistent with this platform's fixed 1.5%/3.0%/6.0% SL/TP1/TP2 design (2R/4R). No change indicated.
+- MACD/RSI confluence searches again returned only vendor/education content and uncited win-rate claims (e.g. a LedgerMind post citing unverifiable 63–68% figures) — nothing rigorous enough to act on, consistent with every prior day's findings on this topic.
+- Funding-rate-extreme reversal signal: today's sources (Nexo, Sharpe Terminal) repeat the same unresolved split seen before — one vendor claims extreme funding precedes reversals, another says it only establishes "conditions," not timing, and a Sharpe Terminal threshold claim (0.05%/8h) is unsourced. Nothing here overturns the BitMEX regression result logged on day 12 (no significant predictive power) that this platform is currently leaning against a funding-rate bonus.
+- Market-structure searches again returned stale snapshots (an August 2026 Kaiko report naming HYPE/TRX/ZEC/XLM as outperformers, altcoin volumes shrinking since January) rather than anything current enough to justify a symbol-universe change. The existing $200M volume floor already structurally covers this class of liquid, trending name.
+
+### Changes implemented
+
+One targeted bug fix (no trading-logic or quality-score changes — thirteenth day running with no closed-trade data to validate any against):
+
+1. **`lib/emaperps-runtime.js`** (`detectSignal`, reasoning labels) — removed an unreachable dead branch. The 4H-trend hard block (~line 854: `if ((side === "Long" && htfTrend === "down") || (side === "Short" && htfTrend === "up")) return null;`) already rejects every signal whose 4H trend opposes its side *before* the function reaches the reasoning-label section further down. That meant the `else if (htfTrend)` branch there — which pushed `"Counter-trend range fade (4H ...)"` into a signal's displayed reasons — could never actually execute; any signal that survives to that point always has `htfTrend` agreeing with `side`. Left in place, it was a misleading comment-by-omission: a reader of the reasoning panel code (or the panel itself, had it ever randomly misfired) could believe the platform sometimes takes counter-trend fades, when it hard-blocks them entirely. Collapsed to the single reachable branch and added a comment explaining why the other case can't occur. Verified with `node -c` (syntax) and by re-reading the hard-block logic to confirm the invariant.
+
+**Considered but deferred** (unchanged — still no trade data to validate against):
+- EMA-pullback volume-confirmation filter (RSI+MFI or similar) — still leaning against per day 12's reasoning (this platform tried and removed a volume bonus before for correlating with Q90 losses).
+- Funding-rate-extreme quality bonus — still leaning against per day 12's BitMEX regression finding.
+- RSI-band widening to 60–80 "momentum regime" — still genuinely open, needs backtest against real closed-trade data once available.
+
+### Watch tomorrow
+
+- Network blocker now 13 days unresolved. Holding to the plan: next escalation (push notification) only if this reaches 2026-10-18 with still no change.
+- Once access is restored and trade data is available: backtest the RSI-band widening idea (the only item still genuinely open; funding-rate and volume-bonus ideas are now both leaning "don't implement" per research logged on days 12 and 16).
+- Today's code review found one small dead-branch bug (now fixed) but nothing else — the backlog from the ClaudePerps removal continues to look largely cleared.
+
+---
+
 ## 2026-10-15
 
 **EMAPerps**: ⚠️ Could not fetch live state — same network blocker as the last eleven days, unresolved (day 12).
