@@ -139,6 +139,80 @@ function updateStats(signals) {
   document.getElementById("ta-stat-avgscore").textContent = avg.toFixed(0);
 }
 
+// ── Paper trade rendering ─────────────────────────────────────────────────────
+
+function renderPaper(paper) {
+  if (!paper) return;
+  document.getElementById("ta-paper-section").style.display = "";
+
+  const start = paper.startingBalance || 100;
+  const bal   = paper.balance ?? start;
+  const ret   = ((bal - start) / start * 100).toFixed(2);
+  const retPos = parseFloat(ret) >= 0;
+
+  document.getElementById("ta-paper-balance").textContent = `$${bal.toFixed(2)}`;
+  const retEl = document.getElementById("ta-paper-return");
+  retEl.textContent = `${retPos ? "+" : ""}${ret}%`;
+  retEl.style.color = retPos ? "var(--green)" : "var(--red)";
+
+  document.getElementById("ta-paper-open").textContent = (paper.openPositions || []).length;
+
+  const closed = paper.closedTrades || [];
+  document.getElementById("ta-paper-total").textContent = closed.length;
+  const wins = closed.filter(t => (t.pnl ?? 0) > 0).length;
+  document.getElementById("ta-paper-winrate").textContent = closed.length ? `${Math.round(wins / closed.length * 100)}%` : "—";
+
+  // Circuit breaker warning
+  const cbEl = document.getElementById("ta-cb-warning");
+  if (paper.pausedUntil && Date.now() < paper.pausedUntil) {
+    cbEl.style.display = "";
+    cbEl.textContent = `⚠ ${paper.pauseReason || "Circuit breaker active — new entries paused."}`;
+  } else {
+    cbEl.style.display = "none";
+  }
+
+  renderPositions(paper.openPositions || [], "ta-open-positions", true);
+  renderPositions((paper.closedTrades || []).slice(0, 30), "ta-closed-trades", false);
+}
+
+function renderPositions(trades, containerId, isOpen) {
+  const el = document.getElementById(containerId);
+  if (!trades.length) {
+    el.innerHTML = `<div class="empty-state" style="padding:.75rem;"><p style="margin:0;font-size:.8rem;">${isOpen ? "No open positions." : "No closed trades yet."}</p></div>`;
+    return;
+  }
+  el.innerHTML = trades.map(t => {
+    const isLong = t.side === "long";
+    const pnl    = t.pnl ?? 0;
+    const pnlPct = t.pnlPct ?? 0;
+    const pnlPos = pnl >= 0;
+    const borderColor = isOpen ? (isLong ? "var(--green)" : "var(--red)") : (pnlPos ? "var(--green)" : "var(--red)");
+    const sideLabel = isLong ? "🟢 LONG" : "🔴 SHORT";
+    const reasonBadge = t.closeReason ? `<span style="padding:1px 6px;border-radius:4px;font-size:.7rem;font-weight:600;background:rgba(255,255,255,.06);">${t.closeReason}</span>` : "";
+    const mark = isOpen && t.lastMarkPrice
+      ? `<span style="color:var(--text-muted);font-size:.72rem;">Mark: $${Number(t.lastMarkPrice).toLocaleString(undefined,{maximumFractionDigits:4})}</span>`
+      : "";
+    const pnlStr = isOpen ? "" : `<span style="color:${pnlPos?"var(--green)":"var(--red)"};font-weight:600;font-size:.8rem;">${pnlPos?"+":""}$${pnl.toFixed(2)} (${pnlPct.toFixed(1)}%)</span>`;
+    return `
+      <div style="padding:.75rem 1rem;border-left:3px solid ${borderColor};background:rgba(255,255,255,.03);border-radius:6px;margin-bottom:.5rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem;">
+        <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
+          <strong style="font-size:.85rem;">${t.symbol.replace("USDT","/USDT")}</strong>
+          <span style="font-size:.75rem;">${sideLabel}</span>
+          ${reasonBadge}
+          <span style="font-size:.72rem;color:var(--text-muted);">Score ${t.score ?? "—"}</span>
+        </div>
+        <div style="display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;font-size:.78rem;">
+          <span>Entry: <strong>$${Number(t.entryPrice).toLocaleString(undefined,{maximumFractionDigits:6})}</strong></span>
+          ${isOpen ? `<span>SL: <span style="color:var(--red);">$${Number(t.sl).toLocaleString(undefined,{maximumFractionDigits:6})}</span></span>` : ""}
+          ${isOpen ? `<span>TP1: <span style="color:var(--green);">$${Number(t.tp1).toLocaleString(undefined,{maximumFractionDigits:6})}</span></span>` : ""}
+          ${mark}
+          ${pnlStr}
+          <span style="color:var(--text-muted);font-size:.7rem;">${fmtTime(isOpen ? t.openedAt : t.closedAt)}</span>
+        </div>
+      </div>`;
+  }).join("");
+}
+
 // ── Fetch state ───────────────────────────────────────────────────────────────
 
 async function loadState() {
@@ -156,6 +230,7 @@ async function loadState() {
 
     renderSignals(data.signals ?? []);
     updateStats(data.signals ?? []);
+    if (data.paper) renderPaper(data.paper);
   } catch (e) {
     dot.className = "status-dot status-dot--down";
     msg.textContent = `Error: ${e.message}`;
@@ -192,6 +267,7 @@ async function triggerScan() {
     msg.textContent = `Scan complete — ${(data.signals ?? []).length} signals`;
     renderSignals(data.signals ?? []);
     updateStats(data.signals ?? []);
+    if (data.paper) renderPaper(data.paper);
 
     if (data.lastScan) {
       document.getElementById("ta-last-scan").textContent = `Last scan: ${fmtTime(data.lastScan)}`;

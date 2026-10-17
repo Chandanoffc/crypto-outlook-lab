@@ -44,6 +44,7 @@ module.exports = async function handler(req, res) {
       skipped:  !claimed,
       summary,
       signals:  state.signals ?? [],
+      paper:    state.paper ?? null,
       lastScan: state.lastScan ?? null,
     });
   } catch (err) {

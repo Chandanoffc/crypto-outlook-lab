@@ -89,6 +89,48 @@
         </div>
       </div>
 
+      <!-- Paper trade stats -->
+      <section class="section-block" id="ta-paper-section" style="display:none;">
+        <h2 class="section-title">Paper Trading <span style="font-size:.75rem;font-weight:400;color:var(--text-muted);">5× leverage · $100 start</span></h2>
+        <div class="stats-row" style="margin-bottom:1rem;">
+          <div class="stat-card">
+            <span class="stat-label">Balance</span>
+            <span class="stat-value" id="ta-paper-balance">$100.00</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Return</span>
+            <span class="stat-value" id="ta-paper-return">0.00%</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Open Positions</span>
+            <span class="stat-value" id="ta-paper-open">0</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Win Rate</span>
+            <span class="stat-value" id="ta-paper-winrate">—</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Total Trades</span>
+            <span class="stat-value" id="ta-paper-total">0</span>
+          </div>
+        </div>
+
+        <!-- Circuit breaker warning -->
+        <div id="ta-cb-warning" style="display:none;padding:.6rem 1rem;border-radius:8px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:#fca5a5;font-size:.8rem;margin-bottom:1rem;"></div>
+
+        <!-- Open positions -->
+        <h3 style="font-size:.85rem;font-weight:600;color:var(--text-muted);margin:.5rem 0 .5rem;">Open Positions</h3>
+        <div id="ta-open-positions" class="signals-list">
+          <div class="empty-state" style="padding:.75rem;"><p style="margin:0;font-size:.8rem;">No open positions.</p></div>
+        </div>
+
+        <!-- Closed trades -->
+        <h3 style="font-size:.85rem;font-weight:600;color:var(--text-muted);margin:1rem 0 .5rem;">Closed Trades</h3>
+        <div id="ta-closed-trades" class="signals-list">
+          <div class="empty-state" style="padding:.75rem;"><p style="margin:0;font-size:.8rem;">No closed trades yet.</p></div>
+        </div>
+      </section>
+
       <!-- Signals list -->
       <section class="section-block">
         <h2 class="section-title">Active Signals</h2>
