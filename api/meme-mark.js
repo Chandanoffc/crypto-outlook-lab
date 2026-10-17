@@ -39,10 +39,11 @@ module.exports = async function handler(req, res) {
     if (!memeState.paperTrades) memeState.paperTrades = { balance: 100, trades: [] };
 
     // ── 1. Signal detection (every 2 min via scan lock) ──────────────────
-    // Uses tryClaimScanLock with a 90s cooldown so it runs on every other tick at most.
-    // If this tick loses the scan lock, detection is skipped but price checks still run.
+    // Uses a SEPARATE lock row ("meme-autoscan-lock") so the subsequent
+    // upsertRuntimeState("meme-autoscan", memeState) call cannot clobber
+    // the lastScanAt timestamp that tryClaimScanLock just wrote.
     let scanSummary = null;
-    const scanClaimed = await tryClaimScanLock("meme-autoscan", now, 90 * 1000);
+    const scanClaimed = await tryClaimScanLock("meme-autoscan-lock", now, 90 * 1000);
     if (scanClaimed) {
       scanSummary = await runMemeAutoScan(memeState, { webhook });
     }
