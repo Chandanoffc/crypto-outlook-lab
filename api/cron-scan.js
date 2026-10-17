@@ -12,6 +12,7 @@ const { defaultRuntimeState: epDefault, sanitizeRuntimeState: epSanitize, runEma
 // NOTE: meme autoscan + paper trade checks moved to /api/meme-mark (runs every 2 min)
 // cron-scan no longer touches meme state.
 const { runPonsAutoScan, defaultState: ponsDefault } = require("../lib/pons-autoscan");
+const { runTAPerps_Scan, defaultState: taDefault } = require("../lib/taperps-scanner");
 
 function buildJsonResponse(res, statusCode, payload) {
   res.statusCode = statusCode;
@@ -85,6 +86,27 @@ module.exports = async function handler(req, res) {
     }
   } catch (err) {
     results.pons_autoscan = { ok: false, error: String(err.message) };
+  }
+
+  // TA Perps scan — hourly, 55-min cooldown
+  try {
+    const claimed = await tryClaimScanLock("taperps-lock", now, 55 * 60_000);
+    if (!claimed) {
+      results.taperps = { ok: true, skipped: true };
+    } else {
+      let taState = taDefault();
+      if (hasDatabase()) {
+        const row = await getRuntimeState("taperps");
+        if (row?.state) taState = { ...taDefault(), ...row.state };
+      }
+      const msRow   = hasDatabase() ? await getRuntimeState("memescreener") : null;
+      const webhook = msRow?.state?.settings?.discordWebhook || "";
+      const summary = await runTAPerps_Scan(taState, { webhook });
+      if (hasDatabase()) await upsertRuntimeState("taperps", taState);
+      results.taperps = { ok: true, summary };
+    }
+  } catch (err) {
+    results.taperps = { ok: false, error: String(err.message) };
   }
 
   return buildJsonResponse(res, 200, { ok: true, scannedAt: Date.now(), results });

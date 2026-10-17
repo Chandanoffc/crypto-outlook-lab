@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TA Perps · Soloris Signals</title>
+    <meta name="description" content="Multi-confluence TA scanner: Parallel Channel + RSI Divergence + Elliott Wave + Fibonacci." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="./taperps.js" defer></script>
+  </head>
+  <body>
+
+    <!-- ── Topbar ──────────────────────────────────────────── -->
+    <header class="topbar">
+      <div class="topbar-inner">
+        <a class="brand" href="./emaperps.html">
+          <img class="brand-logo" src="./hyperdrive-mark.svg" alt="" />
+          <span class="brand-name">Soloris <em>Signals</em></span>
+        </a>
+
+        <nav class="topbar-nav" aria-label="Strategy pages">
+          <a class="nav-tab" href="./emaperps.html">EMA Perps</a>
+          <a class="nav-tab" href="./tokenscan.html">TokenScan</a>
+          <a class="nav-tab" href="./memescreener.html">MemeScreener</a>
+          <a class="nav-tab is-current" href="./taperps.html">TA Perps</a>
+        </nav>
+
+        <div class="topbar-end">
+          <span class="live-badge">
+            <span class="live-dot" aria-hidden="true"></span>
+            Live Scan
+          </span>
+          <span class="strategy-chip">Strategy</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- ── Page ───────────────────────────────────────────── -->
+    <main class="page">
+
+      <!-- Strategy hero -->
+      <div class="strategy-hero">
+        <div class="hero-left">
+          <span class="strategy-badge" style="background:rgba(139,92,246,.18);color:#a78bfa;border-color:rgba(139,92,246,.35);">TA Perps</span>
+          <h1 class="hero-title">Multi-Confluence TA Scanner</h1>
+          <p class="hero-sub">
+            4H perpetuals scanner combining four independent pillars:
+            <strong>Parallel Channel</strong> position · <strong>RSI Divergence</strong> (regular / hidden / exaggerated) ·
+            <strong>Elliott Wave</strong> corrective structures (Flat, Zig Zag, Triangle) ·
+            <strong>Fibonacci</strong> retracement zones.
+            Signals require ≥2 pillars and a minimum confluence score of 60/100. Minimum 2R on every trade.
+          </p>
+        </div>
+        <div class="hero-status">
+          <div id="ta-status-dot" class="status-dot status-dot--neutral"></div>
+          <span id="ta-status-msg" class="status-msg">Initializing…</span>
+          <span id="ta-last-scan" class="status-scan"></span>
+        </div>
+      </div>
+
+      <!-- Scan controls -->
+      <section class="section-block" style="margin-bottom:1.25rem;">
+        <div style="display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;">
+          <button id="ta-scan-btn" class="btn btn-primary" style="min-width:120px;">Scan Now</button>
+          <span id="ta-scan-status" style="font-size:.8rem;color:var(--text-muted);"></span>
+        </div>
+      </section>
+
+      <!-- Stats row -->
+      <div class="stats-row" id="ta-stats-row" style="display:none;">
+        <div class="stat-card">
+          <span class="stat-label">Total Signals</span>
+          <span class="stat-value" id="ta-stat-total">0</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Long Signals</span>
+          <span class="stat-value" id="ta-stat-longs" style="color:var(--green);">0</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Short Signals</span>
+          <span class="stat-value" id="ta-stat-shorts" style="color:var(--red);">0</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Avg Score</span>
+          <span class="stat-value" id="ta-stat-avgscore">—</span>
+        </div>
+      </div>
+
+      <!-- Signals list -->
+      <section class="section-block">
+        <h2 class="section-title">Active Signals</h2>
+        <p class="section-sub">Scans top 80 USDT perpetuals on Binance. 4H timeframe. Min score 60/100.</p>
+        <div id="ta-signals-list" class="signals-list">
+          <div class="empty-state">
+            <p>No signals yet. Hit <strong>Scan Now</strong> to run a manual scan, or wait for the hourly cron.</p>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- ── Signal card template ──────────────────────────────── -->
+    <template id="ta-signal-tpl">
+      <div class="signal-card" data-side="">
+        <div class="signal-header">
+          <div class="signal-left">
+            <span class="signal-symbol"></span>
+            <span class="signal-side-badge"></span>
+            <span class="signal-score-badge"></span>
+          </div>
+          <div class="signal-right">
+            <span class="signal-time"></span>
+          </div>
+        </div>
+
+        <div class="signal-prices">
+          <div class="price-item">
+            <span class="price-label">Entry</span>
+            <span class="price-val signal-entry"></span>
+          </div>
+          <div class="price-item">
+            <span class="price-label">SL</span>
+            <span class="price-val signal-sl" style="color:var(--red);"></span>
+          </div>
+          <div class="price-item">
+            <span class="price-label">TP1 (2R)</span>
+            <span class="price-val signal-tp1" style="color:var(--green);"></span>
+          </div>
+          <div class="price-item">
+            <span class="price-label">TP2 (3R)</span>
+            <span class="price-val signal-tp2" style="color:var(--green);"></span>
+          </div>
+        </div>
+
+        <!-- Confluence breakdown -->
+        <div class="signal-confluence">
+          <div class="confluence-title">Confluence Breakdown</div>
+          <div class="confluence-bars"></div>
+        </div>
+      </div>
+    </template>
+
+  </body>
+</html>
