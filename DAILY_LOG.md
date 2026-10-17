@@ -1,5 +1,55 @@
 # Soloris Signals — Daily Agent Log
 
+## 2026-10-17
+
+**EMAPerps**: ⚠️ Could not fetch live state — same network blocker as the last thirteen days, unresolved (day 14).
+
+**BTC**: ⚠️ Could not fetch — same blocker.
+
+---
+
+### ⚠️ Blocker persists (day 14): network egress policy still blocks the health check and performance analysis
+
+Identical denial, confirmed via `/__agentproxy/status`: gateway answered 403 to CONNECT for both `soloris-signals.vercel.app:443` and `fapi.binance.com:443`. `WebFetch` was also blocked today (DNS resolution failure, `getaddrinfo ENOTFOUND`), so Task 2 research ran on `WebSearch` snippets only — no full-article reads. Tasks 1 and 3 could not run for the 14th consecutive day: no live state, no BTC ticker, no closed-trade data. No data-driven quality/strategy change was made for the same reason as every prior day in this streak.
+
+**This is now a two-week-old, unresolved blocker.** The daily agent cannot complete its core job (health check + performance analysis + data-validated strategy tuning) until network access to `soloris-signals.vercel.app` and `fapi.binance.com` is added to this environment's allowlist (Environment settings → Network access → Custom → add both hosts under Allowed domains, or broaden the access level). This requires action outside the agent's own permissions and is flagged to the user directly today.
+
+---
+
+### Research findings (Task 2)
+
+WebSearch-only (WebFetch blocked by DNS failure). Today's results were assessed as mostly recycled/generic — consistent with the last several days:
+
+- **Trending coins**: no reliable dated "this week" list surfaced. Undated/stale items: ZEC/BNB/ARB/XRP/SOL perp OI growth (ZEC OI ~$2.4B, early-Sep vintage), HYPE/TRX/ZEC/XLM as relative outperformers in a weak altcoin market (Aug 2026 Kaiko report) — same genre as prior QNT/SUI/AAVE findings, nothing fresher.
+- **EMA pullback improvements**: no independent/peer-reviewed 2026 backtests. Only self-reported TradingView scripts, 32–45% WR (profit from R:R not hit rate); an "80% WR" claim is explicitly marketing (author admits curve-fitting after the fact). Nothing here beats the platform's existing fixed 1.5/3/6% scheme — no change justified.
+- **Indicator combos**: generic "trend + momentum + volume" consensus, unsourced "65-70% RSI accuracy" / "73% of reversals" marketing figures. Same recycled ADX>25-style claim pattern as prior days — already implemented (`adx4h >= 25` bonus), no new rigor.
+- **Market structure**: BTC dominance ~58%, Altcoin Season Index ~18/100 (deep Bitcoin-season) argues against broad altcoin momentum right now — doesn't change the $200M volume floor or symbol universe.
+- **Funding rate**: same recycled wisdom — extreme funding clusters near local tops anecdotally, no backtest cited. Basis/cash-and-carry arb is the one well-documented edge but compressed since 2024. Not actioned (same as every prior day).
+
+**Note for future runs**: if this WebSearch-snippet-only cadence continues, primary data sources (CoinGlass/Coinalyze for OI/funding, DefiLlama for perp DEX volume) would likely beat repeating the same generic strategy queries.
+
+### Changes implemented
+
+No trading-logic or quality-score changes — 14 days running with no closed-trade data to validate any against. Code review turned up and fixed 3 genuinely new bugs (all verified by direct code read before fixing):
+
+1. **`lib/emaperps-runtime.js` (minimum-target-size gate comment)** — a stale comment block said "R2 must be at least 10% from entry... no structural room to reach a meaningful 15–25% move. (TP1/R1 floor: 5%)", directly contradicting the comment right below it (correctly documenting the real history: lowered to 5%/2.5%, then to the current fixed 3%/6% TP1/TP2 with sanity-only distance gates) and the actual code (`tp2Dist < 0.03`, `tp1Dist < 0.02`). Removed the stale, superseded comment block.
+2. **`emaperps.js` pre-trade checklist — "Funding neutral (< ±0.05%)" check was comparing against the wrong scale.** `signal.fundingRate` is already ×100-scaled in the runtime (stored in percent units, e.g. a real-world ~0.01% funding rate arrives as `frVal≈0.01`), but the checklist compared `Math.abs(frVal) < 0.0005` — 100× stricter than the label's stated ±0.05% band. This made the check fail for virtually any real-world funding rate, misleadingly flagging "funding not neutral" when funding was actually well within band. Fixed to `< 0.05` to match the label. (Day-7's checklist fix, commit `4f54351`, corrected 3 other items in this block but missed this one.)
+3. **`emaperps.js` Stats → Pattern Breakdown table was silently excluding all P/Q EMA-pullback signals.** `patternMeta`/`patternOrder` only listed dead `G1/G2/H1/H2` codes ("EMA20 Retest↓", "EMA50 Pullback↑") left over from before the P/Q rename (commit `e678dcb`). The engine's actual pullback signal codes are `P20`/`P50`/`Q20`/`Q50` (`lib/emaperps-runtime.js` `detectSignal`) — these never appeared in `emaperps.js` at all, so any alerted P/Q signal was silently dropped from the breakdown stats panel, and the G/H rows could never populate since no live `signalType` ever matches them. Replaced the dead codes with the real ones (`P20: "EMA20 Pullback ↑"`, `P50: "EMA50 Pullback ↑"`, `Q20: "EMA20 Retest ↓"`, `Q50: "EMA50 Retest ↓"`) in both `patternMeta` and `patternOrder`. Verified with `node --check` on both edited files.
+
+**Considered but deferred** (unchanged — still no trade data to validate against):
+- EMA-pullback volume-confirmation filter (pullback volume < impulse volume) as a new quality bonus.
+- Funding-rate-extreme quality bonus.
+- RSI gate widening to a wider "momentum regime" band.
+- VWAP-as-trend-filter idea from an earlier day's research (48%→60% WR claim) — still unvalidated against this platform's own trades.
+
+### Watch tomorrow
+
+- **Priority, now 14 days running**: network access to `soloris-signals.vercel.app` and `fapi.binance.com` needs to be restored in this environment's settings. Flagged directly to the user today — this is outside the agent's own permissions to fix.
+- Once access is restored and trade data is available: validate the Pattern Breakdown fix by confirming P20/P50/Q20/Q50 rows now populate with real alerted-signal counts.
+- Consider switching Task 2 research to primary data sources (CoinGlass/Coinalyze, DefiLlama) if WebSearch-snippet-only research keeps producing recycled findings.
+
+---
+
 ## 2026-10-16
 
 **EMAPerps**: ⚠️ Could not fetch live state — same network blocker as the last twelve days, unresolved (day 13).

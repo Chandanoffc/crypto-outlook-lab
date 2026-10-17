@@ -665,7 +665,7 @@ function renderReasoningPanel(signal) {
     { label: signal.htfTrend != null ? "4H trend aligned with trade direction" : "4H trend unconfirmed (data unavailable)", pass: htfAligned },
     { label: "Volume > $200M 24H",                    pass: (signal.volume24h || 0) >= 200e6 },
     { label: rsiZoneLabel,                            pass: rsiZonePass },
-    { label: "Funding neutral (< ±0.05%)",             pass: frVal == null || Math.abs(frVal) < 0.0005 },
+    { label: "Funding neutral (< ±0.05%)",             pass: frVal == null || Math.abs(frVal) < 0.05 },
     { label: "Level tested 3+ times",                 pass: reasons.some(r => /Level tested/.test(r)) },
     { label: "SL defined before entry",                pass: !!signal.sl },
     { label: "Position size calculated",               pass: false, interactive: true },
@@ -1252,10 +1252,10 @@ function renderStatsTab() {
       D1: "EMA20 + R1",  D2: "EMA20 + R2",
       E1: "EMA50 + R1",  E2: "EMA50 + R2",
       F1: "Resist 1",    F2: "Resist 2",
-      G1: "EMA20 Retest ↓", G2: "EMA50 Retest ↓",
-      H1: "EMA20 Pullback ↑", H2: "EMA50 Pullback ↑",
+      P20: "EMA20 Pullback ↑", P50: "EMA50 Pullback ↑",
+      Q20: "EMA20 Retest ↓",   Q50: "EMA50 Retest ↓",
     };
-    const patternOrder = ["B2","B1","A2","A1","E2","E1","D2","D1","C2","C1","F2","F1","G2","G1","H2","H1"];
+    const patternOrder = ["B2","B1","A2","A1","E2","E1","D2","D1","C2","C1","F2","F1","P50","P20","Q50","Q20"];
     const rows = patternOrder.map(pt => {
       const sigs = alertedSigs.filter(s => s.signalType === pt);
       if (!sigs.length) return "";
