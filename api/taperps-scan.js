@@ -4,7 +4,7 @@
  * Called by cron-scan.js (hourly) and the frontend's "Scan Now" button.
  */
 const { hasDatabase, getRuntimeState, upsertRuntimeState, tryClaimScanLock } = require("../lib/neon-db");
-const { runTAPerps_Scan, defaultState } = require("../lib/taperps-scanner");
+const { runTAPerps_Scan, defaultState, defaultPaper } = require("../lib/taperps-scanner");
 
 function buildJsonResponse(res, statusCode, payload) {
   res.statusCode = statusCode;
@@ -25,6 +25,8 @@ module.exports = async function handler(req, res) {
       const row = await getRuntimeState("taperps");
       if (row?.state) state = { ...defaultState(), ...row.state };
     }
+    // Always ensure paper is present — may be missing from older DB rows
+    if (!state.paper) state.paper = defaultPaper();
 
     const msRow   = hasDatabase() ? await getRuntimeState("memescreener") : null;
     const webhook = msRow?.state?.settings?.discordWebhook || "";

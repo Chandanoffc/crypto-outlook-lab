@@ -29,6 +29,7 @@ module.exports = async function handler(req, res) {
       const row = await getRuntimeState("taperps");
       if (row?.state) state = { ...defaultState(), ...row.state };
     }
+    // Always ensure paper is present — may be missing from older DB rows
     if (!state.paper) state.paper = defaultPaper();
 
     const msRow   = hasDatabase() ? await getRuntimeState("memescreener") : null;
