@@ -3,8 +3,7 @@
  * taperps.js — frontend for the TA Perps multi-confluence scanner.
  */
 
-const API      = "/api/taperps-scan";
-const STATE_API = "/api/taperps";
+const API      = "/api/taperps";  // unified endpoint: ?action=scan, ?action=mark, or base for state
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -228,7 +227,7 @@ function initSettings() {
   document.getElementById("ta-settings-form")?.addEventListener("submit", async e => {
     e.preventDefault();
     const webhook = document.getElementById("ta-s-webhook").value.trim();
-    const r = await fetch(STATE_API, {
+    const r = await fetch(API, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "settings", discordWebhook: webhook }),
@@ -245,7 +244,7 @@ async function loadState() {
   const msg = document.getElementById("ta-status-msg");
   const lastScanEl = document.getElementById("ta-last-scan");
   try {
-    const r = await fetch(STATE_API);
+    const r = await fetch(API);
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const data = await r.json();
 
@@ -281,7 +280,7 @@ async function triggerScan() {
   msg.textContent = "Scanning…";
 
   try {
-    const r = await fetch(API + "?manual=1");
+    const r = await fetch(API + "?action=scan&manual=1");
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const data = await r.json();
 

@@ -12,7 +12,7 @@ const { defaultRuntimeState: epDefault, sanitizeRuntimeState: epSanitize, runEma
 // NOTE: meme autoscan + paper trade checks moved to /api/meme-mark (runs every 2 min)
 // cron-scan no longer touches meme state.
 const { runPonsAutoScan, defaultState: ponsDefault } = require("../lib/pons-autoscan");
-const { runTAPerps_Scan, defaultState: taDefault, defaultPaper: taPaperDefault } = require("../lib/taperps-scanner");
+const { runTAPerps_Scan, defaultState: taDefault, defaultPaper: taPaperDefault, markTAPaperPositions } = require("../lib/taperps-scanner");
 
 function buildJsonResponse(res, statusCode, payload) {
   res.statusCode = statusCode;
