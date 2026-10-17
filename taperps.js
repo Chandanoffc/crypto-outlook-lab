@@ -218,8 +218,9 @@ function renderPositions(trades, containerId, isOpen) {
 
 function initSettings() {
   const overlay = document.getElementById("ta-settings-overlay");
-  const close   = () => { overlay.hidden = true; };
-  document.getElementById("ta-settings-btn")?.addEventListener("click", () => { overlay.hidden = false; });
+  const open  = () => { overlay.hidden = false; overlay.style.display = "flex"; };
+  const close = () => { overlay.hidden = true;  overlay.style.display = "none"; };
+  document.getElementById("ta-settings-btn")?.addEventListener("click", open);
   document.getElementById("ta-settings-close")?.addEventListener("click", close);
   document.getElementById("ta-settings-cancel")?.addEventListener("click", close);
   overlay?.addEventListener("click", e => { if (e.target === overlay) close(); });
