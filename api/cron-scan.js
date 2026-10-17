@@ -99,9 +99,9 @@ module.exports = async function handler(req, res) {
         const row = await getRuntimeState("taperps");
         if (row?.state) taState = { ...taDefault(), ...row.state };
       }
+      if (!taState.settings) taState.settings = { discordWebhook: "" };
       if (!taState.paper) taState.paper = taPaperDefault();
-      const msRow   = hasDatabase() ? await getRuntimeState("memescreener") : null;
-      const webhook = msRow?.state?.settings?.discordWebhook || "";
+      const webhook = taState.settings.discordWebhook || "";
       const summary = await runTAPerps_Scan(taState, { webhook });
       if (hasDatabase()) await upsertRuntimeState("taperps", taState);
       results.taperps = { ok: true, summary };

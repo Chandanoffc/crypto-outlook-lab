@@ -3,7 +3,8 @@
  * taperps.js — frontend for the TA Perps multi-confluence scanner.
  */
 
-const API = "/api/taperps-scan";
+const API      = "/api/taperps-scan";
+const STATE_API = "/api/taperps";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -213,6 +214,29 @@ function renderPositions(trades, containerId, isOpen) {
   }).join("");
 }
 
+// ── Settings modal ────────────────────────────────────────────────────────────
+
+function initSettings() {
+  const overlay = document.getElementById("ta-settings-overlay");
+  const close   = () => { overlay.hidden = true; };
+  document.getElementById("ta-settings-btn")?.addEventListener("click", () => { overlay.hidden = false; });
+  document.getElementById("ta-settings-close")?.addEventListener("click", close);
+  document.getElementById("ta-settings-cancel")?.addEventListener("click", close);
+  overlay?.addEventListener("click", e => { if (e.target === overlay) close(); });
+
+  document.getElementById("ta-settings-form")?.addEventListener("submit", async e => {
+    e.preventDefault();
+    const webhook = document.getElementById("ta-s-webhook").value.trim();
+    const r = await fetch(STATE_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "settings", discordWebhook: webhook }),
+    });
+    const d = await r.json();
+    if (d.ok) close();
+  });
+}
+
 // ── Fetch state ───────────────────────────────────────────────────────────────
 
 async function loadState() {
@@ -220,13 +244,17 @@ async function loadState() {
   const msg = document.getElementById("ta-status-msg");
   const lastScanEl = document.getElementById("ta-last-scan");
   try {
-    const r = await fetch(API);
+    const r = await fetch(STATE_API);
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const data = await r.json();
 
     dot.className = "status-dot status-dot--up";
-    msg.textContent = data.skipped ? "Scan skipped (cooldown active)" : "Scan complete";
+    msg.textContent = "Ready";
     if (data.lastScan) lastScanEl.textContent = `Last scan: ${fmtTime(data.lastScan)}`;
+
+    // Populate settings form with saved webhook
+    const webhookEl = document.getElementById("ta-s-webhook");
+    if (webhookEl && data.settings?.discordWebhook) webhookEl.value = data.settings.discordWebhook;
 
     renderSignals(data.signals ?? []);
     updateStats(data.signals ?? []);
@@ -286,7 +314,7 @@ async function triggerScan() {
 
 document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("ta-scan-btn").addEventListener("click", triggerScan);
+  initSettings();
   loadState();
-  // Refresh every 5 minutes passively
   setInterval(loadState, 5 * 60 * 1000);
 });

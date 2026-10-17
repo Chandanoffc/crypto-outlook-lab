@@ -25,11 +25,11 @@ module.exports = async function handler(req, res) {
       const row = await getRuntimeState("taperps");
       if (row?.state) state = { ...defaultState(), ...row.state };
     }
-    // Always ensure paper is present — may be missing from older DB rows
+    // Always ensure settings and paper are present — may be missing from older DB rows
+    if (!state.settings) state.settings = { discordWebhook: "" };
     if (!state.paper) state.paper = defaultPaper();
 
-    const msRow   = hasDatabase() ? await getRuntimeState("memescreener") : null;
-    const webhook = msRow?.state?.settings?.discordWebhook || "";
+    const webhook = state.settings.discordWebhook || "";
 
     // Claim scan lock — 55-min cooldown for cron, no cooldown for manual
     const cooldown = manual ? 0 : 55 * 60 * 1000;

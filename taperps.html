@@ -33,7 +33,7 @@
             <span class="live-dot" aria-hidden="true"></span>
             Live Scan
           </span>
-          <span class="strategy-chip">Strategy</span>
+          <button id="ta-settings-btn" class="btn btn-ghost" type="button">⚙ Settings</button>
         </div>
       </div>
     </header>
@@ -143,6 +143,26 @@
       </section>
 
     </main>
+
+    <!-- ── Settings modal ───────────────────────────────────────── -->
+    <div id="ta-settings-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;display:flex;align-items:center;justify-content:center;" hidden>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.5rem;width:min(480px,92vw);position:relative;">
+        <button id="ta-settings-close" type="button" style="position:absolute;top:.75rem;right:.75rem;background:none;border:none;color:var(--text-muted);font-size:1.1rem;cursor:pointer;">✕</button>
+        <h2 style="font-size:1rem;font-weight:600;margin:0 0 1rem;">TA Perps Settings</h2>
+        <form id="ta-settings-form" autocomplete="off">
+          <div style="margin-bottom:1rem;">
+            <label style="display:block;font-size:.8rem;color:var(--text-muted);margin-bottom:.35rem;" for="ta-s-webhook">Discord Webhook URL</label>
+            <input id="ta-s-webhook" type="url" placeholder="https://discord.com/api/webhooks/…"
+              style="width:100%;background:var(--input-bg,rgba(255,255,255,.06));border:1px solid var(--border);border-radius:6px;padding:.5rem .75rem;color:var(--text);font-size:.85rem;box-sizing:border-box;" />
+            <p style="font-size:.72rem;color:var(--text-muted);margin:.35rem 0 0;">Paste a webhook URL for a <strong>different</strong> Discord channel — alerts will go here instead of MemeScreener.</p>
+          </div>
+          <div style="display:flex;gap:.75rem;justify-content:flex-end;">
+            <button type="button" id="ta-settings-cancel" class="btn btn-ghost">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
 
     <!-- ── Signal card template ──────────────────────────────── -->
     <template id="ta-signal-tpl">
