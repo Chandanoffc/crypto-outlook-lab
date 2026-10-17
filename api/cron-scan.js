@@ -9,12 +9,9 @@
  */
 const { hasDatabase, getRuntimeState, upsertRuntimeState, tryClaimScanLock } = require("../lib/neon-db");
 const { defaultRuntimeState: epDefault, sanitizeRuntimeState: epSanitize, runEmaPerps_Scan } = require("../lib/emaperps-runtime");
-const { runZenCalls_Scan } = require("../lib/zencalls-scan");
-const { runZenStrategy_Scan, defaultState: zcStratDefault } = require("../lib/zencalls-strategy");
 // NOTE: meme autoscan + paper trade checks moved to /api/meme-mark (runs every 2 min)
 // cron-scan no longer touches meme state.
 const { runPonsAutoScan, defaultState: ponsDefault } = require("../lib/pons-autoscan");
-const { checkPaperTrades, calcStats, defaultState: ptDefault } = require("../lib/zencalls-papertrades");
 
 function buildJsonResponse(res, statusCode, payload) {
   res.statusCode = statusCode;
@@ -65,59 +62,6 @@ module.exports = async function handler(req, res) {
     }
   } catch (err) {
     results.emaperps = { ok: false, error: String(err.message) };
-  }
-
-  // ZenCalls price monitor — checks TP1/TP2/SL for all open conviction calls
-  try {
-    const claimed = await tryClaimScanLock("zencalls", now, 60_000);
-    if (!claimed) {
-      results.zencalls = { ok: true, skipped: true };
-    } else {
-      const row = hasDatabase() ? await getRuntimeState("zencalls") : null;
-      if (row && row.state) {
-        const state = row.state;
-        const summary = await runZenCalls_Scan(state);
-        if (hasDatabase()) await upsertRuntimeState("zencalls", state);
-        results.zencalls = { ok: true, summary };
-      } else {
-        results.zencalls = { ok: true, summary: { hits: 0, reason: "no-calls" } };
-      }
-    }
-  } catch (err) {
-    results.zencalls = { ok: false, error: String(err.message) };
-  }
-
-  // ZenCalls strategy scanner — auto-scans ALL Binance perp tokens for S/R setups
-  try {
-    const claimed = await tryClaimScanLock("zencalls-strategy", now, 60_000);
-    if (!claimed) {
-      results.zencalls_strategy = { ok: true, skipped: true };
-    } else {
-      let stratState = zcStratDefault();
-      if (hasDatabase()) {
-        const row = await getRuntimeState("zencalls-strategy");
-        if (row && row.state) stratState = { ...zcStratDefault(), ...row.state };
-      }
-      // Load paper trades state so new signals auto-open trades
-      let ptState = ptDefault();
-      if (hasDatabase()) {
-        const ptRow = await getRuntimeState("zencalls-papertrades");
-        if (ptRow?.state) ptState = { ...ptDefault(), ...ptRow.state };
-      }
-      // Read Discord webhook from ZenCalls settings
-      const zcRow = hasDatabase() ? await getRuntimeState("zencalls") : null;
-      const webhook = zcRow?.state?.settings?.discordWebhook || "";
-      const summary = await runZenStrategy_Scan(stratState, { webhook, ptState });
-      if (hasDatabase()) await upsertRuntimeState("zencalls-strategy", stratState);
-      // Check open paper trades for TP/SL hits
-      const ptSummary = await checkPaperTrades(ptState, { webhook, stratState });
-      if (hasDatabase()) await upsertRuntimeState("zencalls-papertrades", ptState);
-      // Save strategy state again if any signals were marked closed by the PT checker
-      if (hasDatabase()) await upsertRuntimeState("zencalls-strategy", stratState);
-      results.zencalls_strategy = { ok: true, summary, papertrades: ptSummary };
-    }
-  } catch (err) {
-    results.zencalls_strategy = { ok: false, error: String(err.message) };
   }
 
   // NOTE: meme autoscan moved to /api/meme-mark — runs every 2 min via cron-job.org
