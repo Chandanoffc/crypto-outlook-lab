@@ -1,5 +1,48 @@
 # Soloris Signals — Daily Agent Log
 
+## 2026-10-18
+
+**EMAPerps**: ⚠️ Could not fetch live state — same network blocker as the last fourteen days, unresolved (day 15).
+
+**BTC**: ⚠️ Could not fetch — same blocker.
+
+---
+
+### ⚠️ Blocker persists (day 15): network egress policy still blocks the health check and performance analysis
+
+Identical denial, reconfirmed via `/__agentproxy/status`: gateway answered 403 to CONNECT for both `soloris-signals.vercel.app:443` and `fapi.binance.com:443` (`recentRelayFailures` shows `connect_rejected` / "policy denial or upstream failure" for both, timestamped this run). `WebSearch` worked fine (separate path), so Task 2 ran; Tasks 1 and 3 could not run for the 15th consecutive day — no live balance/positions, no BTC ticker, no closed-trade data, so no data-driven quality/strategy change was made, for the same reason as every prior day in this streak.
+
+**This is now a three-week-old, unresolved blocker spanning 15 straight daily runs.** Flagging directly to the user again (push notification sent this run): the daily agent cannot complete its core job — health check, performance analysis, or any trade-data-validated strategy tuning — until `soloris-signals.vercel.app` and `fapi.binance.com` are added to this environment's network allowlist (Environment settings → Network access → Custom → add both hosts under Allowed domains, or broaden the access level). This is outside the agent's own permissions; it requires the user to change the environment's settings once.
+
+---
+
+### Research findings (Task 2)
+
+Same low-signal pattern as recent days — WebSearch only, mostly recycled or undated material, nothing that clears the bar for a code change without trade data to validate against:
+
+- **Trending/setups**: no reliable dated "this week" ranking surfaced. Repeated names from recent weeks: ZEC/BNB/ARB/XRP/SOL perp OI growth (ZEC ~$2.4B OI, early-Sep vintage), HYPE/TRX/ZEC/XLM as relative outperformers in a weak altcoin market (Aug 2026 Kaiko report).
+- **EMA pullback / strategy improvements**: no independent peer-reviewed 2026 backtest. Self-reported TradingView scripts range 19–45% WR depending on implementation; one shared Oct-2026 BTC 15m backtest lost money outright (19% WR, 0.32 PF). An "80% WR" claim was explicitly disclaimed by its own script author as untested. Nothing here beats the existing fixed 1.5%/3.0%/6.0% SL/TP1/TP2 scheme.
+- **Indicator combinations**: consensus is MACD+RSI on higher timeframes (4H+) to cut noise, which the engine's 1H detection + 4H confirmation layer already implements. No source showed backtested evidence that adding ADX to that pairing adds edge beyond what's already encoded (`adx4h >= 25` bonus, `<18` ranging-skip for P/Q).
+- **Market structure**: no clean 2026 $500M-volume altcoin ranking found; closest data points (South Korea exchange volume, old liquidation-cascade figures) don't change the $200M volume floor or symbol universe.
+- **Funding rate edge**: same recurring thesis — extreme funding (crowded positioning) precedes reversals/squeezes, no fixed threshold agreed across sources (0.03%–0.10% per interval depending on exchange), negative extremes weighted as a stronger contrarian signal than positive. `fundingRate` is already captured per-signal and shown in the UI/checklist; still not validated against this platform's own trades, so still not actioned as a quality bonus.
+
+### Changes implemented
+
+No trading-logic or quality-score changes — 15 days running with no closed-trade data to validate any against (same constraint as every prior day). Did a full read-through of `lib/emaperps-runtime.js` (signal detection, paper trading, circuit breaker) and `emaperps.js` (stats panels, pattern breakdown, pre-trade checklist, Discord formatting) plus `api/notify.js` looking for the kind of doc/code drift bugs found on days 1–14 (stale ClaudePerps references, dead signal-type codes, wrong constant values, scale mismatches). Found none — everything checked (MIN_ALERT_QUALITY=95, $200M volume floor, PAPER_SIZE_QUALITY_CEIL=110, fixed 1.5/3.0/6.0% SL/TP1/TP2, pattern-breakdown codes, funding-neutral checklist scale, Discord strategy-label fallbacks) already matches the current documented behavior — the day-7/8/12/14 cleanup passes appear to have genuinely exhausted this backlog. No code changes made today.
+
+**Considered but deferred** (unchanged — still no trade data to validate against):
+- EMA-pullback volume-confirmation filter (pullback volume < impulse volume) as a new quality bonus.
+- Funding-rate-extreme quality bonus or filter.
+- RSI gate widening to the "momentum regime" 55–80 band research has repeatedly surfaced.
+
+### Watch tomorrow
+
+- **Priority, now repeated fifteen times**: get network access to `soloris-signals.vercel.app` and `fapi.binance.com` restored. Until that happens, Tasks 1 and 3 cannot run and no data-driven strategy change can be made in good conscience.
+- If the blocker lifts: run the full health check + performance analysis immediately, and backtest the volume-confirmation, funding-rate-bonus, and RSI-band-widening ideas against real closed trades before implementing any of them.
+- If the blocker does not lift again: consider whether daily WebSearch-only research cycles are still worth running as-is, since the last several days' findings have been largely repetitive with no fresh actionable signal.
+
+---
+
 ## 2026-10-17
 
 **EMAPerps**: ⚠️ Could not fetch live state — same network blocker as the last thirteen days, unresolved (day 14).
