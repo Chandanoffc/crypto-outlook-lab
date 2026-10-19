@@ -139,9 +139,26 @@ function updateStats(signals) {
   document.getElementById("ta-stat-avgscore").textContent = avg.toFixed(0);
 }
 
+// ── Live price fetch (Binance public API — no key needed) ─────────────────────
+
+async function fetchLivePrices(symbols) {
+  if (!symbols.length) return {};
+  const prices = {};
+  // Binance FAPI ticker/price is public and CORS-accessible from browser
+  await Promise.allSettled(symbols.map(async sym => {
+    try {
+      const r = await fetch(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${sym}`);
+      if (!r.ok) return;
+      const d = await r.json();
+      if (d?.price) prices[sym] = parseFloat(d.price);
+    } catch (_) {}
+  }));
+  return prices;
+}
+
 // ── Paper trade rendering ─────────────────────────────────────────────────────
 
-function renderPaper(paper) {
+async function renderPaper(paper) {
   if (!paper) return;
   document.getElementById("ta-paper-section").style.display = "";
 
@@ -155,7 +172,8 @@ function renderPaper(paper) {
   retEl.textContent = `${retPos ? "+" : ""}${ret}%`;
   retEl.style.color = retPos ? "var(--green)" : "var(--red)";
 
-  document.getElementById("ta-paper-open").textContent = (paper.openPositions || []).length;
+  const openPos = paper.openPositions || [];
+  document.getElementById("ta-paper-open").textContent = openPos.length;
 
   const closed = paper.closedTrades || [];
   document.getElementById("ta-paper-total").textContent = closed.length;
@@ -171,8 +189,19 @@ function renderPaper(paper) {
     cbEl.style.display = "none";
   }
 
-  renderPositions(paper.openPositions || [], "ta-open-positions", true);
-  renderPositions((paper.closedTrades || []).slice(0, 30), "ta-closed-trades", false);
+  // Fetch live prices from Binance for open positions
+  let livePrices = {};
+  if (openPos.length) {
+    const syms = [...new Set(openPos.map(p => p.symbol))];
+    livePrices = await fetchLivePrices(syms);
+    // Inject live price as lastMarkPrice so renderPositions uses it
+    for (const pos of openPos) {
+      if (livePrices[pos.symbol]) pos.lastMarkPrice = livePrices[pos.symbol];
+    }
+  }
+
+  renderPositions(openPos, "ta-open-positions", true);
+  renderPositions(closed.slice(0, 30), "ta-closed-trades", false);
 }
 
 function fmtP(v) {
@@ -345,7 +374,7 @@ async function loadState() {
 
     renderSignals(data.signals ?? []);
     updateStats(data.signals ?? []);
-    if (data.paper) renderPaper(data.paper);
+    if (data.paper) await renderPaper(data.paper);
   } catch (e) {
     dot.className = "status-dot status-dot--down";
     msg.textContent = `Error: ${e.message}`;
@@ -382,7 +411,7 @@ async function triggerScan() {
     msg.textContent = `Scan complete — ${(data.signals ?? []).length} signals`;
     renderSignals(data.signals ?? []);
     updateStats(data.signals ?? []);
-    if (data.paper) renderPaper(data.paper);
+    if (data.paper) await renderPaper(data.paper);
 
     if (data.lastScan) {
       document.getElementById("ta-last-scan").textContent = `Last scan: ${fmtTime(data.lastScan)}`;
