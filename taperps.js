@@ -175,40 +175,127 @@ function renderPaper(paper) {
   renderPositions((paper.closedTrades || []).slice(0, 30), "ta-closed-trades", false);
 }
 
+function fmtP(v) {
+  if (v == null || !isFinite(v)) return "—";
+  return "$" + Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 });
+}
+
 function renderPositions(trades, containerId, isOpen) {
   const el = document.getElementById(containerId);
   if (!trades.length) {
     el.innerHTML = `<div class="empty-state" style="padding:.75rem;"><p style="margin:0;font-size:.8rem;">${isOpen ? "No open positions." : "No closed trades yet."}</p></div>`;
     return;
   }
+
   el.innerHTML = trades.map(t => {
-    const isLong = t.side === "long";
-    const pnl    = t.pnl ?? 0;
-    const pnlPct = t.pnlPct ?? 0;
-    const pnlPos = pnl >= 0;
-    const borderColor = isOpen ? (isLong ? "var(--green)" : "var(--red)") : (pnlPos ? "var(--green)" : "var(--red)");
-    const sideLabel = isLong ? "🟢 LONG" : "🔴 SHORT";
-    const reasonBadge = t.closeReason ? `<span style="padding:1px 6px;border-radius:4px;font-size:.7rem;font-weight:600;background:rgba(255,255,255,.06);">${t.closeReason}</span>` : "";
-    const mark = isOpen && t.lastMarkPrice
-      ? `<span style="color:var(--text-muted);font-size:.72rem;">Mark: $${Number(t.lastMarkPrice).toLocaleString(undefined,{maximumFractionDigits:4})}</span>`
+    const isLong  = t.side === "long";
+    const mark    = t.lastMarkPrice || null;
+    const entry   = t.entryPrice || 0;
+    const lev     = t.leverage || 5;
+
+    // Compute unrealized P&L from last mark price
+    let unrealPnl = null, unrealPct = null;
+    if (isOpen && mark && entry) {
+      const diff = isLong ? mark - entry : entry - mark;
+      unrealPnl = Math.round((diff / entry) * (t.size || 0) * lev * 100) / 100;
+      unrealPct = Math.round((diff / entry) * lev * 10000) / 100;
+    }
+
+    // For closed trades use realized values
+    const closedPnl = t.pnl ?? 0;
+    const closedPct = t.pnlPct ?? 0;
+
+    const isUp    = isOpen ? (unrealPnl ?? 0) >= 0 : closedPnl >= 0;
+    const pnlColor = isUp ? "#22c55e" : "#ef4444";
+    const borderColor = isOpen
+      ? (isLong ? "rgba(34,197,94,.6)" : "rgba(239,68,68,.6)")
+      : (isUp   ? "rgba(34,197,94,.4)" : "rgba(239,68,68,.4)");
+
+    const sideColor = isLong ? "#22c55e" : "#ef4444";
+    const sideBg    = isLong ? "rgba(34,197,94,.12)" : "rgba(239,68,68,.12)";
+
+    // Progress toward TP1 (for open positions with mark price)
+    let progressBar = "";
+    if (isOpen && mark && entry && t.tp1 && t.sl) {
+      const totalRange = Math.abs(t.tp1 - t.sl);
+      const progress   = totalRange > 0
+        ? Math.max(0, Math.min(100, Math.abs(mark - t.sl) / totalRange * 100))
+        : 0;
+      const progressColor = isLong
+        ? (mark >= entry ? "#22c55e" : "#f59e0b")
+        : (mark <= entry ? "#22c55e" : "#f59e0b");
+      progressBar = `
+        <div style="margin-top:.6rem;">
+          <div style="display:flex;justify-content:space-between;font-size:.67rem;color:var(--text-muted);margin-bottom:.2rem;">
+            <span>SL ${fmtP(t.sl)}</span>
+            <span>Entry ${fmtP(entry)}</span>
+            <span>TP1 ${fmtP(t.tp1)}</span>
+          </div>
+          <div style="height:4px;background:rgba(255,255,255,.08);border-radius:2px;overflow:hidden;">
+            <div style="height:100%;width:${progress.toFixed(1)}%;background:${progressColor};border-radius:2px;transition:width .4s;"></div>
+          </div>
+        </div>`;
+    }
+
+    // Close reason badge
+    const reasonColors = { TP2:"#22c55e", TP1:"#22c55e", BE:"#f59e0b", SL:"#ef4444", EXPIRED:"#6b7280" };
+    const reasonBadge = t.closeReason
+      ? `<span style="padding:1px 8px;border-radius:4px;font-size:.7rem;font-weight:700;background:${reasonColors[t.closeReason]||"#6b7280"}22;color:${reasonColors[t.closeReason]||"#6b7280"};border:1px solid ${reasonColors[t.closeReason]||"#6b7280"}44;">${t.closeReason}</span>`
       : "";
-    const pnlStr = isOpen ? "" : `<span style="color:${pnlPos?"var(--green)":"var(--red)"};font-weight:600;font-size:.8rem;">${pnlPos?"+":""}$${pnl.toFixed(2)} (${pnlPct.toFixed(1)}%)</span>`;
+
+    // TP1 reached badge
+    const tp1Badge = isOpen && t.tp1Reached
+      ? `<span style="padding:1px 6px;border-radius:4px;font-size:.68rem;font-weight:600;background:rgba(34,197,94,.15);color:#22c55e;">TP1 ✓ BE locked</span>`
+      : "";
+
+    const openedLabel = `Opened ${fmtTime(t.openedAt)}`;
+    const closedLabel = t.closedAt ? `Closed ${fmtTime(t.closedAt)}` : "";
+
     return `
-      <div style="padding:.75rem 1rem;border-left:3px solid ${borderColor};background:rgba(255,255,255,.03);border-radius:6px;margin-bottom:.5rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem;">
-        <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
-          <strong style="font-size:.85rem;">${t.symbol.replace("USDT","/USDT")}</strong>
-          <span style="font-size:.75rem;">${sideLabel}</span>
-          ${reasonBadge}
-          <span style="font-size:.72rem;color:var(--text-muted);">Score ${t.score ?? "—"}</span>
+      <div style="padding:.9rem 1rem;border-left:3px solid ${borderColor};background:rgba(255,255,255,.025);border-radius:8px;margin-bottom:.6rem;">
+
+        <!-- Header row -->
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.5rem;flex-wrap:wrap;margin-bottom:.5rem;">
+          <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
+            <strong style="font-size:.95rem;">${t.symbol.replace("USDT","/USDT")}</strong>
+            <span style="padding:2px 8px;border-radius:4px;font-size:.72rem;font-weight:700;background:${sideBg};color:${sideColor};">${isLong ? "LONG" : "SHORT"}</span>
+            <span style="font-size:.72rem;color:var(--text-muted);">${lev}× · Score ${t.score ?? "—"}</span>
+            ${reasonBadge}
+            ${tp1Badge}
+          </div>
+          <!-- P&L block -->
+          ${isOpen ? `
+            <div style="text-align:right;">
+              ${mark
+                ? `<div style="font-size:1.1rem;font-weight:700;color:${pnlColor};">${(unrealPnl??0)>=0?"+":""}$${(unrealPnl??0).toFixed(2)}</div>
+                   <div style="font-size:.8rem;font-weight:600;color:${pnlColor};">${(unrealPct??0)>=0?"+":""}${(unrealPct??0).toFixed(2)}% unrealized</div>`
+                : `<div style="font-size:.78rem;color:var(--text-muted);">Awaiting mark price…</div>`
+              }
+            </div>
+          ` : `
+            <div style="text-align:right;">
+              <div style="font-size:1.05rem;font-weight:700;color:${pnlColor};">${closedPnl>=0?"+":""}$${closedPnl.toFixed(2)}</div>
+              <div style="font-size:.8rem;font-weight:600;color:${pnlColor};">${closedPct>=0?"+":""}${closedPct.toFixed(2)}%</div>
+            </div>
+          `}
         </div>
-        <div style="display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;font-size:.78rem;">
-          <span>Entry: <strong>$${Number(t.entryPrice).toLocaleString(undefined,{maximumFractionDigits:6})}</strong></span>
-          ${isOpen ? `<span>SL: <span style="color:var(--red);">$${Number(t.sl).toLocaleString(undefined,{maximumFractionDigits:6})}</span></span>` : ""}
-          ${isOpen ? `<span>TP1: <span style="color:var(--green);">$${Number(t.tp1).toLocaleString(undefined,{maximumFractionDigits:6})}</span></span>` : ""}
-          ${mark}
-          ${pnlStr}
-          <span style="color:var(--text-muted);font-size:.7rem;">${fmtTime(isOpen ? t.openedAt : t.closedAt)}</span>
+
+        <!-- Price grid -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:.4rem .75rem;font-size:.78rem;margin-bottom:.3rem;">
+          <div><span style="color:var(--text-muted);display:block;font-size:.68rem;">ENTRY</span><strong>${fmtP(entry)}</strong></div>
+          ${isOpen
+            ? `<div><span style="color:var(--text-muted);display:block;font-size:.68rem;">MARK</span><strong style="color:${mark ? (isLong ? (mark>=entry?"#22c55e":"#ef4444") : (mark<=entry?"#22c55e":"#ef4444")) : "inherit"};">${mark ? fmtP(mark) : "—"}</strong></div>`
+            : `<div><span style="color:var(--text-muted);display:block;font-size:.68rem;">EXIT</span><strong>${fmtP(t.closedPrice)}</strong></div>`
+          }
+          <div><span style="color:var(--text-muted);display:block;font-size:.68rem;">STOP LOSS</span><strong style="color:#ef4444;">${fmtP(t.sl)}</strong></div>
+          <div><span style="color:var(--text-muted);display:block;font-size:.68rem;">TP1 (2R)</span><strong style="color:#22c55e;">${fmtP(t.tp1)}</strong></div>
+          <div><span style="color:var(--text-muted);display:block;font-size:.68rem;">TP2 (3R)</span><strong style="color:#22c55e;">${fmtP(t.tp2)}</strong></div>
+          <div><span style="color:var(--text-muted);display:block;font-size:.68rem;">SIZE</span><strong>$${(t.size||0).toFixed(2)}</strong></div>
         </div>
+
+        ${progressBar}
+
+        <div style="margin-top:.4rem;font-size:.68rem;color:var(--text-muted);">${isOpen ? openedLabel : closedLabel}</div>
       </div>`;
   }).join("");
 }
