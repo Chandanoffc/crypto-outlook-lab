@@ -1,5 +1,51 @@
 # Soloris Signals — Daily Agent Log
 
+## 2026-10-19
+
+**EMAPerps**: ⚠️ Could not fetch live state — same network blocker as the last fifteen days, unresolved (day 16).
+
+**BTC**: ⚠️ Could not fetch — same blocker.
+
+---
+
+### ⚠️ Blocker persists (day 16): network egress policy still blocks the health check and performance analysis
+
+Identical denial, reconfirmed via `/__agentproxy/status`: gateway answered 403 to CONNECT for both `soloris-signals.vercel.app:443` and `fapi.binance.com:443` (`recentRelayFailures` shows `connect_rejected` / "policy denial or upstream failure" for both, timestamped this run). `WebSearch` worked fine, so Task 2 ran; Tasks 1 and 3 could not run for the 16th consecutive day — no live balance/positions, no BTC ticker, no closed-trade data, so no data-driven quality/strategy change was made, for the same reason as every prior day in this streak.
+
+Not sending another push notification today — one was already sent yesterday (day 15) to flag this same still-unresolved blocker, and nothing has changed since. Still outstanding: `soloris-signals.vercel.app` and `fapi.binance.com` need to be added to this environment's network allowlist (Environment settings → Network access → Custom → add both hosts under Allowed domains, or broaden the access level) before Tasks 1 and 3 can run again.
+
+---
+
+### Research findings (Task 2)
+
+Same recycled, low-signal pattern as the last several days — nothing cleared the bar for a trading-logic change without trade data to validate against:
+
+- **Trending/setups**: no reliable dated "this week" ranking surfaced for October 2026; searches mostly returned stale 2024/2025 TradingView posts and generic press releases.
+- **EMA pullback / strategy improvements**: self-reported TradingView backtests again clustered at 19–45% WR depending on implementation (one July–Sep 2026 BTC 15m sample lost money outright, 19% WR / 0.32 PF), relying on R:R above 1.5–2:1 to stay profitable — still directionally consistent with the platform's fixed 1.5%/3.0%/6.0% SL/TP1/TP2 scheme, no change indicated.
+- **Indicator combinations**: same generic MACD+RSI+volume consensus and unverifiable vendor win-rate claims (65–70% RSI accuracy, "Christmas special" ADX+RSI+MACD script tested without fees/slippage). Nothing clears the bar beyond what `adx4h >= 25` / `<18` already encodes.
+- **Market structure**: outlook pieces are mostly late-2025 forecasts; BTC dominance ~58%, Altcoin Season Index in the high teens/low 20s (Bitcoin-season territory) — doesn't change the $200M volume floor or symbol universe.
+- **Funding rate edge**: same unresolved split as every prior day — crowding/squeeze logic is directionally sound but no universal threshold across sources (0.03%–0.10%/interval), and the most rigorous source found to date (BitMEX's own regression, logged 2026-10-15) still shows no significant standalone predictive power. Not actioned.
+
+### Changes implemented
+
+No live-trade-data-validated quality/strategy changes — 16th day running with no closed-trade data available. Found and fixed one real scoring/logic bug and two documentation/display bugs during code review, all three verified purely by reading the engine's own code (no live trade data needed):
+
+1. **`lib/emaperps-runtime.js` — multi-tested-level bonus (+5 quality) was scored against the wrong S/R level, and fired on signals that touch no S/R level at all.** `anchorTests` (feeds `multiTestedBonus` and the "Level tested N×" reasoning label) was hardcoded to `s1Tests`/`r1Tests` regardless of which level the signal actually triggered on. Two distinct problems: (a) for "2"-tier signals (A2/B2/C2 touch `s2`, D2/E2/F2 touch `r2`), the bonus credited the *wrong* level's test count — `s2Tests`/`r2Tests` existed in `findSwingLevels()`'s return value but were never even destructured into scope; (b) for the P/Q pure-EMA-pullback signals (no S/R level involved in their trigger at all — confirmed by tracing the if/else-if chain: reaching the P/Q branch requires `side === null`, which requires `s1Touch`/`s2Touch`/`r1Touch`/`r2Touch` to all already be false, since any of them being true would have matched an A–F branch first), the bonus and its reasoning label fired anyway off a same-direction level's test count that had zero relationship to why the signal actually triggered — handing P50/P20/Q50/Q20 signals an unearned +5 quality and a misleading "Level tested 3×"-style explanation on the signal card. Fixed `anchorTests` to resolve to the specific level actually touched (`s2Touch ? s2Tests : s1Touch ? s1Tests : 0`, mirrored for the short side), which now correctly yields 0 — no bonus, no label — for every P/Q signal, and the right level's count for every A–F signal. Verified with `node -c` and a full trace of the touch-detection branches; no live trade data was needed since this is a pure code-logic bug.
+2. **`emaperps.html` — Signal Rules panel never documented the P/Q EMA-pullback signal types.** The panel only listed the six A-F confluence rules (Q85 down to Q60) per side, even though the architecture has documented a second, EMA-pullback-only signal family (P20/P50/Q20/Q50, Q78/Q82 base quality) since before this daily-agent log began — and the Pattern Breakdown stats table (fixed 2026-10-17) already tracks these codes in production. A trader reading "Signal Rules" to understand how a quality score was derived would have no idea half the signal-generation logic existed. Added two new rule sections (Long EMA Pullback, Short EMA Retest) documenting the Q82/Q78 badges and the no-S/R-required mechanic, and extended the panel's footnote to explain why these setups skip the S/R requirement.
+3. **`README.md`** — the Neon schema reference linked to a leftover local filesystem path (`/tmp/crypto-outlook-lab-fix/db/schema.sql`) from some earlier build environment instead of a repo-relative link. Fixed to `./db/schema.sql`, which resolves correctly on GitHub. (The rest of the README — `paper.html`/`arena.html`/`tradez.html` references, an `/api/init-db` endpoint — describes an older iteration of this dashboard that no longer exists; a full README rewrite is out of scope for today's surgical pass and is logged below as deferred.)
+
+**Considered but deferred**:
+- EMA-pullback volume-confirmation filter, funding-rate-extreme quality bonus, RSI-band widening — unchanged from prior days, still no trade data to validate against (volume and funding-rate ideas are leaning "don't implement" per days 12/15's research).
+- Full `README.md` rewrite — it still describes a pre-EMAPerps iteration of the dashboard (non-existent pages, a non-existent `/api/init-db` endpoint). Fixed the one broken link found; a full rewrite needs more scope/intent confirmation than a daily surgical pass should take on unilaterally.
+
+### Watch tomorrow
+
+- **Priority, now 16 days running**: network access to `soloris-signals.vercel.app` and `fapi.binance.com` needs to be restored. Until that happens, Tasks 1 and 3 cannot run and no data-driven strategy change can be made in good conscience.
+- Once access is restored and trade data is available: validate that the `anchorTests` fix behaves as expected in production (P/Q signals should no longer show a "Level tested N×" reason or get the associated +5; A2/B2/C2/D2/E2/F2 signals should now show counts for the level they actually touched, which may shift a handful of signals across the 95 floor in either direction — worth a specific before/after comparison once scan data is available).
+- Decide whether the full `README.md` rewrite flagged today is worth doing in a future run, or should wait for explicit user direction given it's outside the core EMAPerps scope these instructions cover.
+
+---
+
 ## 2026-10-18
 
 **EMAPerps**: ⚠️ Could not fetch live state — same network blocker as the last fourteen days, unresolved (day 15).

@@ -75,7 +75,7 @@ You can also initialize the schema manually one time from the browser or with `c
 
 - [https://soloris-signals.vercel.app/api/init-db](https://soloris-signals.vercel.app/api/init-db)
 
-Reference schema: [`db/schema.sql`](/tmp/crypto-outlook-lab-fix/db/schema.sql)
+Reference schema: [`db/schema.sql`](./db/schema.sql)
 
 If `DATABASE_URL` is not configured, the logging hooks stay dormant and the platform keeps running normally.
 
