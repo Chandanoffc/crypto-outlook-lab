@@ -1,5 +1,47 @@
 # Soloris Signals — Daily Agent Log
 
+## 2026-10-20
+
+**EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 17).
+
+**BTC**: ⚠️ Could not fetch — same blocker.
+
+---
+
+### ⚠️ Blocker persists (day 17): network egress policy still blocks the health check and performance analysis
+
+Identical denial to every prior day: `curl` returned `connect_rejected` for `soloris-signals.vercel.app:443` ("gateway answered 403 to CONNECT" per `/__agentproxy/status`), and `fapi.binance.com:443` the same. Also tried `WebFetch` directly on both URLs as a second route — both failed at DNS resolution (`getaddrinfo ENOTFOUND`), confirming neither host is reachable by any path available to this session, not just the raw-curl path. `WebSearch` worked fine, so Task 2 ran; Tasks 1 and 3 could not run for the 17th consecutive day — no live balance/positions, no BTC ticker, no closed-trade data, so no data-driven quality/strategy change was made, for the same reason as every prior day in this streak.
+
+Not sending another push notification today — one was sent on day 15 (2026-10-18), day 16 held off since nothing had changed, and nothing has changed again today. Still outstanding: `soloris-signals.vercel.app` and `fapi.binance.com` need to be added to this environment's network allowlist (Environment settings → Network access → Custom → add both hosts under Allowed domains, or broaden the access level) before Tasks 1 and 3 can run again.
+
+---
+
+### Research findings (Task 2)
+
+Same recycled, low-signal pattern as recent days — nothing cleared the bar for a trading-logic change without trade data to validate against:
+
+- **Trending/setups**: no reliable dated "this week" ranking surfaced for October 2026; results were mostly stale TradingView posts (some over a year old) and generic press releases. Nothing actionable on specific coins/setups.
+- **EMA pullback / strategy improvements**: self-reported TradingView backtests again spread widely by implementation (19–45% WR depending on script), still consistent with needing >1.5–2:1 R:R to be profitable — directionally matches the platform's fixed 1.5%/3.0%/6.0% SL/TP1/TP2 scheme, no change indicated.
+- **Indicator combinations**: generic MACD+RSI+volume vendor consensus; one 2026 "top 5 indicators" guide didn't even list ADX among its core picks (RSI/EMA/Volume Profile/Bollinger/MACD) — doesn't contradict our existing `adx4h >= 25`/`<18` gates, just no new evidence either way.
+- **Market structure**: most recent dated data point found was an August 2026 Kaiko note describing a contracting altcoin market (SOL -40%, XRP -45% YTD) with narrow pockets of relative strength (HYPE, TRX, ZEC, XLM) — two months stale, nothing current enough to act on, and doesn't change the $200M volume floor or symbol universe.
+- **Funding rate edge**: same unresolved pattern as every prior day — crowding/squeeze framing is directionally plausible (anecdotal 2026 case studies on both sides), but no validated universal threshold and no backtest against this platform's own trades. Not actioned.
+
+### Changes implemented
+
+No live-trade-data-validated quality/strategy changes — 17th day running with no closed-trade data available. Re-verified the engine's core guardrails are still intact (no drift today): `MIN_ALERT_QUALITY = 95`, `$200M` volume floor, `PAPER_SIZE_QUALITY_CEIL = 110`, `PAPER_LEVERAGE = 5`. Re-checked the two display fixes from day 16 (`emaperps.html` panel label, `api/notify.js` fallback label) — both still correct. Scanned for `TODO`/`FIXME` markers repo-wide and for lingering `ClaudePerps`/`CLAUDEPERPS` references outside `.claude/daily-agent.md` (where it's an intentional "removed, don't treat as live" note) — found none. No new bugs found today; the prior days' cleanup passes continue to hold.
+
+**Considered but deferred** (unchanged from prior days):
+- EMA-pullback volume-confirmation filter, funding-rate-extreme quality bonus, RSI-band widening — still no trade data to validate against.
+- Full `README.md` rewrite (flagged day 16) — still outside today's surgical scope without explicit user direction.
+
+### Watch tomorrow
+
+- **Priority, now 17 days running**: network access to `soloris-signals.vercel.app` and `fapi.binance.com` needs to be restored. Until that happens, Tasks 1 and 3 cannot run and no data-driven strategy change can be made in good conscience.
+- Once access is restored: run the full health check + performance analysis backlog (balance/positions/closed-trade breakdown) before considering any of the deferred research ideas above.
+- If this blocker reaches roughly 2026-10-27 (one week past the day-15 notification) with still no change, re-escalate with another push notification per the established cadence.
+
+---
+
 ## 2026-10-19
 
 **EMAPerps**: ⚠️ Could not fetch live state — same network blocker as the last fifteen days, unresolved (day 16).
