@@ -13,6 +13,7 @@ const { defaultRuntimeState: epDefault, sanitizeRuntimeState: epSanitize, runEma
 // cron-scan no longer touches meme state.
 const { runPonsAutoScan, defaultState: ponsDefault } = require("../lib/pons-autoscan");
 const { runTAPerps_Scan, defaultState: taDefault, defaultPaper: taPaperDefault, markTAPaperPositions } = require("../lib/taperps-scanner");
+const { runBreakout_Scan, markBreakoutPaper, defaultState: boDefault, defaultPaper: boPaperDefault } = require("../lib/breakout-scanner");
 
 function buildJsonResponse(res, statusCode, payload) {
   res.statusCode = statusCode;
@@ -108,6 +109,28 @@ module.exports = async function handler(req, res) {
     }
   } catch (err) {
     results.taperps = { ok: false, error: String(err.message) };
+  }
+
+  // Breakout scan — daily bars, 20h cooldown
+  try {
+    const claimed = await tryClaimScanLock("breakout-lock", now, 20 * 60 * 60_000);
+    if (!claimed) {
+      results.breakout = { ok: true, skipped: true };
+    } else {
+      let boState = boDefault();
+      if (hasDatabase()) {
+        const row = await getRuntimeState("breakout");
+        if (row?.state) boState = { ...boDefault(), ...row.state };
+      }
+      if (!boState.settings) boState.settings = { discordWebhook: "" };
+      if (!boState.paper)    boState.paper    = boPaperDefault();
+      const webhook = boState.settings.discordWebhook || "";
+      const summary = await runBreakout_Scan(boState, { webhook });
+      if (hasDatabase()) await upsertRuntimeState("breakout", boState);
+      results.breakout = { ok: true, summary };
+    }
+  } catch (err) {
+    results.breakout = { ok: false, error: String(err.message) };
   }
 
   return buildJsonResponse(res, 200, { ok: true, scannedAt: Date.now(), results });

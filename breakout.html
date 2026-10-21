@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Breakout · Soloris Signals</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="./breakout.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="topbar-inner">
+        <a class="brand" href="./emaperps.html">
+          <span class="brand-name">Soloris <em>Signals</em></span>
+        </a>
+
+        <nav class="topbar-nav" aria-label="Strategy pages">
+          <a class="nav-tab" href="./emaperps.html">EMA Perps</a>
+          <a class="nav-tab" href="./tokenscan.html">TokenScan</a>
+          <a class="nav-tab" href="./memescreener.html">MemeScreener</a>
+          <a class="nav-tab" href="./taperps.html">TA Perps</a>
+          <a class="nav-tab is-current" href="./breakout.html">Breakout</a>
+        </nav>
+
+        <div class="topbar-end">
+          <span class="live-badge">
+            <span class="live-dot" aria-hidden="true"></span>
+            Live Scan
+          </span>
+          <button id="bo-settings-btn" class="btn btn-ghost" type="button">⚙ Settings</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="page">
+
+      <!-- Hero -->
+      <div class="strategy-hero">
+        <div class="hero-left">
+          <span class="strategy-badge" style="background:rgba(245,158,11,.14);color:#fbbf24;border-color:rgba(245,158,11,.35);">Breakout</span>
+          <h1 class="hero-title">Accumulation Breakout Scanner</h1>
+          <p class="hero-sub">
+            Daily perpetuals scanner detecting six-phase accumulation patterns:
+            <strong>Prior decline</strong> (≥25%) → <strong>Capitulation low</strong> → <strong>V-shaped recovery</strong> →
+            <strong>Low retest</strong> (double bottom) → <strong>Accumulation structure</strong> (higher lows, tight range) →
+            <strong>Volume breakout</strong> above structure high. Min score 55/100. 3× leverage.
+          </p>
+        </div>
+        <div class="hero-status">
+          <div id="bo-status-dot" class="status-dot status-dot--neutral"></div>
+          <span id="bo-status-msg" class="status-msg">Initializing…</span>
+          <span id="bo-last-scan" class="status-scan"></span>
+        </div>
+      </div>
+
+      <!-- Scan controls -->
+      <section class="section-block" style="margin-bottom:1.25rem;">
+        <div style="display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;">
+          <button id="bo-scan-btn" class="btn btn-primary" style="min-width:120px;">Scan Now</button>
+          <span id="bo-scan-status" style="font-size:.8rem;color:var(--text-muted);"></span>
+        </div>
+      </section>
+
+      <!-- Stats row -->
+      <div class="stats-row" id="bo-stats-row" style="display:none;">
+        <div class="stat-card">
+          <span class="stat-label">Total Signals</span>
+          <span class="stat-value" id="bo-stat-total">0</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Avg Score</span>
+          <span class="stat-value" id="bo-stat-avgscore">—</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Avg Decline</span>
+          <span class="stat-value" id="bo-stat-decline">—</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Avg Vol Expansion</span>
+          <span class="stat-value" id="bo-stat-vol">—</span>
+        </div>
+      </div>
+
+      <!-- Paper trading -->
+      <section class="section-block" id="bo-paper-section" style="display:none;">
+        <h2 class="section-title">Paper Trading <span style="font-size:.75rem;font-weight:400;color:var(--text-muted);">3× leverage · $100 start</span></h2>
+        <div class="stats-row" style="margin-bottom:1rem;">
+          <div class="stat-card">
+            <span class="stat-label">Balance</span>
+            <span class="stat-value" id="bo-paper-balance">$100.00</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Return</span>
+            <span class="stat-value" id="bo-paper-return">0.00%</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Open Positions</span>
+            <span class="stat-value" id="bo-paper-open">0</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Win Rate</span>
+            <span class="stat-value" id="bo-paper-winrate">—</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Total Trades</span>
+            <span class="stat-value" id="bo-paper-total">0</span>
+          </div>
+        </div>
+
+        <div id="bo-cb-warning" style="display:none;padding:.6rem 1rem;border-radius:8px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:#fca5a5;font-size:.8rem;margin-bottom:1rem;"></div>
+
+        <h3 style="font-size:.85rem;font-weight:600;color:var(--text-muted);margin:.5rem 0 .5rem;">Open Positions</h3>
+        <div id="bo-open-positions" class="signals-list">
+          <div class="empty-state" style="padding:.75rem;"><p style="margin:0;font-size:.8rem;">No open positions.</p></div>
+        </div>
+
+        <h3 style="font-size:.85rem;font-weight:600;color:var(--text-muted);margin:1rem 0 .5rem;">Closed Trades</h3>
+        <div id="bo-closed-trades" class="signals-list">
+          <div class="empty-state" style="padding:.75rem;"><p style="margin:0;font-size:.8rem;">No closed trades yet.</p></div>
+        </div>
+      </section>
+
+      <!-- Signals list -->
+      <section class="section-block">
+        <h2 class="section-title">Active Signals</h2>
+        <p class="section-sub">Scans top 150 USDT perpetuals on Binance. Daily timeframe. Min score 55/100.</p>
+        <div id="bo-signals-list" class="signals-list">
+          <div class="empty-state">
+            <p>No signals yet. Hit <strong>Scan Now</strong> to run a manual scan, or wait for the hourly cron.</p>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Settings modal -->
+    <div id="bo-settings-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;align-items:center;justify-content:center;" hidden>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.5rem;width:min(480px,92vw);position:relative;">
+        <button id="bo-settings-close" type="button" style="position:absolute;top:.75rem;right:.75rem;background:none;border:none;color:var(--text-muted);font-size:1.1rem;cursor:pointer;">✕</button>
+        <h2 style="font-size:1rem;font-weight:600;margin:0 0 1rem;">Breakout Settings</h2>
+        <form id="bo-settings-form" autocomplete="off">
+          <div style="margin-bottom:1rem;">
+            <label style="display:block;font-size:.8rem;color:var(--text-muted);margin-bottom:.35rem;" for="bo-s-webhook">Discord Webhook URL</label>
+            <input id="bo-s-webhook" type="url" placeholder="https://discord.com/api/webhooks/…"
+              style="width:100%;background:var(--input-bg,rgba(255,255,255,.06));border:1px solid var(--border);border-radius:6px;padding:.5rem .75rem;color:var(--text);font-size:.85rem;box-sizing:border-box;" />
+            <p style="font-size:.72rem;color:var(--text-muted);margin:.35rem 0 0;">Discord webhook for Breakout alerts.</p>
+          </div>
+          <div style="display:flex;gap:.75rem;justify-content:flex-end;">
+            <button type="button" id="bo-settings-cancel" class="btn btn-ghost">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Signal card template -->
+    <template id="bo-signal-tpl">
+      <div class="signal-card" data-side="long">
+        <div class="signal-header">
+          <div class="signal-left">
+            <span class="signal-symbol"></span>
+            <span class="signal-side-badge" style="background:rgba(34,197,94,.12);color:#4ade80;border:1px solid rgba(34,197,94,.3);">LONG</span>
+            <span class="signal-score-badge"></span>
+          </div>
+          <div class="signal-right">
+            <span class="signal-time"></span>
+          </div>
+        </div>
+
+        <div class="signal-prices">
+          <div class="price-item">
+            <span class="price-label">Entry</span>
+            <span class="price-val signal-entry"></span>
+          </div>
+          <div class="price-item">
+            <span class="price-label">Stop Loss</span>
+            <span class="price-val signal-sl" style="color:var(--red);"></span>
+          </div>
+          <div class="price-item">
+            <span class="price-label">TP1 (2R)</span>
+            <span class="price-val signal-tp1" style="color:var(--green);"></span>
+          </div>
+          <div class="price-item">
+            <span class="price-label">TP2 (3.5R)</span>
+            <span class="price-val signal-tp2" style="color:var(--green);"></span>
+          </div>
+        </div>
+
+        <!-- Pattern breakdown -->
+        <div class="signal-detail" style="margin-top:.75rem;padding:.6rem .75rem;background:rgba(245,158,11,.06);border-radius:6px;border:1px solid rgba(245,158,11,.15);">
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:.4rem .75rem;font-size:.75rem;">
+            <div><span style="color:var(--text-muted);">Decline</span><br><strong class="bo-decline"></strong></div>
+            <div><span style="color:var(--text-muted);">Retest accuracy</span><br><strong class="bo-retest"></strong></div>
+            <div><span style="color:var(--text-muted);">Accum. bars</span><br><strong class="bo-bars"></strong></div>
+            <div><span style="color:var(--text-muted);">Vol expansion</span><br><strong class="bo-vol"></strong></div>
+            <div><span style="color:var(--text-muted);">Structure</span><br><strong class="bo-struct"></strong></div>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <!-- Position card template -->
+    <template id="bo-position-tpl">
+      <div class="signal-card" style="border-color:rgba(245,158,11,.2);">
+        <div class="signal-header">
+          <div class="signal-left">
+            <span class="signal-symbol"></span>
+            <span class="signal-side-badge" style="background:rgba(34,197,94,.12);color:#4ade80;border:1px solid rgba(34,197,94,.3);">LONG</span>
+            <span class="signal-score-badge"></span>
+          </div>
+          <div class="signal-right">
+            <span class="pos-pnl-badge" style="font-size:.75rem;padding:.2rem .5rem;border-radius:4px;font-weight:600;"></span>
+          </div>
+        </div>
+        <div class="signal-prices">
+          <div class="price-item"><span class="price-label">Entry</span><span class="price-val pos-entry"></span></div>
+          <div class="price-item"><span class="price-label">Mark</span><span class="price-val pos-mark"></span></div>
+          <div class="price-item"><span class="price-label">SL</span><span class="price-val pos-sl" style="color:var(--red);"></span></div>
+          <div class="price-item"><span class="price-label">TP1</span><span class="price-val pos-tp1" style="color:var(--green);"></span></div>
+          <div class="price-item"><span class="price-label">TP2</span><span class="price-val pos-tp2" style="color:var(--green);"></span></div>
+        </div>
+        <div class="pos-progress-wrap" style="margin-top:.5rem;">
+          <div class="pos-progress-bar" style="height:4px;border-radius:2px;background:var(--border);overflow:hidden;">
+            <div class="pos-progress-fill" style="height:100%;transition:width .4s;"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:.68rem;color:var(--text-muted);margin-top:.2rem;">
+            <span class="pos-progress-sl"></span>
+            <span class="pos-progress-mark"></span>
+            <span class="pos-progress-tp2"></span>
+          </div>
+        </div>
+        <div style="font-size:.72rem;color:var(--text-muted);margin-top:.4rem;">
+          Size: <strong class="pos-size"></strong> · 3× lev · Opened <span class="pos-opened"></span>
+          <span class="pos-be-tag" style="display:none;margin-left:.4rem;padding:.1rem .35rem;background:rgba(251,191,36,.12);color:#fbbf24;border-radius:3px;font-size:.68rem;">BE</span>
+          <span class="pos-tp1-tag" style="display:none;margin-left:.4rem;padding:.1rem .35rem;background:rgba(34,197,94,.12);color:#4ade80;border-radius:3px;font-size:.68rem;">TP1 ✓</span>
+        </div>
+      </div>
+    </template>
+
+  </body>
+</html>

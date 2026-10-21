@@ -1,4 +1,33 @@
 const fallbackExchangeInfo = require("../fallback-perps.js");
+const { ensureSchema, insertAlertDelivery, insertSignalEvent, insertTradeEvent } = require("../lib/neon-db");
+
+async function readJsonBody(req) {
+  let body = "";
+  for await (const chunk of req) body += chunk;
+  return body ? JSON.parse(body) : {};
+}
+
+async function handleLogEvent(req, res) {
+  const buildRes = (code, payload) => {
+    res.statusCode = code;
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.end(JSON.stringify(payload));
+  };
+  try {
+    const body   = await readJsonBody(req);
+    const stream = String(body?.stream || "").trim().toLowerCase();
+    const event  = body?.event || {};
+    await ensureSchema();
+    let result;
+    if      (stream === "signal") result = await insertSignalEvent(event);
+    else if (stream === "trade")  result = await insertTradeEvent(event);
+    else if (stream === "alert")  result = await insertAlertDelivery(event);
+    else { buildRes(400, { error: "Unsupported log stream." }); return; }
+    buildRes(200, { ok: true, stream, result });
+  } catch (err) {
+    buildRes(500, { error: err.message || "Unable to log event." });
+  }
+}
 
 const DEFAULT_TOKEN = "BTC";
 const DEFAULT_INTERVAL = "15m";
@@ -388,6 +417,9 @@ async function buildVenueMatrix(resolved, ticker, premiumIndex, openInterest) {
 }
 
 module.exports = async function handler(req, res) {
+  // POST → log-event (merged from api/log-event.js to stay within Vercel 12-fn limit)
+  if (req.method === "POST") return handleLogEvent(req, res);
+
   const token =
     firstQueryValue(req.query?.token) ||
     firstQueryValue(req.query?.symbol) ||
