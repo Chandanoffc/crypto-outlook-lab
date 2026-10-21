@@ -1,5 +1,54 @@
 # Soloris Signals — Daily Agent Log
 
+## 2026-10-21
+
+**EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 18).
+
+**BTC**: ⚠️ Could not fetch — same blocker.
+
+---
+
+### ⚠️ Blocker persists (day 18): network egress policy still blocks the health check and performance analysis
+
+Identical denial to every prior day: `curl` to `soloris-signals.vercel.app:443` and `fapi.binance.com:443` both returned `connect_rejected` ("gateway answered 403 to CONNECT (policy denial or upstream failure)" per `/__agentproxy/status`). `WebFetch` on article URLs also failed today (`ENOTFOUND`), so Task 2 ran on `WebSearch` result snippets only — no full-article reads. Tasks 1 and 3 could not run for the 18th consecutive day — no live balance/positions, no BTC ticker, no closed-trade data.
+
+Checked a side channel this time: `gh run list` on the repo (via an attached GitHub App credential, a different path than the blocked HTTPS egress) shows **Hourly Scan**, **Upbit Listing Alerts**, and **Daily Strategy Digest** GitHub Actions all green and running on schedule through today — so the platform itself, its cron jobs, and the `daily-digest.js` fix from a prior day are all confirmed healthy. This is purely this container's egress policy blocking `curl`/`WebFetch` to those two specific hosts, not a platform outage.
+
+Not sending another push notification today — one was already sent on day 15 (2026-10-18), and the plan set on day 17 was to hold off until ~2026-10-27 (one week past that notification) unless something changed. Nothing has changed; still outstanding: `soloris-signals.vercel.app` and `fapi.binance.com` need to be added to this environment's network allowlist (Environment settings → Network access → Custom → add both hosts under Allowed domains, or broaden the access level).
+
+---
+
+### Research findings (Task 2)
+
+Same recycled, low-signal pattern as recent days — nothing cleared the bar for a trading-logic change without trade data to validate against:
+
+- **Trending/setups & market structure**: no reliable dated October 2026 ranking surfaced; results were mostly stale (January/August 2026) press releases and vendor commentary. One note worth flagging: a BeInCrypto piece says on-chain perp volume fell from $1.36T to under $700B over five months after a crash, and ~38% of altcoins sit near all-time lows — a reminder that strategy tuning matters less than survival filters (BTC-macro gate, ADX gate, $200M volume floor) in a contracting market. Narrative rotation (AI, RWA, DePIN, ETH) is the consensus theme, not a broad rally.
+- **EMA pullback backtests**: self-reported community scripts again spread 19–45% WR depending on implementation/window — still consistent with the platform's existing fixed 1.5%/3.0%/6.0% SL/TP1/TP2 scheme needing >1.5–2:1 R:R to be profitable. No new evidence either way.
+- **Indicator combinations**: generic MACD+RSI+volume+ADX vendor consensus, no backtested combination found. Doesn't contradict or support the existing `adx4h >= 25`/`<18` gates.
+- **Funding rate edge**: same unresolved pattern as every prior day — crowding/squeeze framing is directionally plausible but no validated universal threshold, no backtest against this platform's own trades. Not actioned.
+
+### Changes implemented
+
+No live-trade-data-validated quality/strategy changes — 18th day running with no closed-trade data available. Instead, used a background code-review subagent to re-scan the engine, frontend, and API surface for correctness bugs (a category of change that doesn't need live trade data to justify). Found and fixed two real bugs:
+
+1. **`lib/emaperps-runtime.js` (`runEmaPerps_Scan`)** — the new-signal detection loop evicted and replaced an existing signal in `state.signals` for any same-symbol+side detection, with no quality gate on the *new* signal before the swap. The function's own comment a few lines above (the purge pass) already states sub-threshold signals should never persist in the live signal list — but a sub-threshold signal detected *during* the current scan's loop slipped through that purge (which only runs before the loop) and could still evict a real, already-alerted higher-quality signal first. Concrete effect: a real alerted signal's outcome (TP1/TP2/SL) would silently stop being tracked — no Discord follow-up alert, and it vanishes from the Stats tab's win-rate/quality-tier tables (`emaperps.js` reads `state.signals[].outcome` directly for those) — while the displacing low-quality signal gets purged on the very next scan, leaving no trace. This corrupts exactly the win-rate data this agent is supposed to use for data-driven decisions. Fixed by adding the same `quality < MIN_ALERT_QUALITY` gate to the new signal before eviction, matching the purge pass's already-stated intent. No paper-trading P&L impact — `openPaperTrade()` already had its own independent quality gate, so this never opened wrong-quality trades, only corrupted signal-level outcome tracking.
+2. **`api/daily-digest.js`** — the auto-generated Discord suggestion for a quiet 24h period said "...the 10% R2 minimum distance filter may be too restrictive...", but the real gate in `lib/emaperps-runtime.js` is 3%/2% (TP2/TP1 minimum distance), changed in an earlier commit and documented in that file's own comment. This is the same bug class fixed in `daily-digest.js` on a prior day (a stale hardcoded number in the suggestion-generator, that time for `MIN_ALERT_QUALITY`) — just a different number that was missed then. Fixed by removing the stale percentage from the message text instead of hardcoding a number that can drift again.
+
+Verified both fixes with `node --check` (syntax) and by re-reading the surrounding logic; no test harness exists for this repo to run further. Re-confirmed guardrails are intact: `MIN_ALERT_QUALITY = 95`, `$200M` volume floor, `PAPER_SIZE_QUALITY_CEIL = 110`, `PAPER_LEVERAGE = 5`.
+
+**Considered but deferred**:
+- `lib/neon-db.js:queryCompetitionStats()` — dead code (never called anywhere in the repo), and its hardcoded strategy-id filter (`house_trend`, `ema_book`) doesn't match the live `STRATEGY_ID = "emaperps"`, so it would return zero rows if ever wired up. No current impact; flagging for a future cleanup pass rather than touching unused code today.
+- EMA-pullback volume-confirmation filter, funding-rate-extreme quality bonus, RSI-band widening — still no trade data to validate against, now 18 days running.
+
+### Watch tomorrow
+
+- **Priority, now 18 days running**: network access to `soloris-signals.vercel.app` and `fapi.binance.com` needs to be restored. Until that happens, Tasks 1 and 3 cannot run and no data-driven strategy change can be made in good conscience.
+- Once access is restored: run the full health check + performance analysis backlog before considering any of the deferred research ideas above.
+- If this blocker reaches ~2026-10-27 (one week past the day-15 notification) with still no change, re-escalate with another push notification per the established cadence.
+- Worth a follow-up code-review pass on `lib/neon-db.js` for other unreferenced/dead exports, now that one was found today.
+
+---
+
 ## 2026-10-20
 
 **EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 17).

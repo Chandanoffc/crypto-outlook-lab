@@ -134,7 +134,7 @@ function generateSuggestions(epSig, epPaper, epPatterns, epTiers) {
     suggestions.push({ strategy: "EMAPerps", severity: "⚠️", text: `Win rate is ${epSig.winRate}% on ${epSig.resolved.length} resolved signals — below breakeven for 2:1 R:R. Consider raising MIN_ALERT_QUALITY from ${MIN_ALERT_QUALITY} further.` });
   }
   if (epSig.last24h.length === 0) {
-    suggestions.push({ strategy: "EMAPerps", severity: "⚠️", text: `No new signals in the last 24h — the 10% R2 minimum distance filter may be too restrictive for current market conditions.` });
+    suggestions.push({ strategy: "EMAPerps", severity: "⚠️", text: `No new signals in the last 24h — the TP1/TP2 minimum distance filter may be too restrictive for current market conditions.` });
   }
 
   // ── EMAPerps pattern analysis ──
