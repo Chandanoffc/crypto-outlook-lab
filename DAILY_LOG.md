@@ -1,5 +1,53 @@
 # Soloris Signals — Daily Agent Log
 
+## 2026-10-22
+
+**EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 19).
+
+**BTC**: ⚠️ Could not fetch — same blocker.
+
+---
+
+### ⚠️ Blocker persists (day 19): network egress policy still blocks the health check and performance analysis
+
+Identical denial to every prior day: `curl` to `soloris-signals.vercel.app:443` and `fapi.binance.com:443` both returned `connect_rejected` ("gateway answered 403 to CONNECT (policy denial or upstream failure)" per `/__agentproxy/status`). `WebSearch` worked fine, so Task 2 ran on search-result snippets; `WebFetch` was not attempted today (no article looked worth a full read — see below). Tasks 1 and 3 could not run for the 19th consecutive day — no live balance/positions, no BTC ticker, no closed-trade data.
+
+Re-checked the side channel from day 18: `gh run list` (via the GitHub App credential, a separate path from the blocked HTTPS egress) shows **Hourly Scan**, **Upbit Listing Alerts**, and **Daily Strategy Digest** all green and running on schedule through today (most recent: Hourly Scan at 2026-10-22T01:18 UTC, success). The platform itself, its crons, and the prior digest fix remain confirmed healthy — this is purely this container's egress policy on two specific hosts.
+
+Not sending another push notification today — one was sent on day 15 (2026-10-18), and the plan set on day 17 was to hold off until ~2026-10-27 (one week past that notification) unless something changed. Nothing has changed. Still outstanding: `soloris-signals.vercel.app` and `fapi.binance.com` need to be added to this environment's network allowlist (Environment settings → Network access → Custom → add both hosts under Allowed domains, or broaden the access level).
+
+---
+
+### Research findings (Task 2)
+
+Same recycled, low-signal pattern as recent days — nothing cleared the bar for a trading-logic change without trade data to validate against:
+
+- **Trending/setups & market structure**: no reliable dated October 2026 ranking surfaced. Most recent dated data point is still the August 2026 Kaiko note: altcoin volumes/prices contracting roughly in line with BTC, fewer listed pairs, relative strength concentrated in HYPE, TRX, ZEC, XLM (SOL -40%, XRP -45% YTD as of that report). Nothing here changes the $200M volume floor or symbol universe.
+- **EMA pullback backtests**: still wildly inconsistent by implementation — one fresh (Jul–Sep 2026) BTC 15m community backtest reported 19% WR / 0.32 PF / -10% return over 184 trades; others self-report 32-45% WR with no comparable window. Reinforces that win rate alone is meaningless without R:R, drawdown, and cost context — consistent with this platform's existing fixed 1.5%/3.0%/6.0% SL/TP1/TP2 scheme needing a real R:R edge, not a high win rate, to be profitable. No change indicated.
+- **Indicator combinations**: generic MACD+RSI+volume-filter vendor consensus repeated (volume-gated MACD crossovers, RSI held in a band rather than raw 70/30, z-score volume impulse scoring) — none backtested with out-of-sample rigor. Doesn't contradict or support the existing `adx4h >= 25`/`<18` gates; ADX wasn't even mentioned in this round's indicator-guide results.
+- **Funding rate edge**: same unresolved pattern as every prior day — crowding/squeeze framing is directionally plausible, vendors cite ad hoc thresholds (KuCoin ~0.05%/interval, one TradingView script ±0.03% paired with an OI z-score ≥2.0), but sources themselves say compare-to-own-30/90-day-average beats any fixed cutoff, and none is validated against this platform's own trades. Not actioned.
+
+### Changes implemented
+
+No live-trade-data-validated quality/strategy changes — 19th day running with no closed-trade data available. Ran a background code-review subagent on the engine/API/frontend surface again (bug-hunting doesn't need live trade data to justify). Found and fixed 2 new bugs, both in `lib/emaperps-runtime.js` (`detectSignal`):
+
+1. **Quality-bonus leak on P/Q EMA-pullback signals, closing a gap the day-16 fix left open.** The day-16 fix zeroed `anchorTests` (the S/R "level tested N×" quality bonus + reasoning label) for P/Q signals by relying on the assumption that `s1Touch/s2Touch/r1Touch/r2Touch` are always false by the time a P/Q signal is reached. That assumption is false in one case: those touch flags are computed independently of `srLevelsUsable` (the gate that decides whether S1/S2 or R1/R2 are far enough apart to be structurally usable for an A-F signal). When levels are too clustered (`srLevelsUsable = false`) but price still happens to touch one, the A-F branch correctly gets skipped — but a P/Q signal reaching the fallback block could still carry a true touch flag, handing it an unearned +5 quality bonus and a misleading "Level tested N×" label on a signal type that by definition doesn't use S/R levels. Fixed by gating `anchorTests` directly on `isEMAPullbackSignal` (the signal's own type) instead of the touch-flag invariant — now unconditionally 0 for every P/Q signal.
+2. **Self-contradicting comment on the minimum-target-distance gate.** The comment above the `tp2Dist < 0.03` / `tp1Dist < 0.02` checks claimed "TP distance gates no longer apply" directly above two lines of code that do still apply and reject signals. Comment-only fix: rewrote it to correctly explain these gates sanity-check the *structural* candidate tp1/tp2 before the fixed-%-of-entry SL/TP1/TP2 overwrite later in the function — no behavior change.
+
+Both verified with `node --check`. Re-confirmed guardrails intact: `MIN_ALERT_QUALITY = 95`, `$200M` volume floor, `PAPER_SIZE_QUALITY_CEIL = 110`, `PAPER_LEVERAGE = 5`. No other new bugs found in `lib/neon-db.js`, `lib/backtest-runtime.js`, `api/emaperps.js`, `api/daily-digest.js`, `api/notify.js`, `emaperps.js`, `emaperps.html` — prior days' fixes (breakeven-label, dead ClaudePerps refs, signal-eviction quality gate, digest stale-percentage) all still correct.
+
+**Considered but deferred**:
+- `lib/neon-db.js:queryCompetitionStats()` — still unreferenced dead code, flagged day 18, no new reason to touch it today.
+- EMA-pullback volume-confirmation filter, funding-rate-extreme quality bonus, RSI-band widening — still no trade data to validate against, now 19 days running.
+
+### Watch tomorrow
+
+- **Priority, now 19 days running**: network access to `soloris-signals.vercel.app` and `fapi.binance.com` needs to be restored. Until that happens, Tasks 1 and 3 cannot run and no data-driven strategy change can be made in good conscience.
+- Once access is restored: run the full health check + performance analysis backlog before considering any of the deferred research ideas above.
+- If this blocker reaches ~2026-10-27 (one week past the day-15 notification) with still no change, re-escalate with another push notification per the established cadence.
+
+---
+
 ## 2026-10-21
 
 **EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 18).
