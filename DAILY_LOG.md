@@ -1,5 +1,53 @@
 # Soloris Signals — Daily Agent Log
 
+## 2026-10-23
+
+**EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 20).
+
+**BTC**: ⚠️ Could not fetch — same blocker.
+
+---
+
+### ⚠️ Blocker persists (day 20): network egress policy still blocks the health check and performance analysis
+
+Identical denial to every prior day: `curl` to `soloris-signals.vercel.app:443` and `fapi.binance.com:443` both returned `connect_rejected` ("gateway answered 403 to CONNECT (policy denial or upstream failure)" per `/__agentproxy/status`). `WebSearch` worked fine, so Task 2 ran on search-result snippets. Tasks 1 and 3 could not run for the 20th consecutive day — no live balance/positions, no BTC ticker, no closed-trade data.
+
+Tried the `gh run list` side channel used on days 18–19 to at least confirm crons are healthy; this time it was denied — first by a GitHub-access-not-enabled error, then (after attaching the repo with push access via `add_repo`) by this session's own auto-mode permission classifier. Not pursued further; no side-channel confirmation of cron health today.
+
+Not sending another push notification today — per the day-17 plan (reaffirmed day 22), holding off until ~2026-10-27 (one week past the day-15/2026-10-18 notification) unless something changes. Nothing has changed. Still outstanding: `soloris-signals.vercel.app` and `fapi.binance.com` need to be added to this environment's network allowlist (Environment settings → Network access → Custom → add both hosts under Allowed domains, or broaden the access level).
+
+---
+
+### Research findings (Task 2)
+
+Same recycled, low-signal pattern as recent days — nothing cleared the bar for a trading-logic change without trade data to validate against:
+
+- **Trending/setups & market structure**: no reliable dated October 2026 ranking surfaced for either perps setups or altcoin trends — most search results were stale (2024-2025) or boilerplate price-signal pages. Most recent dated altcoin data point found: an early-September KuCoin piece on ZEC/BNB/ARB/XRP/SOL open-interest surge (ZEC OI hit a record $2.4B, described as leverage-driven, not spot-driven) and a CoinStats note that September perp-DEX volume topped $1.1T with HYPE/ASTER/AVNT posting strong gains. Nothing here changes the $200M volume floor or symbol universe.
+- **EMA pullback backtests**: still wildly inconsistent by implementation — same pattern as prior days (one BTC 15m community backtest at 19% WR/0.32 PF/-10% return vs. unverified vendor claims of 32-45% WR or PF 1.97). Reinforces that win rate alone is meaningless without R:R and cost context — consistent with this platform's fixed 1.5%/3.0%/6.0% SL/TP1/TP2 scheme. No change indicated.
+- **MACD/RSI/ADX combinations**: generic vendor/TradingView-script consensus repeated (volume-gated MACD crossovers, RSI held in a band, ADX-above-threshold trend filter) — all self-reported, none out-of-sample verified. Doesn't contradict or support the existing `adx4h >= 25`/`<18` gates.
+- **Funding rate edge**: same unresolved pattern as every prior day — crowded-positioning/mean-reversion framing is directionally plausible, but sources themselves say compare-to-own-rolling-average beats any fixed threshold, and none is validated against this platform's own trades. Not actioned.
+
+### Changes implemented
+
+No live-trade-data-validated quality/strategy changes — 20th day running with no closed-trade data available. Ran a background code-review subagent on the engine/API/frontend surface again; findings:
+
+1. **`lib/emaperps-runtime.js`** — fixed a factual error in the `PAPER_BE_TRIGGER_PCT` comment. It claimed the 10% breakeven trigger is "halfway to TP1=15%" — half of 15 is 7.5, not 10 (10 is ⅔ of the way there). Comment-only, no behavior change, but a real error that could mislead a future tuning pass.
+2. **`emaperps.html` / `emaperps.js` / `styles.css`** — added a circuit-breaker warning banner to the EMAPerps paper-trading tab. The backend has computed and returned `paper.pausedUntil`/`paper.pauseReason` all along (Task 1 of these very instructions says to check it), and the platform's two sibling strategies (`taperps.js`/`taperps.html`, `breakout.js`) both already surface this as a visible warning banner — but the main, live EMAPerps dashboard had no UI for it at all (confirmed via grep: zero hits before today). Added `#ep-cb-warning` (new `.cb-warning` CSS class, same red flat-UI treatment as existing warning/SL classes) between the paper-stats row and the open/closed trade grid in `emaperps.html`; wired it in `renderPaperTab()` in `emaperps.js` to show `paper.pauseReason` whenever `Date.now() < paper.pausedUntil`, hidden otherwise. This is a pure additive display fix — doesn't touch quality scoring, sizing, leverage, or the API response shape. Verified `node --check` on `emaperps.js`.
+
+Re-confirmed guardrails intact: `MIN_ALERT_QUALITY = 95`, `$200M` volume floor, `PAPER_SIZE_QUALITY_CEIL = 110`, `PAPER_LEVERAGE = 5`.
+
+**Considered but deferred**:
+- EMA-pullback volume-confirmation filter, funding-rate-extreme quality bonus, RSI-band widening — still no trade data to validate against, now 20 days running.
+- `lib/neon-db.js:queryCompetitionStats()` — still unreferenced dead code, flagged repeatedly, no new reason to touch it today.
+
+### Watch tomorrow
+
+- **Priority, now 20 days running**: network access to `soloris-signals.vercel.app` and `fapi.binance.com` needs to be restored. Until that happens, Tasks 1 and 3 cannot run and no data-driven strategy change can be made in good conscience.
+- Once access is restored: run the full health check + performance analysis backlog before considering any of the deferred research ideas above.
+- If this blocker reaches ~2026-10-27 (one week past the day-15 notification) with still no change, re-escalate with another push notification per the established cadence.
+
+---
+
 ## 2026-10-22
 
 **EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 19).

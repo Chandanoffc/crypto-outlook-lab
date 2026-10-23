@@ -84,6 +84,7 @@ const dom = {
   paperClosedCount: document.getElementById("ep-paper-closed-count"),
   paperOpen:        document.getElementById("ep-paper-open"),
   paperClosed:      document.getElementById("ep-paper-closed"),
+  cbWarning:        document.getElementById("ep-cb-warning"),
   paperReset:       document.getElementById("ep-paper-reset"),
   // Comparison
   comparison:   document.getElementById("ep-comparison"),
@@ -502,6 +503,15 @@ function renderPaperTab() {
   if (dom.paperWinrate)     dom.paperWinrate.textContent     = winrate != null ? `${winrate}%` : "–";
   if (dom.paperOpenCount)   dom.paperOpenCount.textContent   = openPos.length;
   if (dom.paperClosedCount) dom.paperClosedCount.textContent = closed.length;
+
+  if (dom.cbWarning) {
+    if (paper.pausedUntil && Date.now() < paper.pausedUntil) {
+      dom.cbWarning.style.display = "";
+      dom.cbWarning.textContent = `⏸ ${paper.pauseReason || "Circuit breaker active — new entries paused."}`;
+    } else {
+      dom.cbWarning.style.display = "none";
+    }
+  }
 
   if (dom.paperOpen) {
     dom.paperOpen.innerHTML = openPos.length
