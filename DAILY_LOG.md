@@ -1,5 +1,51 @@
 # Soloris Signals — Daily Agent Log
 
+## 2026-10-24
+
+**EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 21).
+
+**BTC**: ⚠️ Could not fetch — same blocker.
+
+---
+
+### ⚠️ Blocker persists (day 21): network egress policy still blocks the health check and performance analysis
+
+Identical denial to every prior day: `curl` to `soloris-signals.vercel.app:443` and `fapi.binance.com:443` both returned `connect_rejected` ("gateway answered 403 to CONNECT (policy denial or upstream failure)" per `/__agentproxy/status`). `WebSearch` worked fine, so Task 2 ran on search-result snippets. Tasks 1 and 3 could not run for the 21st consecutive day — no live balance/positions, no BTC ticker, no closed-trade data.
+
+Side channel worked today (it didn't on day 20): attached the repo with push access via `add_repo` and ran `gh run list` successfully. **Hourly Scan**, **Upbit Listing Alerts**, and **Daily Strategy Digest** are all green and running on schedule, most recently Hourly Scan at 2026-10-24T00:19:21Z. The platform, its crons, and the prior digest fix remain confirmed healthy — this is purely this container's egress policy on the two specific hosts, not a platform problem.
+
+Not sending another push notification today — holding to the day-17 plan (reaffirmed days 20/22) of waiting until ~2026-10-27 (one week past the day-15/2026-10-18 notification) unless something changes. Nothing materially has. Still outstanding: `soloris-signals.vercel.app` and `fapi.binance.com` need to be added to this environment's network allowlist (Environment settings → Network access → Custom → add both hosts under Allowed domains, or broaden the access level).
+
+---
+
+### Research findings (Task 2)
+
+Same recycled, low-signal pattern as recent days — nothing cleared the bar for a trading-logic change without trade data to validate against:
+
+- **Trending/setups & market structure**: no reliable dated October 2026 ranking surfaced — search results kept returning the same early-September KuCoin/CryptoBriefing item (ZEC open interest hit a record $2.4B, BNB/ARB/XRP/SOL also climbing) and an undated CoinGlass-sourced piece noting altcoin OI rebounding above $100B with AAVE/PUMP as sharp movers. Nothing here changes the $200M volume floor or symbol universe.
+- **EMA pullback backtests**: still wildly inconsistent by implementation (TradesViz community runs from 19% WR/-10% return to 32% WR/1.04 PF; vendor scripts self-reporting 32-45% WR). Win rate alone remains meaningless without R:R/cost context — consistent with the platform's existing fixed 1.5%/3.0%/6.0% SL/TP1/TP2 scheme. No change indicated.
+- **ADX/RSI/MACD combinations**: generic vendor consensus (MACD histogram flip + RSI>50 + volume filter, or ADX>20/30 as trend-strength threshold) — all self-reported, none out-of-sample verified, none contradicting or improving on the existing `adx4h >= 25`/`<18` gates.
+- **Funding rate edge**: same unresolved pattern as every prior day — crowded-positioning/mean-reversion framing is directionally plausible, thresholds cited (0.03–0.05%/interval) conflict across sources, and none is validated against this platform's own trades. Not actioned.
+
+### Changes implemented
+
+No code changes today. Ran a background code-review subagent across `api/emaperps.js`, `emaperps.js`, `emaperps.html`, `lib/backtest-runtime.js`, `lib/neon-db.js`, `api/notify.js`, `api/daily-digest.js`, `lib/engine-core.js`, and `lib/notify-client.js` (plus a full manual read of `lib/emaperps-runtime.js`, the engine itself). One low-confidence item surfaced — `api/notify.js`'s `createNativeBannerFrame` has a `quality > 140` "gold" branch that's unreachable in practice (EMAPerps events route to `generatePerpsEntryBanner` instead; the only other caller never sets `qualityScore`) — but it has zero observable effect on any live path, so no fix was applied, just flagged. No other new correctness bugs found: field names, units (leveraged vs. unleveraged %, fixed-% SL/TP), and guardrail constants (`MIN_ALERT_QUALITY=95`, `$200M` floor, `PAPER_SIZE_QUALITY_CEIL=110`, `PAPER_LEVERAGE=5`) all check out. After 21 consecutive days of review, the backlog of stale-comment/dead-code bugs appears genuinely exhausted — today's pass found nothing worth changing.
+
+Re-confirmed guardrails intact: `MIN_ALERT_QUALITY = 95`, `$200M` volume floor, `PAPER_SIZE_QUALITY_CEIL = 110`, `PAPER_LEVERAGE = 5`.
+
+**Considered but deferred**:
+- EMA-pullback volume-confirmation filter, funding-rate-extreme quality bonus, RSI-band widening — still no trade data to validate against, now 21 days running.
+- `lib/neon-db.js:queryCompetitionStats()` — still unreferenced dead code, flagged repeatedly, no new reason to touch it today.
+- `api/notify.js` unreachable `quality > 140` gold-banner branch — dead in practice, not worth a change on its own.
+
+### Watch tomorrow
+
+- **Priority, now 21 days running**: network access to `soloris-signals.vercel.app` and `fapi.binance.com` needs to be restored. Until that happens, Tasks 1 and 3 cannot run and no data-driven strategy change can be made in good conscience.
+- Once access is restored: run the full health check + performance analysis backlog before considering any of the deferred research ideas above.
+- If this blocker reaches ~2026-10-27 (one week past the day-15 notification) with still no change, re-escalate with another push notification per the established cadence.
+
+---
+
 ## 2026-10-23
 
 **EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 20).
