@@ -1,5 +1,51 @@
 # Soloris Signals — Daily Agent Log
 
+## 2026-10-25
+
+**EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 22).
+
+**BTC**: ⚠️ Could not fetch — same blocker.
+
+---
+
+### ⚠️ Blocker persists (day 22): network egress policy still blocks the health check and performance analysis
+
+Identical denial to every prior day: `curl` to `soloris-signals.vercel.app:443` returned `connect_rejected` ("gateway answered 403 to CONNECT (policy denial or upstream failure)" per `/__agentproxy/status`); `fapi.binance.com` was not re-tested individually today but the proxy state is unchanged. `WebSearch` worked fine; `WebFetch` on an external research article (kraken.com) failed with `ENOTFOUND` — same intermittent pattern as recent days. Tasks 1 and 3 could not run for the 22nd consecutive day — no live balance/positions, no BTC ticker, no closed-trade data.
+
+Side channel confirmed healthy again (as on days 18, 19, 21): attached the repo with push access via `add_repo` and ran `gh run list` successfully. **Hourly Scan**, **Upbit Listing Alerts**, and **Daily Strategy Digest** are all green on schedule, most recently Hourly Scan at 2026-10-25T00:55:35Z and Daily Strategy Digest at 2026-10-24T13:00:06Z. The platform, its crons, and the prior digest fix remain confirmed healthy — this is purely this container's egress policy on the two specific hosts, not a platform problem.
+
+Not sending another push notification today — holding to the day-17 plan (reaffirmed days 20/22/24) of waiting until ~2026-10-27 (one week past the day-15/2026-10-18 notification) unless something changes. Nothing has. Still outstanding: `soloris-signals.vercel.app` and `fapi.binance.com` need to be added to this environment's network allowlist (Environment settings → Network access → Custom → add both hosts under Allowed domains, or broaden the access level).
+
+---
+
+### Research findings (Task 2)
+
+Same recycled, low-signal pattern as recent days — nothing cleared the bar for a trading-logic change without trade data to validate against:
+
+- **Trending/setups & market structure**: no reliable dated October 2026 ranking surfaced; results were dominated by stale TradingView community posts (2018–2024) and generic derivatives commentary (Wintermute, Block Scholes, Bernama) with no current date or volume figures. Nothing here changes the $200M volume floor or symbol universe.
+- **EMA pullback backtests**: same wide, inconsistent spread as every prior day — one TradesViz BTC-USD 15m run (Jul–Sep 2026) at 19.0% WR / -10.17% return; another community run at 32.2% WR / 1.04 PF (the platform's own luck-check says a no-edge strategy looks this good ~31% of the time); vendor scripts self-reporting 32–45% WR with no comparable window. Reinforces the existing conclusion: win rate alone is meaningless without R:R/cost context, consistent with the platform's fixed 1.5%/3.0%/6.0% SL/TP1/TP2 scheme. No change indicated.
+- **MACD/RSI/ADX combinations**: generic vendor consensus repeated (MACD + RSI-band gating, ADX>20 as a trend-strength threshold) — all self-reported, none out-of-sample verified, none contradicting or improving on the existing `adx4h >= 25`/`<18` gates.
+- **Funding rate edge**: same unresolved pattern as every prior day — Kraken's framing (extreme funding = crowded, leveraged positioning, historically preceding mean reversion; compare to 30/90-day rolling average rather than a fixed threshold) is the most credible source found today, but `WebFetch` couldn't load the full page for exact numbers, and it remains unvalidated against this platform's own trades. Not actioned.
+
+### Changes implemented
+
+No live-trade-data-validated quality/strategy changes — 22nd day running with no closed-trade data available. Ran a background subagent for a fresh, adversarial code-review pass over the EMAPerps engine/API/frontend surface (bug-hunting doesn't need live trade data to justify). Found and fixed one real bug:
+
+1. **`emaperps.js` (`renderPaperPositionCard`, open-position live P&L)** — for a position that has already hit TP1, `pos.size` holds only the *remaining* leg; the profit already booked from that partial close is tracked separately in `pos.realizedPnl` (set in `markPaperPositions` in `lib/emaperps-runtime.js`, and already correctly added into the closed-trade `totalPnl` calc at `lib/emaperps-runtime.js:435`). The open-position card's unrealized-P&L calculation used `pos.size` alone and never added `pos.realizedPnl`, so any open position that had already locked in a TP1 partial showed a running total that understated its true P&L by the already-booked amount — in some cases bad enough to show the wrong color (red on a trade that's actually net positive). Fixed by adding `pos.realizedPnl || 0` into `unrealizedUsd`, and switched `pnlClass`/`pnlStr`'s sign check to key off that corrected dollar total instead of the remaining-leg-only `leveragedPct`. Verified with `node --check emaperps.js`.
+
+Re-confirmed guardrails intact: `MIN_ALERT_QUALITY = 95`, `$200M` volume floor, `PAPER_SIZE_QUALITY_CEIL = 110`, `PAPER_LEVERAGE = 5`. No other new bugs found in `api/emaperps.js`, `lib/backtest-runtime.js`, `lib/neon-db.js`, `api/notify.js`, `api/daily-digest.js`, `lib/engine-core.js`, `lib/notify-client.js` — all internally consistent, no stale numbers or field-name drift. `api/notify.js`'s dead `quality > 140` gold-banner branch and `lib/neon-db.js`'s dead `queryCompetitionStats()` remain unchanged from prior assessments — still no reason to touch unused code.
+
+**Considered but deferred**:
+- EMA-pullback volume-confirmation filter, funding-rate-extreme quality bonus, RSI-band widening — still no trade data to validate against, now 22 days running.
+
+### Watch tomorrow
+
+- **Priority, now 22 days running**: network access to `soloris-signals.vercel.app` and `fapi.binance.com` needs to be restored. Until that happens, Tasks 1 and 3 cannot run and no data-driven strategy change can be made in good conscience.
+- Once access is restored: run the full health check + performance analysis backlog before considering any of the deferred research ideas above.
+- If this blocker reaches ~2026-10-27 (one week past the day-15 notification) with still no change, re-escalate with another push notification per the established cadence.
+
+---
+
 ## 2026-10-24
 
 **EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 21).

@@ -370,9 +370,14 @@ function renderPaperPositionCard(pos, isClosed = false) {
     const markDiff     = isLong ? pos.lastMarkPrice - pos.entryPrice : pos.entryPrice - pos.lastMarkPrice;
     const rawPct       = (markDiff / pos.entryPrice) * 100;
     const leveragedPct = rawPct * lev;
-    const unrealizedUsd = (markDiff / pos.entryPrice) * pos.size * lev;
-    pnlClass = leveragedPct > 0 ? "paper-pos-pnl--pos" : leveragedPct < 0 ? "paper-pos-pnl--neg" : "paper-pos-pnl--zero";
-    pnlStr   = `${leveragedPct >= 0 ? "+" : ""}${fmt$(unrealizedUsd)} (${fPct(leveragedPct)})`;
+    // pos.size is only the REMAINING leg after a TP1 partial close (see
+    // openPaperTrade/markPaperPositions in lib/emaperps-runtime.js) — the
+    // profit already booked from that partial close lives in pos.realizedPnl,
+    // not in pos.size. Omitting it understates the trade's true running P&L
+    // for every open position that has already hit TP1.
+    const unrealizedUsd = (markDiff / pos.entryPrice) * pos.size * lev + (pos.realizedPnl || 0);
+    pnlClass = unrealizedUsd > 0 ? "paper-pos-pnl--pos" : unrealizedUsd < 0 ? "paper-pos-pnl--neg" : "paper-pos-pnl--zero";
+    pnlStr   = `${unrealizedUsd >= 0 ? "+" : ""}${fmt$(unrealizedUsd)} (${fPct(leveragedPct)})`;
   } else {
     pnlClass = "paper-pos-pnl--zero";
     pnlStr   = "–";
