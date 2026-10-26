@@ -149,7 +149,38 @@ function computeMemePaperStats(paperTrades = {}) {
   const todayPnl    = todayClosed.reduce((s, t) => s + (t.pnl || 0), 0);
   const dayStart    = paperTrades._dayStartBalance ?? MEME_START;
 
-  return { balance, totalReturn, totalPnl, open: open.length, closed: closed.length, wins: wins.length, losses: losses.length, winRate, yesterday, today: { date: today, trades: todayClosed.length, wins: todayWins.length, losses: todayClosed.length - todayWins.length, pnl: Math.round(todayPnl * 100) / 100, openingBalance: dayStart, closingBalance: balance, winRate: todayClosed.length ? Math.round(todayWins.length / todayClosed.length * 100) : null } };
+  // Rich per-trade list for today (from live trades array, not dailyLog snapshot)
+  const todayTradeRecords = todayClosed.map(t => ({
+    symbol:      t.symbol || t.name || (t.mint || "").slice(0, 8),
+    status:      t.status,
+    pnl:         t.pnl,
+    pnlPct:      t.pnlPct,
+    holdMs:      t.holdMs || (t.closedAt && t.openedAt ? t.closedAt - t.openedAt : null),
+    source:      t.source || null,
+    detected_mc: t.detected_mc || null,
+    pair_url:    t.pair_url || null,
+  }));
+
+  const bySource = {};
+  const byMcTier = {};
+  const mcTier = mc => !mc ? "unknown" : mc < 100_000 ? "<$100K" : mc < 500_000 ? "$100K-500K" : "$500K-3M";
+  for (const t of todayClosed) {
+    const s = t.source || "unknown";
+    if (!bySource[s]) bySource[s] = { trades: 0, wins: 0, pnl: 0 };
+    bySource[s].trades++; if (t.status === "win") bySource[s].wins++; bySource[s].pnl += t.pnl || 0;
+    const k = mcTier(t.detected_mc);
+    if (!byMcTier[k]) byMcTier[k] = { trades: 0, wins: 0, pnl: 0 };
+    byMcTier[k].trades++; if (t.status === "win") byMcTier[k].wins++; byMcTier[k].pnl += t.pnl || 0;
+  }
+  const avgHoldWinMs  = todayWins.length   ? todayWins.reduce((s, t) => s + (t.holdMs || 0), 0) / todayWins.length   : null;
+  const avgHoldLossMs = (todayClosed.length - todayWins.length) > 0
+    ? todayClosed.filter(t => t.status !== "win").reduce((s, t) => s + (t.holdMs || 0), 0) / (todayClosed.length - todayWins.length)
+    : null;
+  const topWin  = todayWins.length   ? Math.max(...todayWins.map(t => t.pnl  || 0)) : null;
+  const topLoss = todayClosed.filter(t => t.status !== "win").length
+    ? Math.min(...todayClosed.filter(t => t.status !== "win").map(t => t.pnl || 0)) : null;
+
+  return { balance, totalReturn, totalPnl, open: open.length, closed: closed.length, wins: wins.length, losses: losses.length, winRate, yesterday, today: { date: today, trades: todayClosed.length, wins: todayWins.length, losses: todayClosed.length - todayWins.length, pnl: Math.round(todayPnl * 100) / 100, openingBalance: dayStart, closingBalance: balance, winRate: todayClosed.length ? Math.round(todayWins.length / todayClosed.length * 100) : null, trades: todayTradeRecords, bySource, byMcTier, avgHoldWinMs, avgHoldLossMs, topWin, topLoss } };
 }
 
 // ─── Suggestion engine ────────────────────────────────────────────────────────
@@ -261,25 +292,86 @@ function buildDiscordMessage(epSig, epPaper, epPatterns, suggestions, runDate, m
   // ── MemeScreener Paper Trading ──
   if (memePaper) {
     const d = memePaper.today;
-    lines.push("📅 **MEMESCREENER — TODAY'S PAPER TRADING**");
+    const fMs = ms => {
+      if (!ms) return "—";
+      const m = Math.round(ms / 60000);
+      return m >= 60 ? `${Math.floor(m/60)}h${m%60 ? m%60+"m" : ""}` : `${m}m`;
+    };
+    const fMc = mc => !mc ? "—" : mc >= 1_000_000 ? `$${(mc/1_000_000).toFixed(1)}M` : `$${Math.round(mc/1000)}K`;
+    const fSign = v => v == null ? "—" : (v >= 0 ? "+" : "") + "$" + Math.abs(v).toFixed(2);
+
+    lines.push("🪙 **MEMESCREENER — TODAY'S PAPER TRADING**");
     lines.push("```");
-    lines.push(`Date:             ${d.date}`);
-    lines.push(`Opening balance:  $${d.openingBalance.toFixed(2)}`);
-    lines.push(`Closing balance:  $${memePaper.balance.toFixed(2)}`);
-    lines.push(`Today's P&L:      ${d.pnl >= 0 ? "+" : ""}$${d.pnl.toFixed(2)}`);
-    lines.push(`Trades today:     ${d.trades}  (${d.wins}W / ${d.losses}L)`);
-    lines.push(`Win rate today:   ${d.winRate != null ? d.winRate + "%" : "–"}`);
-    lines.push(`Open positions:   ${memePaper.open}`);
-    lines.push("");
-    lines.push(`All-time balance: $${memePaper.balance.toFixed(2)} (${fPct(memePaper.totalReturn)} from $${MEME_START})`);
-    lines.push(`All-time trades:  ${memePaper.closed} closed  (${memePaper.wins}W / ${memePaper.losses}L · ${memePaper.winRate != null ? memePaper.winRate + "% WR" : "–"})`);
+    lines.push(`Date             ${d.date}`);
+    lines.push(`Opening balance  $${(d.openingBalance || MEME_START).toFixed(2)}`);
+    lines.push(`Closing balance  $${memePaper.balance.toFixed(2)}   (${fPct((memePaper.balance - (d.openingBalance || MEME_START)) / (d.openingBalance || MEME_START) * 100)} today)`);
+    lines.push(`P&L today        ${fSign(d.pnl)}`);
+    lines.push(`Trades today     ${d.trades}  ·  ${d.wins}W / ${d.losses}L  ·  WR: ${d.winRate != null ? d.winRate + "%" : "–"}`);
+    lines.push(`Open positions   ${memePaper.open}`);
+    lines.push(`All-time         $${memePaper.balance.toFixed(2)}  (${fPct(memePaper.totalReturn)} from $${MEME_START})  ·  ${memePaper.wins}W/${memePaper.losses}L  ·  ${memePaper.winRate != null ? memePaper.winRate + "% WR" : "–"}`);
+    lines.push("```");
+
+    // Per-token trade record
+    if (d.trades && d.trades.length > 0) {
+      lines.push("**📋 Token-by-token record**");
+      lines.push("```");
+      lines.push("Token          Result    P&L       Hold    MC at entry");
+      lines.push("─────────────────────────────────────────────────────");
+      for (const t of d.trades) {
+        const sym    = (t.symbol || "?").padEnd(13).slice(0, 13);
+        const res    = t.status === "win" ? "WIN  ✓" : t.status === "loss" ? "LOSS ✗" : "EXPIR";
+        const pnl    = (t.pnl >= 0 ? "+" : "") + "$" + Math.abs(t.pnl || 0).toFixed(2);
+        const hold   = fMs(t.holdMs);
+        const mc     = fMc(t.detected_mc);
+        lines.push(`${sym}  ${res}    ${pnl.padEnd(8)}  ${hold.padEnd(6)}  ${mc}`);
+      }
+      lines.push("```");
+
+      // What worked best — source breakdown
+      const src = d.bySource || {};
+      if (Object.keys(src).length > 1) {
+        lines.push("**🔍 What worked — by discovery source**");
+        lines.push("```");
+        for (const [s, v] of Object.entries(src)) {
+          const label = s === "dexscreener_boost" ? "DS Boost  " : s === "dexscreener" ? "DS Profile" : s.padEnd(10);
+          const wr    = v.trades ? Math.round(v.wins / v.trades * 100) + "%" : "—";
+          lines.push(`${label}  ${v.trades} trades  ${v.wins}W/${v.trades-v.wins}L  WR:${wr}  P&L:${fSign(v.pnl)}`);
+        }
+        lines.push("```");
+      }
+
+      // MC tier breakdown
+      const tiers = d.byMcTier || {};
+      if (Object.keys(tiers).length > 0) {
+        lines.push("**💰 What worked — by market cap at detection**");
+        lines.push("```");
+        const tierOrder = ["<$100K", "$100K-500K", "$500K-3M", "unknown"];
+        for (const k of tierOrder) {
+          if (!tiers[k]) continue;
+          const v  = tiers[k];
+          const wr = v.trades ? Math.round(v.wins / v.trades * 100) + "%" : "—";
+          lines.push(`${k.padEnd(12)}  ${v.trades} trades  ${v.wins}W/${v.trades-v.wins}L  WR:${wr}  P&L:${fSign(v.pnl)}`);
+        }
+        lines.push("```");
+      }
+
+      // Hold time insight
+      if (d.avgHoldWinMs || d.avgHoldLossMs) {
+        lines.push("**⏱ Hold time**");
+        lines.push("```");
+        if (d.avgHoldWinMs)  lines.push(`Avg hold (wins):    ${fMs(d.avgHoldWinMs)}`);
+        if (d.avgHoldLossMs) lines.push(`Avg hold (losses):  ${fMs(d.avgHoldLossMs)}`);
+        if (d.topWin  != null) lines.push(`Best trade:         +$${d.topWin.toFixed(2)}`);
+        if (d.topLoss != null) lines.push(`Worst trade:        $${d.topLoss.toFixed(2)}`);
+        lines.push("```");
+      }
+    }
+
+    // Yesterday's summary row
     if (memePaper.yesterday && memePaper.yesterday.date !== d.date) {
       const y = memePaper.yesterday;
-      lines.push("");
-      lines.push(`Yesterday (${y.date}):`);
-      lines.push(`  $${y.openingBalance.toFixed(2)} → $${y.closingBalance.toFixed(2)}  P&L: ${y.pnl >= 0 ? "+" : ""}$${y.pnl.toFixed(2)}  Trades: ${y.trades} (${y.wins}W/${y.losses}L · ${y.winRate != null ? y.winRate + "% WR" : "–"})`);
+      lines.push(`_Yesterday (${y.date}): $${y.openingBalance.toFixed(2)} → $${y.closingBalance.toFixed(2)} · ${fSign(y.pnl)} · ${y.trades} trades (${y.wins}W/${y.losses}L · ${y.winRate != null ? y.winRate + "% WR" : "–"})_`);
     }
-    lines.push("```");
   }
 
   lines.push(`\n_soloris-signals.vercel.app_`);
