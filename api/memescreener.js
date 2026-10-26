@@ -291,7 +291,7 @@ module.exports = async function handler(req, res) {
         if (row?.state) autoState = { ...memeAutoDefault(), ...row.state };
       }
       const pt = autoState.paperTrades || defaultPaperState();
-      return res.end(JSON.stringify({ ok: true, trades: pt.trades || [], balance: pt.balance ?? 100, stats: calcMemePtStats(pt.trades) }));
+      return res.end(JSON.stringify({ ok: true, trades: pt.trades || [], balance: pt.balance ?? 200, stats: calcMemePtStats(pt.trades), dailyLog: pt.dailyLog || [] }));
     }
     return res.end(JSON.stringify({ ok: true, settings: state.settings, history: state.history }));
   }

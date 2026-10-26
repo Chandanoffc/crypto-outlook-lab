@@ -20,6 +20,7 @@
 
 const { hasDatabase, getRuntimeState } = require("../lib/neon-db");
 const { MIN_ALERT_QUALITY } = require("../lib/emaperps-runtime");
+const { STARTING_BALANCE: MEME_START } = require("../lib/meme-papertrades");
 
 const CHALLENGE_TARGET = 1000;
 const CHALLENGE_START  = 100;
@@ -124,6 +125,33 @@ function patternBreakdown(signals = []) {
   }).sort((a, b) => b.count - a.count);
 }
 
+// ─── MemeScreener paper stats ─────────────────────────────────────────────────
+
+function computeMemePaperStats(paperTrades = {}) {
+  const trades  = paperTrades.trades || [];
+  const balance = paperTrades.balance ?? MEME_START;
+  const open    = trades.filter(t => t.status === "open");
+  const closed  = trades.filter(t => t.status !== "open");
+  const wins    = closed.filter(t => t.status === "win");
+  const losses  = closed.filter(t => t.status !== "win");
+  const totalPnl   = closed.reduce((s, t) => s + (t.pnl || 0), 0);
+  const winRate    = closed.length ? Math.round(wins.length / closed.length * 100) : null;
+  const totalReturn = ((balance - MEME_START) / MEME_START) * 100;
+
+  // Yesterday's daily log entry (index 0 after roll, or today's partial)
+  const today     = new Date().toISOString().slice(0, 10);
+  const dailyLog  = paperTrades.dailyLog || [];
+  const yesterday = dailyLog[0] || null;
+
+  // Today's partial stats from trades closed today
+  const todayClosed = closed.filter(t => t.closedAt && new Date(t.closedAt).toISOString().slice(0, 10) === today);
+  const todayWins   = todayClosed.filter(t => t.status === "win");
+  const todayPnl    = todayClosed.reduce((s, t) => s + (t.pnl || 0), 0);
+  const dayStart    = paperTrades._dayStartBalance ?? MEME_START;
+
+  return { balance, totalReturn, totalPnl, open: open.length, closed: closed.length, wins: wins.length, losses: losses.length, winRate, yesterday, today: { date: today, trades: todayClosed.length, wins: todayWins.length, losses: todayClosed.length - todayWins.length, pnl: Math.round(todayPnl * 100) / 100, openingBalance: dayStart, closingBalance: balance, winRate: todayClosed.length ? Math.round(todayWins.length / todayClosed.length * 100) : null } };
+}
+
 // ─── Suggestion engine ────────────────────────────────────────────────────────
 
 function generateSuggestions(epSig, epPaper, epPatterns, epTiers) {
@@ -187,7 +215,7 @@ function challengeBar(balance, target = CHALLENGE_TARGET, start = CHALLENGE_STAR
   return `[${bar}] ${Math.round(pct * 100)}%`;
 }
 
-function buildDiscordMessage(epSig, epPaper, epPatterns, suggestions, runDate) {
+function buildDiscordMessage(epSig, epPaper, epPatterns, suggestions, runDate, memePaper) {
   const lines = [];
 
   lines.push(`📊 **SOLORIS DAILY REPORT** — ${runDate}`);
@@ -230,6 +258,30 @@ function buildDiscordMessage(epSig, epPaper, epPatterns, suggestions, runDate) {
     });
   }
 
+  // ── MemeScreener Paper Trading ──
+  if (memePaper) {
+    const d = memePaper.today;
+    lines.push("📅 **MEMESCREENER — TODAY'S PAPER TRADING**");
+    lines.push("```");
+    lines.push(`Date:             ${d.date}`);
+    lines.push(`Opening balance:  $${d.openingBalance.toFixed(2)}`);
+    lines.push(`Closing balance:  $${memePaper.balance.toFixed(2)}`);
+    lines.push(`Today's P&L:      ${d.pnl >= 0 ? "+" : ""}$${d.pnl.toFixed(2)}`);
+    lines.push(`Trades today:     ${d.trades}  (${d.wins}W / ${d.losses}L)`);
+    lines.push(`Win rate today:   ${d.winRate != null ? d.winRate + "%" : "–"}`);
+    lines.push(`Open positions:   ${memePaper.open}`);
+    lines.push("");
+    lines.push(`All-time balance: $${memePaper.balance.toFixed(2)} (${fPct(memePaper.totalReturn)} from $${MEME_START})`);
+    lines.push(`All-time trades:  ${memePaper.closed} closed  (${memePaper.wins}W / ${memePaper.losses}L · ${memePaper.winRate != null ? memePaper.winRate + "% WR" : "–"})`);
+    if (memePaper.yesterday && memePaper.yesterday.date !== d.date) {
+      const y = memePaper.yesterday;
+      lines.push("");
+      lines.push(`Yesterday (${y.date}):`);
+      lines.push(`  $${y.openingBalance.toFixed(2)} → $${y.closingBalance.toFixed(2)}  P&L: ${y.pnl >= 0 ? "+" : ""}$${y.pnl.toFixed(2)}  Trades: ${y.trades} (${y.wins}W/${y.losses}L · ${y.winRate != null ? y.winRate + "% WR" : "–"})`);
+    }
+    lines.push("```");
+  }
+
   lines.push(`\n_soloris-signals.vercel.app_`);
 
   return lines.join("\n");
@@ -258,8 +310,12 @@ module.exports = async function handler(req, res) {
   try {
     // Load EMAPerps strategy state
     const epStored = await getRuntimeState("emaperps").catch(() => ({ found: false }));
+    const epState  = epStored.found ? (epStored.state || {}) : {};
 
-    const epState = epStored.found ? (epStored.state || {}) : {};
+    // Load MemeScreener autoscan state
+    const memeStored = await getRuntimeState("meme-autoscan").catch(() => null);
+    const memeState  = memeStored?.state || {};
+    const memePaper  = memeState.paperTrades ? computeMemePaperStats(memeState.paperTrades) : null;
 
     // Compute metrics
     const epSig      = computeSignalStats(epState.signals || []);
@@ -269,7 +325,7 @@ module.exports = async function handler(req, res) {
 
     const suggestions = generateSuggestions(epSig, epPaper, epPatterns, epTiers);
     const runDate     = new Date().toISOString().slice(0, 10);
-    const message     = buildDiscordMessage(epSig, epPaper, epPatterns, suggestions, runDate);
+    const message     = buildDiscordMessage(epSig, epPaper, epPatterns, suggestions, runDate, memePaper);
 
     // Send to Discord
     const webhook = String(process.env.UPBIT_DISCORD_WEBHOOK || process.env.DISCORD_WEBHOOK || "").trim();
