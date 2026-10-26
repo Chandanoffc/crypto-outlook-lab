@@ -1,5 +1,53 @@
 # Soloris Signals — Daily Agent Log
 
+## 2026-10-26
+
+**EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 23).
+
+**BTC**: ⚠️ Could not fetch — same blocker.
+
+---
+
+### ⚠️ Blocker persists (day 23): network egress policy still blocks the health check and performance analysis
+
+Identical denial to every prior day, re-confirmed via `/__agentproxy/status`: `curl` to both `soloris-signals.vercel.app:443` and `fapi.binance.com:443` returned `connect_rejected` ("gateway answered 403 to CONNECT (policy denial or upstream failure)"). `WebSearch` worked fine. Tasks 1 and 3 could not run for the 23rd consecutive day — no live balance/positions, no BTC ticker, no closed-trade data.
+
+Side channel confirmed healthy again: attached the repo with push access via `add_repo`, cloned to `/home/user/crypto-outlook-lab`, and ran `gh run list` successfully. **Hourly Scan** and **Upbit Listing Alerts** are both green and firing on schedule (most recently Hourly Scan at 2026-10-25T23:53:15Z, Upbit Listing Alerts at 2026-10-26T00:44:06Z). The platform and its crons remain confirmed healthy — this is purely this container's egress policy on the two specific hosts, not a platform problem.
+
+Not sending another push notification today — holding to the day-17 plan (reaffirmed through day 22) of waiting until ~2026-10-27 unless something changes. Nothing has, and tomorrow is that date — if the blocker is still in place on the next run, escalate with another push notification per the established cadence. Still outstanding: `soloris-signals.vercel.app` and `fapi.binance.com` need to be added to this environment's network allowlist (Environment settings → Network access → Custom → add both hosts under Allowed domains, or broaden the access level).
+
+---
+
+### Research findings (Task 2)
+
+Same recycled, low-signal pattern as recent days for most queries, but one source today is more rigorous than usual:
+
+- **Funding rate edge — a genuinely new, more conclusive data point**: BitMEX's own published test of a funding-rate mean-reversion strategy on XBTUSD found the funding rate "contains no significant predictive power" for price reversals. This is an exchange's own rigorous backtest, not vendor marketing — stronger evidence than the "plausible but unvalidated" framing used on every prior day. Downgrading the funding-rate-extreme quality bonus from "deferred, needs backtesting" to "research-rejected, no standalone edge found" — removing it from the active backlog. `fundingRate` stays captured and displayed per-signal (context only), as it already is.
+- **EMA pullback backtests**: same wide, inconsistent spread as every prior day (TradingView script self-reports 44.8%/32% WR with >40% max drawdown; TradesViz BTC 15m run at 19.0% WR / 0.32 PF losing money; another TradesViz run at 32.2% WR / 1.04 PF, within the no-edge luck-check band). Win rate alone remains meaningless without R:R/cost context — consistent with the platform's fixed 1.5%/3.0%/6.0% SL/TP1/TP2 scheme. No change indicated.
+- **MACD/RSI/ADX/volume combinations**: generic vendor consensus repeated (MACD + volume-spike confirmation, RSI as an extremes filter, "confluence checklist" framing) — all self-reported, none out-of-sample verified, none contradicting or improving on the existing `adx4h >= 25`/`<18` gates.
+- **Trending setups & market structure**: no reliable dated October 2026 ranking surfaced — results were dominated by stale Aug/Sep 2026 items (ZEC/BNB/ARB/XRP/SOL open-interest surge, HYPE/TRX/ZEC/XLM named as relative outperformers) and even older 2025 pieces misdated by the search index. Nothing here changes the $200M volume floor or symbol universe.
+
+### Changes implemented
+
+No code changes today. Reviewed the EMAPerps surface again (`lib/emaperps-runtime.js` in full, `api/emaperps.js` in full, the stats/position-card rendering path in `emaperps.js`) looking specifically for anything related to yesterday's `realizedPnl` fix or the open-position display — found nothing incorrect:
+- Yesterday's `pos.realizedPnl` fix in the open-position P&L card is still correct and consistent with how closed trades compute `totalPnl`.
+- The open-position `leveragedPct` display is a price-move % (not scaled by remaining size after a TP1 partial), which matches how closed-trade `pnlPct` is defined (`lib/emaperps-runtime.js:437`) — not a bug, just worth noting as intentionally consistent.
+- `action: "paper-reset"` (api/emaperps.js) writes a hand-built paper object missing fields like `peakBalance`/`consecutiveLosses` instead of using `defaultPaper()` — cosmetically inconsistent with `action: "reset"`, but harmless: `sanitizePaper()` backfills every missing field with correct defaults on the next read. Not changed — no observable bug, and today's instructions favor leaving working code alone over speculative tidy-ups.
+- Grepped the whole repo for stale "25%"/ClaudePerps/ZenCalls references again — none found. The documentation-drift backlog from early October remains clear.
+
+Re-confirmed guardrails intact: `MIN_ALERT_QUALITY = 95`, `$200M` volume floor, `PAPER_SIZE_QUALITY_CEIL = 110`, `PAPER_LEVERAGE = 5`, `PAPER_BE_TRIGGER_PCT = 10`.
+
+**Considered but deferred**:
+- EMA-pullback volume-confirmation filter, RSI-band widening — still no trade data to validate against, now 23 days running.
+- Funding-rate-extreme quality bonus — **no longer "deferred pending data," now research-rejected** per today's BitMEX finding above.
+
+### Watch tomorrow
+
+- **Priority, now 23 days running, and tomorrow is the self-imposed escalation date (~2026-10-27)**: network access to `soloris-signals.vercel.app` and `fapi.binance.com` needs to be restored. If still blocked tomorrow, send another push notification per the day-17 plan.
+- Once access is restored: run the full health check + performance analysis backlog before considering the EMA-pullback volume-confirmation or RSI-band-widening ideas still in the queue.
+
+---
+
 ## 2026-10-25
 
 **EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 22).
