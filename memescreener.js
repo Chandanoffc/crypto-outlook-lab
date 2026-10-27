@@ -631,7 +631,9 @@ async function loadMsPaperTrades() {
     if (!openEl || !closedEl) return;
 
     const openTrades   = trades.filter(t => t.status === "open");
-    const closedTrades = trades.filter(t => t.status !== "open");
+    const closedTrades = trades
+      .filter(t => t.status !== "open")
+      .sort((a, b) => (b.closedAt || 0) - (a.closedAt || 0));
 
     // Always re-render both lists so closed trades appear immediately
     openEl.innerHTML = "";
