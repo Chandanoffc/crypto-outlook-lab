@@ -93,7 +93,8 @@ module.exports = async function handler(req, res) {
 
       // Real buys for each newly opened paper trade (skip if paused)
       const liveTrading = msRow?.state?.settings?.liveTrading;
-      const liveEnabled = process.env.TRADING_WALLET_PRIVKEY && !liveTrading?.paused;
+      const liveEnabled = !!(process.env.TRADING_WALLET_PRIVKEY) && !liveTrading?.paused;
+      const buyResults  = [];
       if (scanSummary?.newTrades?.length && liveEnabled) {
         const { buyToken, REAL_TRADE_USDC } = getTrader();
         for (const trade of scanSummary.newTrades) {
@@ -107,8 +108,10 @@ module.exports = async function handler(req, res) {
               actualEntry:    result.actualPrice,
               openedAt:       Date.now(),
             };
+            buyResults.push({ mint: trade.mint, status: "ok", txSig: result.txSig });
           } catch (err) {
             trade.realTrade = { status: "buy_failed", error: err.message };
+            buyResults.push({ mint: trade.mint, status: "buy_failed", error: err.message });
           }
           // Persist realTrade onto the paper trade object in state
           const pt = (memeState.paperTrades.trades || []).find(t => t.id === trade.id);
@@ -116,6 +119,11 @@ module.exports = async function handler(req, res) {
         }
         // Save again with realTrade data attached
         if (hasDatabase()) await upsertRuntimeState("meme-autoscan", memeState);
+      } else if (scanSummary?.newTrades?.length && !liveEnabled) {
+        buyResults.push({
+          skipped: true,
+          reason: !process.env.TRADING_WALLET_PRIVKEY ? "TRADING_WALLET_PRIVKEY not set" : "live trading paused",
+        });
       }
     }
 
@@ -127,6 +135,16 @@ module.exports = async function handler(req, res) {
       scan:       scanSummary  ?? { skipped: true },
       paper:      paperResult  ?? { skipped: true },
       milestones: msResult?.milestones ?? 0,
+      realTrades: {
+        privkeySet:   !!(process.env.TRADING_WALLET_PRIVKEY),
+        liveEnabled:  !!(process.env.TRADING_WALLET_PRIVKEY) && !(msRow?.state?.settings?.liveTrading?.paused),
+        paused:       !!(msRow?.state?.settings?.liveTrading?.paused),
+        buys:         scanSummary?.newTrades?.map(t => ({
+          symbol: t.symbol || t.name,
+          mint:   t.mint,
+          result: t.realTrade ?? null,
+        })) ?? [],
+      },
     });
   } catch (err) {
     return buildJsonResponse(res, 500, { ok: false, error: err.message });
