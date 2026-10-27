@@ -11,7 +11,7 @@
  * Every closed paper trade also sells the real token balance back to USDC.
  */
 const { hasDatabase, getRuntimeState, upsertRuntimeState, tryClaimMarkLock, tryClaimScanLock } = require("../lib/neon-db");
-const { defaultState: memeDefault, runMemeAutoScan, checkMemeMilestones } = require("../lib/meme-autoscan");
+const { defaultState: memeDefault, runMemeAutoScan, checkMemeMilestones, fireMilestonePending } = require("../lib/meme-autoscan");
 const { checkPaperTrades } = require("../lib/meme-papertrades");
 // Lazy-load solana-trader to avoid ESM uuid crash at module init time
 function getTrader() { return require("../lib/solana-trader"); }
@@ -51,8 +51,13 @@ module.exports = async function handler(req, res) {
       ]);
       paperResult = pr;
       msResult = ms;
-      // Save immediately after paper checks so TP/SL closes are persisted even if real sells time out
+      // Save BEFORE firing Discord alerts — milestones_hit is already updated in memory.
+      // This guarantees the dedup record hits DB before the webhook, so a timeout or
+      // webhook failure can never cause the same milestone to fire twice.
       if (hasDatabase()) await upsertRuntimeState("meme-autoscan", memeState);
+      // Now safe to fire — if this crashes/times out, milestones_hit is already saved
+      const milestonesFired = await fireMilestonePending(ms?.pending);
+      msResult = { ...ms, milestones: milestonesFired };
 
       // Real sells for each closed paper trade (always sell even if paused — need to exit open positions)
       if (paperResult?.closedTrades?.length && process.env.TRADING_WALLET_PRIVKEY) {
