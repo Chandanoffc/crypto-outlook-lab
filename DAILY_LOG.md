@@ -1,5 +1,47 @@
 # Soloris Signals — Daily Agent Log
 
+## 2026-10-27
+
+**EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 24).
+
+**BTC**: ⚠️ Could not fetch — same blocker.
+
+---
+
+### ⚠️ Blocker persists (day 24) — escalating per the day-17 plan
+
+Identical denial to every prior day, re-confirmed via `curl -v` and `/__agentproxy/status`: both `soloris-signals.vercel.app:443` and `fapi.binance.com:443` return `connect_rejected` ("gateway answered 403 to CONNECT (policy denial or upstream failure)"). `WebSearch` worked fine; `WebFetch` on external research articles was also blocked today (`ENOTFOUND`). Tasks 1 and 3 could not run for the 24th consecutive day — no live balance/positions, no BTC ticker, no closed-trade data.
+
+Side channel confirmed healthy again: attached the repo with push access via `add_repo`/`gh`, ran `gh run list` successfully. **Hourly Scan** and **Upbit Listing Alerts** are both green and firing on schedule (most recently Hourly Scan at 2026-10-27T01:13:47Z, Upbit Listing Alerts at 2026-10-27T00:47:38Z). The platform and its crons remain confirmed healthy — this is purely this container's egress policy on the two specific hosts, not a platform problem.
+
+**Today is the self-imposed escalation date set on day 17 (reaffirmed days 20/22/24): if the blocker was still in place on ~2026-10-27, send another push notification.** It is, so this run sends one — the first since the day-15 notification on 2026-10-18, now 9 days and 24 total days of repeated blocker logging later. Still outstanding: `soloris-signals.vercel.app` and `fapi.binance.com` need to be added to this environment's network allowlist (Environment settings → Network access → Custom → add both hosts under Allowed domains, or broaden the access level).
+
+---
+
+### Research findings (Task 2)
+
+- **Trending setups & coins**: no reliable dated-this-week ranking surfaced; results skewed toward stale Aug/Sep/early-Oct 2026 items already logged on prior days (ZEC/BNB/ARB/XRP/SOL open-interest surge; HYPE/TRX/ZEC/XLM as relative outperformers). The most recent dated source (CoinStats, Oct 21) repeats the Oct-watchlist already logged on day 23 (ETH/SOL/XRP/ZEC/HYPE/NEAR/LINK/Canton Coin, several down sharply post the Sept 16 Fed hike). Nothing new.
+- **EMA pullback backtests**: same wide, inconsistent, statistically-meaningless spread as every prior day — one source's own framing (TradesViz) notes a no-edge strategy looks like a ~32% WR winner by chance alone roughly 31% of the time, which undercuts most of the vendor win-rate claims surfacing in this research across all 24 days. No actionable, validated change.
+- **MACD/RSI/ADX combinations**: generic vendor consensus repeated again (RSI divergence over static 70/30, MACD histogram shrinking as exhaustion signal, ADX>25 trend-confirmation) — all self-reported, none out-of-sample verified, none improving on the existing `adx4h >= 25`/`<18` gates already in the engine.
+- **Funding rate edge**: no new data point beyond day 23's BitMEX finding (funding rate "contains no significant predictive power" for XBTUSD reversals in BitMEX's own backtest) — that finding stands as the most rigorous evidence seen in 24 days of research on this question, and the funding-rate-extreme quality bonus idea remains research-rejected, not just deferred.
+
+### Changes implemented
+
+No code changes today. Ran a fresh adversarial code-review pass via a subagent, specifically targeting the least-reviewed parts of the EMAPerps surface per file-mention counts across 24 days of this log (`styles.css`, 1 prior mention; `api/emaperps.js` in full, 5 prior mentions; `emaperps.js` Scanner tab, Stats tab, and reasoning/position-sizing panel rendering, not previously called out by name). Found nothing wrong: all 7 `api/emaperps.js` actions are consistent with state sanitization; Scanner/Stats/reasoning-panel rendering has no stale values or logic errors; `styles.css` brace count is balanced; `node --check` is clean on all JS files; a fresh grep for stale ClaudePerps/"25%"/TODO/FIXME references turned up nothing. The low-hanging-fruit backlog from the 2026-09-25 ClaudePerps removal and subsequent reviews appears genuinely exhausted at this point — 24 consecutive days of review have covered `lib/emaperps-runtime.js`, `emaperps.js`, `emaperps.html`, `api/emaperps.js`, `api/notify.js`, `lib/backtest-runtime.js`, `lib/neon-db.js`, `lib/engine-core.js`, `lib/notify-client.js`, and `api/daily-digest.js`.
+
+Re-confirmed guardrails intact (read, not changed): `MIN_ALERT_QUALITY = 95`, `$200M` volume floor, `PAPER_SIZE_QUALITY_CEIL = 110`, `PAPER_LEVERAGE = 5`, `PAPER_BE_TRIGGER_PCT = 10`.
+
+**Considered but deferred**:
+- EMA-pullback volume-confirmation filter, RSI-band widening — still no trade data to validate against, now 24 days running.
+- Funding-rate-extreme quality bonus — research-rejected as of day 23, not reconsidered today.
+
+### Watch tomorrow
+
+- **Priority, now 24 days running, past the self-imposed escalation date**: network access to `soloris-signals.vercel.app` and `fapi.binance.com` needs to be restored. A push notification was sent today per the day-17 plan; if the blocker is still in place after a reasonable window, consider whether a shorter re-escalation cadence (rather than another ~9-day wait) is warranted given how long this has now run.
+- Once access is restored: run the full health check + performance analysis backlog before considering any of the deferred/rejected research ideas above. With the easy code-review backlog now apparently exhausted, future "no live data" days may genuinely have zero changes to report — that's an expected, not a concerning, outcome.
+
+---
+
 ## 2026-10-26
 
 **EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 23).
