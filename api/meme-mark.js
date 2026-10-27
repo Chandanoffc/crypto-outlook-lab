@@ -114,85 +114,72 @@ module.exports = async function handler(req, res) {
     const scanClaimed = await tryClaimScanLock("meme-autoscan-lock", now, 110 * 1000);
     if (scanClaimed) {
       scanSummary = await runMemeAutoScan(memeState, { webhook });
-
-      // Save state immediately after scan so alert cooldowns + paper trades are
-      // persisted before any slow real-trade calls. Prevents duplicate detections
-      // if a second cron tick fires while buyToken is in-flight.
+      // Save immediately — persists cooldowns + new paper trades before any slow RPC
       if (hasDatabase()) await upsertRuntimeState("meme-autoscan", memeState);
+    }
 
-      // Real buys for each newly opened paper trade (skip if paused)
-      const liveTrading = msRow?.state?.settings?.liveTrading;
-      const liveEnabled = !!(process.env.TRADING_WALLET_PRIVKEY) && !liveTrading?.paused;
-      const buyResults  = [];
-      if (liveEnabled) {
-        // Collect pending buys: newly detected trades + any that were pending from a previous timed-out tick
-        const pendingBuys = [];
-        for (const trade of scanSummary?.newTrades || []) {
-          const pt = (memeState.paperTrades.trades || []).find(t => t.id === trade.id);
-          if (pt && !pt.realTrade) {
-            pt.realTrade = { status: "pending_buy", queuedAt: Date.now() };
-            pendingBuys.push(pt);
-          }
+    // ── 3. Real buys — runs every tick, independent of scan lock ─────────
+    // Picks up: (a) newly opened paper trades with no realTrade, and
+    //           (b) trades stuck in pending_buy from a previous timeout.
+    // Running outside scanClaimed means a timed-out buy is always retried
+    // on the next tick even if the scan lock isn't re-claimable.
+    const liveTrading = msRow?.state?.settings?.liveTrading;
+    const liveEnabled = !!(process.env.TRADING_WALLET_PRIVKEY) && !liveTrading?.paused;
+    const buyResults  = [];
+    if (liveEnabled) {
+      const pendingBuys = (memeState.paperTrades.trades || []).filter(pt =>
+        pt.status === "open" && (!pt.realTrade || pt.realTrade.status === "pending_buy")
+      );
+
+      if (pendingBuys.length) {
+        // Mark all as pending_buy and save BEFORE any RPC call.
+        // If the function times out during buyToken, pending_buy is already in DB
+        // and will be retried next tick.
+        for (const pt of pendingBuys) {
+          if (!pt.realTrade) pt.realTrade = { status: "pending_buy", queuedAt: Date.now() };
         }
-        // Also retry any existing paper trades stuck in pending_buy from a prior timeout
-        for (const pt of (memeState.paperTrades.trades || [])) {
-          if (pt.status === "open" && pt.realTrade?.status === "pending_buy" && !pendingBuys.find(p => p.id === pt.id)) {
-            pendingBuys.push(pt);
-          }
-        }
+        if (hasDatabase()) await upsertRuntimeState("meme-autoscan", memeState);
 
-        if (pendingBuys.length) {
-          // Save pending_buy status FIRST — survives a timeout during buyToken
-          if (hasDatabase()) await upsertRuntimeState("meme-autoscan", memeState);
-
-          const { buyToken, REAL_TRADE_USDC } = getTrader();
-          for (const pt of pendingBuys) {
-            try {
-              const result = await buyToken(pt.mint, REAL_TRADE_USDC, pt._liquidity || 0);
-              pt.realTrade = {
-                status:         "open",
-                txSig:          result.txSig,
-                usdcSpent:      result.usdcSpent,
-                tokensReceived: result.tokensReceived,
-                actualEntry:    result.actualPrice,
-                openedAt:       Date.now(),
-              };
-              buyResults.push({ mint: pt.mint, status: "ok", txSig: result.txSig });
-              // Phone alert via Discord (private channel)
-              if (liveTradeWebhook) {
-                const sym   = pt.symbol || pt.name || pt.mint.slice(0, 8);
-                const price = result.actualPrice ? `$${parseFloat(result.actualPrice).toExponential(3)}` : "—";
-                fetch(liveTradeWebhook, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ embeds: [{
-                    title: `💸 LIVE BUY — ${sym}`,
-                    url: pt.pair_url || undefined,
-                    color: 0x3b82f6,
-                    fields: [
-                      { name: "Mint CA",     value: `\`${pt.mint}\``, inline: false },
-                      { name: "Entry Price", value: price, inline: true },
-                      { name: "USDC Spent",  value: `$${result.usdcSpent}`, inline: true },
-                      { name: "Tx",          value: `[View on Solscan](https://solscan.io/tx/${result.txSig})`, inline: false },
-                    ],
-                    footer: { text: "Soloris · Live Trade Opened" },
-                    timestamp: new Date().toISOString(),
-                  }]}),
-                }).catch(() => {});
-              }
-            } catch (err) {
-              pt.realTrade = { status: "buy_failed", error: err.message };
-              buyResults.push({ mint: pt.mint, status: "buy_failed", error: err.message });
+        const { buyToken, REAL_TRADE_USDC } = getTrader();
+        for (const pt of pendingBuys) {
+          try {
+            const result = await buyToken(pt.mint, REAL_TRADE_USDC, pt._liquidity || 0);
+            pt.realTrade = {
+              status:         "open",
+              txSig:          result.txSig,
+              usdcSpent:      result.usdcSpent,
+              tokensReceived: result.tokensReceived,
+              actualEntry:    result.actualPrice,
+              openedAt:       Date.now(),
+            };
+            buyResults.push({ mint: pt.mint, symbol: pt.symbol, status: "ok", txSig: result.txSig });
+            if (liveTradeWebhook) {
+              const sym   = pt.symbol || pt.name || pt.mint.slice(0, 8);
+              const price = result.actualPrice ? `$${parseFloat(result.actualPrice).toExponential(3)}` : "—";
+              fetch(liveTradeWebhook, {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ embeds: [{
+                  title: `💸 LIVE BUY — ${sym}`,
+                  url: pt.pair_url || undefined,
+                  color: 0x3b82f6,
+                  fields: [
+                    { name: "Mint CA",     value: `\`${pt.mint}\``, inline: false },
+                    { name: "Entry Price", value: price, inline: true },
+                    { name: "USDC Spent",  value: `$${result.usdcSpent}`, inline: true },
+                    { name: "Tx",          value: `[View on Solscan](https://solscan.io/tx/${result.txSig})`, inline: false },
+                  ],
+                  footer: { text: "Soloris · Live Trade Opened" },
+                  timestamp: new Date().toISOString(),
+                }]}),
+              }).catch(() => {});
             }
+          } catch (err) {
+            pt.realTrade = { status: "buy_failed", error: err.message };
+            buyResults.push({ mint: pt.mint, symbol: pt.symbol, status: "buy_failed", error: err.message });
           }
-          // Save final realTrade statuses
+          // Save after each individual buy so a mid-loop timeout doesn't lose results
           if (hasDatabase()) await upsertRuntimeState("meme-autoscan", memeState);
         }
-      } else if (scanSummary?.newTrades?.length) {
-        buyResults.push({
-          skipped: true,
-          reason: !process.env.TRADING_WALLET_PRIVKEY ? "TRADING_WALLET_PRIVKEY not set" : "live trading paused",
-        });
       }
     }
 
@@ -205,14 +192,13 @@ module.exports = async function handler(req, res) {
       paper:      paperResult  ?? { skipped: true },
       milestones: msResult?.milestones ?? 0,
       realTrades: {
-        privkeySet:   !!(process.env.TRADING_WALLET_PRIVKEY),
-        liveEnabled:  !!(process.env.TRADING_WALLET_PRIVKEY) && !(msRow?.state?.settings?.liveTrading?.paused),
-        paused:       !!(msRow?.state?.settings?.liveTrading?.paused),
-        buys:         scanSummary?.newTrades?.map(t => ({
-          symbol: t.symbol || t.name,
-          mint:   t.mint,
-          result: t.realTrade ?? null,
-        })) ?? [],
+        privkeySet:  !!(process.env.TRADING_WALLET_PRIVKEY),
+        liveEnabled,
+        paused:      !!(msRow?.state?.settings?.liveTrading?.paused),
+        buys:        buyResults,
+        pending:     (memeState.paperTrades.trades || [])
+          .filter(pt => pt.status === "open" && pt.realTrade?.status === "pending_buy")
+          .map(pt => ({ symbol: pt.symbol, mint: pt.mint, queuedAt: pt.realTrade.queuedAt })),
       },
     });
   } catch (err) {
