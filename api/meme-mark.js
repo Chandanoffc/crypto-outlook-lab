@@ -13,7 +13,8 @@
 const { hasDatabase, getRuntimeState, upsertRuntimeState, tryClaimMarkLock, tryClaimScanLock } = require("../lib/neon-db");
 const { defaultState: memeDefault, runMemeAutoScan, checkMemeMilestones } = require("../lib/meme-autoscan");
 const { checkPaperTrades } = require("../lib/meme-papertrades");
-const { buyToken, sellToken, REAL_TRADE_USDC } = require("../lib/solana-trader");
+// Lazy-load solana-trader to avoid ESM uuid crash at module init time
+function getTrader() { return require("../lib/solana-trader"); }
 
 function buildJsonResponse(res, statusCode, payload) {
   res.statusCode = statusCode;
@@ -48,6 +49,7 @@ module.exports = async function handler(req, res) {
       const liveTrading = msRow?.state?.settings?.liveTrading;
       const liveEnabled = process.env.TRADING_WALLET_PRIVKEY && !liveTrading?.paused;
       if (scanSummary?.newTrades?.length && liveEnabled) {
+        const { buyToken, REAL_TRADE_USDC } = getTrader();
         for (const trade of scanSummary.newTrades) {
           try {
             const result = await buyToken(trade.mint, REAL_TRADE_USDC, trade._liquidity || 0);
@@ -83,6 +85,7 @@ module.exports = async function handler(req, res) {
 
       // Real sells for each closed paper trade (always sell even if paused — need to exit open positions)
       if (paperResult?.closedTrades?.length && process.env.TRADING_WALLET_PRIVKEY) {
+        const { sellToken } = getTrader();
         for (const trade of paperResult.closedTrades) {
           if (!trade.realTrade || trade.realTrade.status !== "open") continue;
           try {

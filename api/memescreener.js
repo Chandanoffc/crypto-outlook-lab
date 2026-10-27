@@ -285,13 +285,28 @@ module.exports = async function handler(req, res) {
       return res.end(JSON.stringify({ ok: true, tokens: allTokens, lastScan: autoState.lastScan || 0 }));
     }
     if (url.searchParams.get("view") === "walletbalance") {
+      const WALLET_ADDRESS = "44hG7cY4xoYie1SYZvoSYqAscZM28KSECkdokmm3meKU";
+      const USDC_MINT      = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+      const heliusKey      = process.env.HELIUS_API_KEY || "";
+      const rpcUrl         = heliusKey
+        ? `https://mainnet.helius-rpc.com/?api-key=${heliusKey}`
+        : "https://api.mainnet-beta.solana.com";
+      const rpcCall = (method, params) => fetch(rpcUrl, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+      }).then(r => r.json()).then(d => { if (d.error) throw new Error(d.error.message); return d.result; });
       try {
-        const { getWalletBalances } = require("../lib/solana-trader");
-        const bal = await getWalletBalances();
-        return res.end(JSON.stringify({ ok: true, ...bal }));
+        const [solResult, tokenResult] = await Promise.all([
+          rpcCall("getBalance", [WALLET_ADDRESS, { commitment: "confirmed" }]),
+          rpcCall("getTokenAccountsByOwner", [WALLET_ADDRESS, { mint: USDC_MINT }, { encoding: "jsonParsed", commitment: "confirmed" }]),
+        ]);
+        const sol  = (solResult?.value ?? solResult ?? 0) / 1e9;
+        const usdc = (tokenResult?.value || []).reduce(
+          (s, a) => s + parseFloat(a.account?.data?.parsed?.info?.tokenAmount?.uiAmount || 0), 0
+        );
+        return res.end(JSON.stringify({ ok: true, sol, usdc, address: WALLET_ADDRESS }));
       } catch (e) {
-        const fallbackAddr = process.env.TRADING_WALLET_ADDRESS || "44hG7cY4xoYie1SYZvoSYqAscZM28KSECkdokmm3meKU";
-        return res.end(JSON.stringify({ ok: false, error: e.message, address: fallbackAddr }));
+        return res.end(JSON.stringify({ ok: false, error: e.message, address: WALLET_ADDRESS }));
       }
     }
     if (url.searchParams.get("view") === "papertrades") {
