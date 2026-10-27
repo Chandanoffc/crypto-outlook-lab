@@ -13,8 +13,6 @@
 const { hasDatabase, getRuntimeState, upsertRuntimeState, tryClaimMarkLock, tryClaimScanLock } = require("../lib/neon-db");
 const { defaultState: memeDefault, runMemeAutoScan, checkMemeMilestones, fireMilestonePending } = require("../lib/meme-autoscan");
 const { checkPaperTrades } = require("../lib/meme-papertrades");
-// Lazy-load solana-trader to avoid ESM uuid crash at module init time
-function getTrader() { return require("../lib/solana-trader"); }
 
 function buildJsonResponse(res, statusCode, payload) {
   res.statusCode = statusCode;
@@ -60,53 +58,8 @@ module.exports = async function handler(req, res) {
       const milestonesFired = await fireMilestonePending(ms?.pending);
       msResult = { ...ms, milestones: milestonesFired };
 
-      // Real sells for each closed paper trade (always sell even if paused — need to exit open positions)
-      if (paperResult?.closedTrades?.length && process.env.TRADING_WALLET_PRIVKEY) {
-        const { sellToken } = getTrader();
-        for (const trade of paperResult.closedTrades) {
-          if (!trade.realTrade || trade.realTrade.status !== "open") continue;
-          try {
-            const result = await sellToken(trade.mint, trade.realTrade.tokensReceived);
-            trade.realTrade.status       = "closed";
-            trade.realTrade.exitTxSig    = result.txSig;
-            trade.realTrade.usdcReceived = result.usdcReceived;
-            trade.realTrade.actualExit   = result.actualPrice;
-            trade.realTrade.closedAt     = Date.now();
-            // Phone alert via Discord (private channel)
-            if (liveTradeWebhook) {
-              const sym   = trade.symbol || trade.name || trade.mint.slice(0, 8);
-              const pnl   = result.usdcReceived - (trade.realTrade.usdcSpent || 0);
-              const pnlPct = trade.realTrade.usdcSpent
-                ? ((pnl / trade.realTrade.usdcSpent) * 100).toFixed(1)
-                : "?";
-              const isWin  = pnl >= 0;
-              const reason = trade.closeReason === "tp" ? "TP hit" : trade.closeReason === "sl" ? "SL hit" : "Expired";
-              fetch(liveTradeWebhook, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ embeds: [{
-                  title: `${isWin ? "✅" : "❌"} LIVE SELL — ${sym} (${reason})`,
-                  url: trade.pair_url || undefined,
-                  color: isWin ? 0x22c55e : 0xef4444,
-                  fields: [
-                    { name: "Mint CA",      value: `\`${trade.mint}\``, inline: false },
-                    { name: "USDC In",      value: `$${(trade.realTrade.usdcSpent || 0).toFixed(2)}`, inline: true },
-                    { name: "USDC Out",     value: `$${result.usdcReceived.toFixed(2)}`, inline: true },
-                    { name: "Real P&L",     value: `${isWin ? "+" : ""}$${pnl.toFixed(2)} (${isWin ? "+" : ""}${pnlPct}%)`, inline: true },
-                    { name: "Tx",           value: `[View on Solscan](https://solscan.io/tx/${result.txSig})`, inline: false },
-                  ],
-                  footer: { text: "Soloris · Live Trade Closed" },
-                  timestamp: new Date().toISOString(),
-                }]}),
-              }).catch(() => {});
-            }
-          } catch (err) {
-            trade.realTrade.status    = "sell_failed";
-            trade.realTrade.sellError = err.message;
-          }
-        }
-        if (hasDatabase()) await upsertRuntimeState("meme-autoscan", memeState);
-      }
+      // Real sells are handled exclusively by the VPS trade engine (worker/trade-engine.js).
+      // Keeping sell logic here caused double-sells when both systems ran simultaneously.
     }
 
     // ── 2. Signal detection (every 2 min via scan lock) ──────────────────
