@@ -255,7 +255,7 @@ function sendDiscordSell(webhook, trade, result) {
   const pnlPct = trade.realTrade.usdcSpent
     ? ((pnl / trade.realTrade.usdcSpent) * 100).toFixed(1) : "?";
   const isWin  = pnl >= 0;
-  const reason = trade.closeReason === "tp" ? "TP hit" : trade.closeReason === "sl" ? "SL hit" : "Expired";
+  const reason = trade.closeReason === "tp" ? "TP hit" : trade.closeReason === "sl" ? "SL hit" : trade.closeReason === "trail" ? "Trail stop" : "Expired";
   fetch(webhook, {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ embeds: [{
