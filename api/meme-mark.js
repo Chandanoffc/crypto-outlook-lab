@@ -45,6 +45,11 @@ module.exports = async function handler(req, res) {
     if (scanClaimed) {
       scanSummary = await runMemeAutoScan(memeState, { webhook });
 
+      // Save state immediately after scan so alert cooldowns + paper trades are
+      // persisted before any slow real-trade calls. Prevents duplicate detections
+      // if a second cron tick fires while buyToken is in-flight.
+      if (hasDatabase()) await upsertRuntimeState("meme-autoscan", memeState);
+
       // Real buys for each newly opened paper trade (skip if paused)
       const liveTrading = msRow?.state?.settings?.liveTrading;
       const liveEnabled = process.env.TRADING_WALLET_PRIVKEY && !liveTrading?.paused;
@@ -68,6 +73,8 @@ module.exports = async function handler(req, res) {
           const pt = (memeState.paperTrades.trades || []).find(t => t.id === trade.id);
           if (pt) pt.realTrade = trade.realTrade;
         }
+        // Save again with realTrade data attached
+        if (hasDatabase()) await upsertRuntimeState("meme-autoscan", memeState);
       }
     }
 
