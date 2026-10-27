@@ -39,7 +39,43 @@ module.exports = async function handler(req, res) {
     }
     if (!memeState.paperTrades) memeState.paperTrades = { balance: 200, trades: [] };
 
-    // ── 1. Signal detection (every 2 min via scan lock) ──────────────────
+    // ── 1. Price checks + milestone alerts (ALWAYS first — must complete within 10s Vercel limit) ─
+    // Running this before scan/real-trades ensures TP/SL closes are never lost to a timeout.
+    const markClaimed = await tryClaimMarkLock("meme-papertrades", now, 90 * 1000);
+    let msResult = null;
+    let paperResult = null;
+    if (markClaimed) {
+      const [pr, ms] = await Promise.all([
+        checkPaperTrades(memeState.paperTrades),
+        checkMemeMilestones(memeState, { webhook }),
+      ]);
+      paperResult = pr;
+      msResult = ms;
+      // Save immediately after paper checks so TP/SL closes are persisted even if real sells time out
+      if (hasDatabase()) await upsertRuntimeState("meme-autoscan", memeState);
+
+      // Real sells for each closed paper trade (always sell even if paused — need to exit open positions)
+      if (paperResult?.closedTrades?.length && process.env.TRADING_WALLET_PRIVKEY) {
+        const { sellToken } = getTrader();
+        for (const trade of paperResult.closedTrades) {
+          if (!trade.realTrade || trade.realTrade.status !== "open") continue;
+          try {
+            const result = await sellToken(trade.mint, trade.realTrade.tokensReceived);
+            trade.realTrade.status       = "closed";
+            trade.realTrade.exitTxSig    = result.txSig;
+            trade.realTrade.usdcReceived = result.usdcReceived;
+            trade.realTrade.actualExit   = result.actualPrice;
+            trade.realTrade.closedAt     = Date.now();
+          } catch (err) {
+            trade.realTrade.status    = "sell_failed";
+            trade.realTrade.sellError = err.message;
+          }
+        }
+        if (hasDatabase()) await upsertRuntimeState("meme-autoscan", memeState);
+      }
+    }
+
+    // ── 2. Signal detection (every 2 min via scan lock) ──────────────────
     let scanSummary = null;
     const scanClaimed = await tryClaimScanLock("meme-autoscan-lock", now, 110 * 1000);
     if (scanClaimed) {
@@ -78,39 +114,7 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    // ── 2 & 3. Price checks + milestone alerts (every 2 min via mark lock) ─
-    const markClaimed = await tryClaimMarkLock("meme-papertrades", now, 90 * 1000);
-    let msResult = null;
-    let paperResult = null;
-    if (markClaimed) {
-      const [pr, ms] = await Promise.all([
-        checkPaperTrades(memeState.paperTrades),
-        checkMemeMilestones(memeState, { webhook }),
-      ]);
-      paperResult = pr;
-      msResult = ms;
-
-      // Real sells for each closed paper trade (always sell even if paused — need to exit open positions)
-      if (paperResult?.closedTrades?.length && process.env.TRADING_WALLET_PRIVKEY) {
-        const { sellToken } = getTrader();
-        for (const trade of paperResult.closedTrades) {
-          if (!trade.realTrade || trade.realTrade.status !== "open") continue;
-          try {
-            const result = await sellToken(trade.mint, trade.realTrade.tokensReceived);
-            trade.realTrade.status      = "closed";
-            trade.realTrade.exitTxSig   = result.txSig;
-            trade.realTrade.usdcReceived = result.usdcReceived;
-            trade.realTrade.actualExit  = result.actualPrice;
-            trade.realTrade.closedAt    = Date.now();
-          } catch (err) {
-            trade.realTrade.status     = "sell_failed";
-            trade.realTrade.sellError  = err.message;
-          }
-        }
-      }
-    }
-
-    // Always save state after any work
+    // Final save to catch any remaining state changes
     if (hasDatabase()) await upsertRuntimeState("meme-autoscan", memeState);
 
     return buildJsonResponse(res, 200, {
