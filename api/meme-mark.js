@@ -124,53 +124,71 @@ module.exports = async function handler(req, res) {
       const liveTrading = msRow?.state?.settings?.liveTrading;
       const liveEnabled = !!(process.env.TRADING_WALLET_PRIVKEY) && !liveTrading?.paused;
       const buyResults  = [];
-      if (scanSummary?.newTrades?.length && liveEnabled) {
-        const { buyToken, REAL_TRADE_USDC } = getTrader();
-        for (const trade of scanSummary.newTrades) {
-          try {
-            const result = await buyToken(trade.mint, REAL_TRADE_USDC, trade._liquidity || 0);
-            trade.realTrade = {
-              status:         "open",
-              txSig:          result.txSig,
-              usdcSpent:      result.usdcSpent,
-              tokensReceived: result.tokensReceived,
-              actualEntry:    result.actualPrice,
-              openedAt:       Date.now(),
-            };
-            buyResults.push({ mint: trade.mint, status: "ok", txSig: result.txSig });
-            // Phone alert via Discord (private channel)
-            if (liveTradeWebhook) {
-              const sym = trade.symbol || trade.name || trade.mint.slice(0, 8);
-              const price = result.actualPrice ? `$${parseFloat(result.actualPrice).toExponential(3)}` : "—";
-              fetch(liveTradeWebhook, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ embeds: [{
-                  title: `💸 LIVE BUY — ${sym}`,
-                  url: trade.pair_url || undefined,
-                  color: 0x3b82f6,
-                  fields: [
-                    { name: "Mint CA",     value: `\`${trade.mint}\``, inline: false },
-                    { name: "Entry Price", value: price, inline: true },
-                    { name: "USDC Spent",  value: `$${result.usdcSpent}`, inline: true },
-                    { name: "Tx",          value: `[View on Solscan](https://solscan.io/tx/${result.txSig})`, inline: false },
-                  ],
-                  footer: { text: "Soloris · Live Trade Opened" },
-                  timestamp: new Date().toISOString(),
-                }]}),
-              }).catch(() => {});
-            }
-          } catch (err) {
-            trade.realTrade = { status: "buy_failed", error: err.message };
-            buyResults.push({ mint: trade.mint, status: "buy_failed", error: err.message });
-          }
-          // Persist realTrade onto the paper trade object in state
+      if (liveEnabled) {
+        // Collect pending buys: newly detected trades + any that were pending from a previous timed-out tick
+        const pendingBuys = [];
+        for (const trade of scanSummary?.newTrades || []) {
           const pt = (memeState.paperTrades.trades || []).find(t => t.id === trade.id);
-          if (pt) pt.realTrade = trade.realTrade;
+          if (pt && !pt.realTrade) {
+            pt.realTrade = { status: "pending_buy", queuedAt: Date.now() };
+            pendingBuys.push(pt);
+          }
         }
-        // Save again with realTrade data attached
-        if (hasDatabase()) await upsertRuntimeState("meme-autoscan", memeState);
-      } else if (scanSummary?.newTrades?.length && !liveEnabled) {
+        // Also retry any existing paper trades stuck in pending_buy from a prior timeout
+        for (const pt of (memeState.paperTrades.trades || [])) {
+          if (pt.status === "open" && pt.realTrade?.status === "pending_buy" && !pendingBuys.find(p => p.id === pt.id)) {
+            pendingBuys.push(pt);
+          }
+        }
+
+        if (pendingBuys.length) {
+          // Save pending_buy status FIRST — survives a timeout during buyToken
+          if (hasDatabase()) await upsertRuntimeState("meme-autoscan", memeState);
+
+          const { buyToken, REAL_TRADE_USDC } = getTrader();
+          for (const pt of pendingBuys) {
+            try {
+              const result = await buyToken(pt.mint, REAL_TRADE_USDC, pt._liquidity || 0);
+              pt.realTrade = {
+                status:         "open",
+                txSig:          result.txSig,
+                usdcSpent:      result.usdcSpent,
+                tokensReceived: result.tokensReceived,
+                actualEntry:    result.actualPrice,
+                openedAt:       Date.now(),
+              };
+              buyResults.push({ mint: pt.mint, status: "ok", txSig: result.txSig });
+              // Phone alert via Discord (private channel)
+              if (liveTradeWebhook) {
+                const sym   = pt.symbol || pt.name || pt.mint.slice(0, 8);
+                const price = result.actualPrice ? `$${parseFloat(result.actualPrice).toExponential(3)}` : "—";
+                fetch(liveTradeWebhook, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ embeds: [{
+                    title: `💸 LIVE BUY — ${sym}`,
+                    url: pt.pair_url || undefined,
+                    color: 0x3b82f6,
+                    fields: [
+                      { name: "Mint CA",     value: `\`${pt.mint}\``, inline: false },
+                      { name: "Entry Price", value: price, inline: true },
+                      { name: "USDC Spent",  value: `$${result.usdcSpent}`, inline: true },
+                      { name: "Tx",          value: `[View on Solscan](https://solscan.io/tx/${result.txSig})`, inline: false },
+                    ],
+                    footer: { text: "Soloris · Live Trade Opened" },
+                    timestamp: new Date().toISOString(),
+                  }]}),
+                }).catch(() => {});
+              }
+            } catch (err) {
+              pt.realTrade = { status: "buy_failed", error: err.message };
+              buyResults.push({ mint: pt.mint, status: "buy_failed", error: err.message });
+            }
+          }
+          // Save final realTrade statuses
+          if (hasDatabase()) await upsertRuntimeState("meme-autoscan", memeState);
+        }
+      } else if (scanSummary?.newTrades?.length) {
         buyResults.push({
           skipped: true,
           reason: !process.env.TRADING_WALLET_PRIVKEY ? "TRADING_WALLET_PRIVKEY not set" : "live trading paused",
