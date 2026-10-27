@@ -290,7 +290,9 @@ module.exports = async function handler(req, res) {
         const bal = await getWalletBalances();
         return res.end(JSON.stringify({ ok: true, ...bal }));
       } catch (e) {
-        return res.end(JSON.stringify({ ok: false, error: e.message }));
+        // If private key missing but wallet address is stored separately, return that
+        const fallbackAddr = process.env.TRADING_WALLET_ADDRESS || null;
+        return res.end(JSON.stringify({ ok: false, error: e.message, address: fallbackAddr }));
       }
     }
     if (url.searchParams.get("view") === "papertrades") {

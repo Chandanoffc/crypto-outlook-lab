@@ -640,14 +640,27 @@ async function loadRealWalletBalance() {
     const d = await fetch(`${API}?view=walletbalance`).then(r => r.json());
     const el = document.getElementById("ms-pt-stat-realbal");
     const subEl = document.getElementById("ms-pt-stat-realbal-sub");
-    if (el && d.usdc != null) {
-      el.textContent = `$${d.usdc.toFixed(2)}`;
-      el.style.color = d.usdc >= 100 ? "var(--long)" : "var(--short)";
+    if (el) {
+      if (d.usdc != null) {
+        el.textContent = `$${d.usdc.toFixed(2)}`;
+        el.style.color = d.usdc >= 100 ? "var(--long)" : "var(--short)";
+      } else if (d.error) {
+        el.textContent = "Error";
+        el.style.color = "var(--short)";
+      }
     }
-    if (subEl && d.address) {
-      subEl.innerHTML = `<a href="https://solscan.io/account/${d.address}" target="_blank" rel="noopener" style="color:var(--ac)">View wallet ↗</a>`;
+    if (subEl) {
+      if (d.address) {
+        subEl.innerHTML = `<a href="https://solscan.io/account/${d.address}" target="_blank" rel="noopener" style="color:var(--ac)">View wallet ↗</a>`;
+      } else if (d.error) {
+        subEl.textContent = d.error.slice(0, 60);
+        subEl.style.color = "var(--short)";
+        console.error("walletbalance error:", d.error);
+      }
     }
-  } catch { /* ignore — wallet balance is best-effort */ }
+  } catch (e) {
+    console.error("walletbalance fetch error:", e);
+  }
 }
 
 async function loadMsPaperTrades() {
@@ -753,9 +766,14 @@ function renderLtStats(trades, walletUsdc) {
 
   const q = id => document.getElementById(id);
   const usdcEl = q("lt-stat-usdc");
-  if (usdcEl && walletUsdc != null) {
-    usdcEl.textContent = "$" + walletUsdc.toFixed(2);
-    usdcEl.style.color = walletUsdc >= 100 ? "var(--long)" : "var(--short)";
+  if (usdcEl) {
+    if (walletUsdc != null) {
+      usdcEl.textContent = "$" + walletUsdc.toFixed(2);
+      usdcEl.style.color = walletUsdc >= 100 ? "var(--long)" : "var(--short)";
+    } else {
+      usdcEl.textContent = "—";
+      usdcEl.style.color = "var(--text-muted)";
+    }
   }
   const rpnlEl = q("lt-stat-rpnl");
   if (rpnlEl) {
@@ -777,7 +795,7 @@ async function loadLiveTrades() {
   try {
     const [d, walBal] = await Promise.all([
       fetch(`${API}?view=livetrades`).then(r => r.json()),
-      fetch(`${API}?view=walletbalance`).then(r => r.json()).catch(() => ({})),
+      fetch(`${API}?view=walletbalance`).then(r => r.json()).catch(e => ({ ok: false, error: e.message })),
     ]);
 
     _ltPaused = !!d.paused;
@@ -796,10 +814,18 @@ async function loadLiveTrades() {
 
     const trades = d.trades || [];
     const solEl  = document.getElementById("lt-stat-sol");
-    if (solEl && walBal.sol != null) solEl.textContent = walBal.sol.toFixed(4) + " SOL";
+    if (solEl) {
+      if (walBal.sol != null) solEl.textContent = walBal.sol.toFixed(4) + " SOL";
+      else if (walBal.error) solEl.textContent = "Error";
+    }
     const linkEl = document.getElementById("lt-stat-wallet-link");
-    if (linkEl && walBal.address) {
-      linkEl.innerHTML = `<a href="https://solscan.io/account/${walBal.address}" target="_blank" rel="noopener" style="color:var(--ac)">View wallet ↗</a>`;
+    if (linkEl) {
+      if (walBal.address) {
+        linkEl.innerHTML = `<a href="https://solscan.io/account/${walBal.address}" target="_blank" rel="noopener" style="color:var(--ac)">View wallet ↗</a>`;
+      } else if (walBal.error) {
+        linkEl.textContent = walBal.error.slice(0, 60);
+        linkEl.style.color = "var(--short)";
+      }
     }
 
     renderLtStats(trades, walBal.usdc);
