@@ -71,6 +71,34 @@ module.exports = async function handler(req, res) {
             trade.realTrade.usdcReceived = result.usdcReceived;
             trade.realTrade.actualExit   = result.actualPrice;
             trade.realTrade.closedAt     = Date.now();
+            // Phone alert via Discord
+            if (webhook) {
+              const sym   = trade.symbol || trade.name || trade.mint.slice(0, 8);
+              const pnl   = result.usdcReceived - (trade.realTrade.usdcSpent || 0);
+              const pnlPct = trade.realTrade.usdcSpent
+                ? ((pnl / trade.realTrade.usdcSpent) * 100).toFixed(1)
+                : "?";
+              const isWin  = pnl >= 0;
+              const reason = trade.closeReason === "tp" ? "TP hit" : trade.closeReason === "sl" ? "SL hit" : "Expired";
+              fetch(webhook, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ embeds: [{
+                  title: `${isWin ? "✅" : "❌"} LIVE SELL — ${sym} (${reason})`,
+                  url: trade.pair_url || undefined,
+                  color: isWin ? 0x22c55e : 0xef4444,
+                  fields: [
+                    { name: "Mint CA",      value: `\`${trade.mint}\``, inline: false },
+                    { name: "USDC In",      value: `$${(trade.realTrade.usdcSpent || 0).toFixed(2)}`, inline: true },
+                    { name: "USDC Out",     value: `$${result.usdcReceived.toFixed(2)}`, inline: true },
+                    { name: "Real P&L",     value: `${isWin ? "+" : ""}$${pnl.toFixed(2)} (${isWin ? "+" : ""}${pnlPct}%)`, inline: true },
+                    { name: "Tx",           value: `[View on Solscan](https://solscan.io/tx/${result.txSig})`, inline: false },
+                  ],
+                  footer: { text: "Soloris · Live Trade Closed" },
+                  timestamp: new Date().toISOString(),
+                }]}),
+              }).catch(() => {});
+            }
           } catch (err) {
             trade.realTrade.status    = "sell_failed";
             trade.realTrade.sellError = err.message;
@@ -109,6 +137,28 @@ module.exports = async function handler(req, res) {
               openedAt:       Date.now(),
             };
             buyResults.push({ mint: trade.mint, status: "ok", txSig: result.txSig });
+            // Phone alert via Discord
+            if (webhook) {
+              const sym = trade.symbol || trade.name || trade.mint.slice(0, 8);
+              const price = result.actualPrice ? `$${parseFloat(result.actualPrice).toExponential(3)}` : "—";
+              fetch(webhook, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ embeds: [{
+                  title: `💸 LIVE BUY — ${sym}`,
+                  url: trade.pair_url || undefined,
+                  color: 0x3b82f6,
+                  fields: [
+                    { name: "Mint CA",     value: `\`${trade.mint}\``, inline: false },
+                    { name: "Entry Price", value: price, inline: true },
+                    { name: "USDC Spent",  value: `$${result.usdcSpent}`, inline: true },
+                    { name: "Tx",          value: `[View on Solscan](https://solscan.io/tx/${result.txSig})`, inline: false },
+                  ],
+                  footer: { text: "Soloris · Live Trade Opened" },
+                  timestamp: new Date().toISOString(),
+                }]}),
+              }).catch(() => {});
+            }
           } catch (err) {
             trade.realTrade = { status: "buy_failed", error: err.message };
             buyResults.push({ mint: trade.mint, status: "buy_failed", error: err.message });
