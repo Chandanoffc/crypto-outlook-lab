@@ -46,6 +46,8 @@ async function loadState() {
   const row = await getRuntimeState("meme-autoscan");
   if (row?.state) {
     memeState = { ...memeDefault(), ...row.state };
+    // Restore lastScanAt so restarts don't immediately re-scan and fire duplicate buys
+    if (row.state._lastScanAt) lastScanAt = row.state._lastScanAt;
     log("State loaded — %d open trades", (memeState.paperTrades?.trades || []).filter(t => t.status === "open").length);
   }
 }
@@ -80,8 +82,11 @@ async function tick() {
   // ── 2. Real sells for closed paper trades ──────────────────────────────────
   // Also retry any trade that was paper-closed in a previous tick but whose
   // on-chain sell never ran (e.g. engine restarted after DB save, before sell).
+  const MAX_SELL_RETRIES = 3;
   const stuckSells = (memeState.paperTrades.trades || []).filter(t =>
-    t.status !== "open" && t.realTrade?.status === "open"
+    t.status !== "open" &&
+    (t.realTrade?.status === "open" ||
+      (t.realTrade?.status === "sell_failed" && (t.realTrade?.sellRetryCount || 0) < MAX_SELL_RETRIES))
   );
   const tradesToSell = [
     ...(paperResult?.closedTrades || []).filter(t => t.realTrade?.status === "open"),
@@ -90,22 +95,37 @@ async function tick() {
 
   if (tradesToSell.length && process.env.TRADING_WALLET_PRIVKEY) {
     for (const trade of tradesToSell) {
-      if (!trade.realTrade || trade.realTrade.status !== "open") continue;
+      if (!trade.realTrade || (trade.realTrade.status !== "open" && trade.realTrade.status !== "sell_failed")) continue;
       const isRetry = !paperResult?.closedTrades?.some(c => c.mint === trade.mint);
       log("%sSelling %s (%s)…", isRetry ? "[retry] " : "", trade.symbol, trade.closeReason || "closed");
       try {
-        const result = await sellToken(trade.mint, trade.realTrade.tokensReceived);
-        trade.realTrade.status       = "closed";
-        trade.realTrade.exitTxSig    = result.txSig;
-        trade.realTrade.usdcReceived = result.usdcReceived;
-        trade.realTrade.actualExit   = result.actualPrice;
-        trade.realTrade.closedAt     = now;
-        log("Sold %s → $%s USDC (tx %s)", trade.symbol, result.usdcReceived.toFixed(2), result.txSig);
-        sendDiscordSell(liveTradeWebhook, trade, result);
+        // Check on-chain balance first — if 0, token was manually sold; mark closed and skip
+        const onChainBalance = await getTokenBalance(trade.mint);
+        if (onChainBalance <= 0) {
+          log("No on-chain balance for %s — marking as manually closed", trade.symbol);
+          trade.realTrade.status    = "closed";
+          trade.realTrade.closedAt  = now;
+          trade.realTrade.manualClose = true;
+        } else {
+          const result = await sellToken(trade.mint, onChainBalance);
+          trade.realTrade.status       = "closed";
+          trade.realTrade.exitTxSig    = result.txSig;
+          trade.realTrade.usdcReceived = result.usdcReceived;
+          trade.realTrade.actualExit   = result.actualPrice;
+          trade.realTrade.closedAt     = now;
+          log("Sold %s → $%s USDC (tx %s)", trade.symbol, result.usdcReceived.toFixed(2), result.txSig);
+          sendDiscordSell(liveTradeWebhook, trade, result);
+        }
       } catch (e) {
-        trade.realTrade.status    = "sell_failed";
-        trade.realTrade.sellError = e.message;
-        err("Sell failed for %s: %s", trade.symbol, e.message);
+        const sellRetryCount = (trade.realTrade.sellRetryCount || 0) + 1;
+        trade.realTrade.status         = "sell_failed";
+        trade.realTrade.sellError      = e.message;
+        trade.realTrade.sellRetryCount = sellRetryCount;
+        if (sellRetryCount >= MAX_SELL_RETRIES) {
+          err("Sell abandoned for %s after %d attempts: %s", trade.symbol, sellRetryCount, e.message);
+        } else {
+          err("Sell failed for %s (attempt %d/%d): %s", trade.symbol, sellRetryCount, MAX_SELL_RETRIES, e.message);
+        }
       }
       if (hasDatabase()) await upsertRuntimeState("meme-autoscan", memeState);
     }
@@ -114,16 +134,20 @@ async function tick() {
   // ── 3. Signal scan (every 2 min) ───────────────────────────────────────────
   if (now - lastScanAt >= SCAN_EVERY_MS) {
     lastScanAt = now;
+    memeState._lastScanAt = now; // persist so restarts don't immediately re-scan
     const scanResult = await runMemeAutoScan(memeState, { webhook });
     if (scanResult?.newTrades?.length) log("New signals: %d", scanResult.newTrades.length);
     if (hasDatabase()) await upsertRuntimeState("meme-autoscan", memeState);
   }
 
   // ── 4. Real buys ────────────────────────────────────────────────────────────
+  const MAX_BUY_RETRIES = 3;
   if (liveEnabled) {
     const toBuy = (memeState.paperTrades.trades || []).filter(pt =>
       pt.status === "open" &&
-      (!pt.realTrade || pt.realTrade.status === "pending_buy" || pt.realTrade.status === "buy_failed")
+      (!pt.realTrade ||
+        pt.realTrade.status === "pending_buy" ||
+        (pt.realTrade.status === "buy_failed" && (pt.realTrade.retryCount || 0) < MAX_BUY_RETRIES))
     );
 
     if (toBuy.length) {
@@ -162,8 +186,13 @@ async function tick() {
         log("Bought %s → tx %s", pt.symbol, result.txSig);
         sendDiscordBuy(liveTradeWebhook, pt, result);
       } catch (e) {
-        pt.realTrade = { status: "buy_failed", error: e.message, failedAt: now };
-        err("Buy failed for %s: %s", pt.symbol, e.message);
+        const retryCount = (pt.realTrade?.retryCount || 0) + 1;
+        pt.realTrade = { status: "buy_failed", error: e.message, failedAt: now, retryCount };
+        if (retryCount >= MAX_BUY_RETRIES) {
+          err("Buy abandoned for %s after %d attempts: %s", pt.symbol, retryCount, e.message);
+        } else {
+          err("Buy failed for %s (attempt %d/%d): %s", pt.symbol, retryCount, MAX_BUY_RETRIES, e.message);
+        }
       }
       if (hasDatabase()) await upsertRuntimeState("meme-autoscan", memeState);
     }
