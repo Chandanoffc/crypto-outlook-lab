@@ -118,75 +118,11 @@ module.exports = async function handler(req, res) {
       if (hasDatabase()) await upsertRuntimeState("meme-autoscan", memeState);
     }
 
-    // ── 3. Real buys — runs every tick, independent of scan lock ─────────
-    // Picks up: (a) newly opened paper trades with no realTrade, and
-    //           (b) trades stuck in pending_buy from a previous timeout.
-    // Running outside scanClaimed means a timed-out buy is always retried
-    // on the next tick even if the scan lock isn't re-claimable.
+    // Real buys are handled exclusively by the VPS trade engine (worker/trade-engine.js).
+    // Keeping buy logic here caused double-buys when both systems ran simultaneously.
     const liveTrading = msRow?.state?.settings?.liveTrading;
     const liveEnabled = !!(process.env.TRADING_WALLET_PRIVKEY) && !liveTrading?.paused;
     const buyResults  = [];
-    if (liveEnabled) {
-      const pendingBuys = (memeState.paperTrades.trades || []).filter(pt =>
-        pt.status === "open" &&
-        (!pt.realTrade || pt.realTrade.status === "pending_buy" || pt.realTrade.status === "buy_failed")
-      );
-
-      if (pendingBuys.length) {
-        // Process max 1 buy per tick — one buy takes ~50s (quote+swap+confirm),
-        // leaving no budget for a second. The retry loop picks up the next one next tick.
-        pendingBuys.splice(1);
-
-        // Mark all as pending_buy and save BEFORE any RPC call.
-        // If the function times out during buyToken, pending_buy is already in DB
-        // and will be retried next tick.
-        for (const pt of pendingBuys) {
-          if (!pt.realTrade) pt.realTrade = { status: "pending_buy", queuedAt: Date.now() };
-        }
-        if (hasDatabase()) await upsertRuntimeState("meme-autoscan", memeState);
-
-        const { buyToken, REAL_TRADE_USDC } = getTrader();
-        for (const pt of pendingBuys) {
-          try {
-            const result = await buyToken(pt.mint, REAL_TRADE_USDC, pt._liquidity || 0);
-            pt.realTrade = {
-              status:         "open",
-              txSig:          result.txSig,
-              usdcSpent:      result.usdcSpent,
-              tokensReceived: result.tokensReceived,
-              actualEntry:    result.actualPrice,
-              openedAt:       Date.now(),
-            };
-            buyResults.push({ mint: pt.mint, symbol: pt.symbol, status: "ok", txSig: result.txSig });
-            if (liveTradeWebhook) {
-              const sym   = pt.symbol || pt.name || pt.mint.slice(0, 8);
-              const price = result.actualPrice ? `$${parseFloat(result.actualPrice).toExponential(3)}` : "—";
-              fetch(liveTradeWebhook, {
-                method: "POST", headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ embeds: [{
-                  title: `💸 LIVE BUY — ${sym}`,
-                  url: pt.pair_url || undefined,
-                  color: 0x3b82f6,
-                  fields: [
-                    { name: "Mint CA",     value: `\`${pt.mint}\``, inline: false },
-                    { name: "Entry Price", value: price, inline: true },
-                    { name: "USDC Spent",  value: `$${result.usdcSpent}`, inline: true },
-                    { name: "Tx",          value: `[View on Solscan](https://solscan.io/tx/${result.txSig})`, inline: false },
-                  ],
-                  footer: { text: "Soloris · Live Trade Opened" },
-                  timestamp: new Date().toISOString(),
-                }]}),
-              }).catch(() => {});
-            }
-          } catch (err) {
-            pt.realTrade = { status: "buy_failed", error: err.message };
-            buyResults.push({ mint: pt.mint, symbol: pt.symbol, status: "buy_failed", error: err.message });
-          }
-          // Save after each individual buy so a mid-loop timeout doesn't lose results
-          if (hasDatabase()) await upsertRuntimeState("meme-autoscan", memeState);
-        }
-      }
-    }
 
     // Final save to catch any remaining state changes
     if (hasDatabase()) await upsertRuntimeState("meme-autoscan", memeState);

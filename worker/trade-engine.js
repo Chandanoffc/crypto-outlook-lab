@@ -21,7 +21,7 @@ require("dotenv").config({ path: require("path").resolve(__dirname, "../.env") }
 const { hasDatabase, getRuntimeState, upsertRuntimeState } = require("../lib/neon-db");
 const { defaultState: memeDefault, runMemeAutoScan, checkMemeMilestones, fireMilestonePending } = require("../lib/meme-autoscan");
 const { checkPaperTrades } = require("../lib/meme-papertrades");
-const { buyToken, sellToken, REAL_TRADE_USDC } = require("../lib/solana-trader");
+const { buyToken, sellToken, getTokenBalance, REAL_TRADE_USDC } = require("../lib/solana-trader");
 
 const TICK_MS       = parseInt(process.env.TICK_MS || "30000");
 const SCAN_EVERY_MS = 120_000; // run full signal scan every 2 min (same cadence as before)
@@ -120,6 +120,19 @@ async function tick() {
       // but we still do one at a time to keep logs clean and avoid parallel RPC spam
       const pt = toBuy[0];
       log("Buying %s (liquidity $%s)…", pt.symbol, pt._liquidity || "unknown");
+
+      // Check on-chain balance first — prevents double-buy after a crash mid-save
+      try {
+        const existingBalance = await getTokenBalance(pt.mint);
+        if (existingBalance > 0) {
+          log("Already hold %s on-chain (%s tokens) — recovering trade state", pt.symbol, existingBalance);
+          pt.realTrade = { status: "open", tokensReceived: existingBalance, openedAt: now, recoveredFromChain: true };
+          if (hasDatabase()) await upsertRuntimeState("meme-autoscan", memeState);
+          return;
+        }
+      } catch (e) {
+        log("Balance check failed for %s: %s — proceeding with buy", pt.symbol, e.message);
+      }
 
       // Mark pending_buy first — survives a crash mid-buy
       pt.realTrade = { status: "pending_buy", queuedAt: now };
