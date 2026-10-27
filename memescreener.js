@@ -577,8 +577,26 @@ function renderMsPtCard(t) {
       ${isClosed && t.closePrice ? `<span>Close ${fmtPrice(t.closePrice)}</span>` : ""}
     </div>
     ${t.pair_url ? `<div class="paper-pos-meta"><a href="${t.pair_url}" target="_blank" rel="noopener" style="color:var(--ac)">View on DexScreener ↗</a></div>` : ""}
+    ${t.realTrade ? renderRealTradeMeta(t.realTrade) : ""}
   `;
   return el;
+}
+
+function renderRealTradeMeta(rt) {
+  if (!rt) return "";
+  const explorerBase = "https://solscan.io/tx/";
+  const status = rt.status || "unknown";
+  const statusColor = status === "open" ? "var(--long)" : status === "closed" ? "var(--text-muted)" : "var(--short)";
+  let html = `<div class="paper-pos-meta" style="border-top:1px solid var(--border);margin-top:6px;padding-top:6px;">`;
+  html += `<span style="color:${statusColor};font-weight:600;">🔗 Real: ${status.toUpperCase()}</span>`;
+  if (rt.txSig) html += ` · <a href="${explorerBase}${rt.txSig}" target="_blank" rel="noopener" style="color:var(--ac)">Buy tx ↗</a>`;
+  if (rt.exitTxSig) html += ` · <a href="${explorerBase}${rt.exitTxSig}" target="_blank" rel="noopener" style="color:var(--ac)">Sell tx ↗</a>`;
+  if (rt.usdcSpent) html += ` · Spent $${rt.usdcSpent.toFixed(2)}`;
+  if (rt.usdcReceived) html += ` · Got $${rt.usdcReceived.toFixed(2)}`;
+  if (rt.error) html += ` · <span style="color:var(--short)">${rt.error.slice(0, 60)}</span>`;
+  if (rt.sellError) html += ` · <span style="color:var(--short)">${rt.sellError.slice(0, 60)}</span>`;
+  html += `</div>`;
+  return html;
 }
 
 function renderMsPtStats(stats, balance) {
@@ -587,8 +605,8 @@ function renderMsPtStats(stats, balance) {
 
   const balEl = q("ms-pt-stat-balance");
   if (balEl) {
-    balEl.textContent = "$" + (balance ?? 100).toFixed(2);
-    const diff = (balance ?? 100) - 100;
+    balEl.textContent = "$" + (balance ?? 200).toFixed(2);
+    const diff = (balance ?? 200) - 200;
     balEl.style.color = diff > 0 ? "var(--long)" : diff < 0 ? "var(--short)" : "";
   }
 
@@ -617,9 +635,27 @@ function renderMsPtStats(stats, balance) {
   if (wl) wl.textContent = stats.closed > 0 ? `${stats.wins}W / ${stats.losses}L` : "—";
 }
 
+async function loadRealWalletBalance() {
+  try {
+    const d = await fetch(`${API}?view=walletbalance`).then(r => r.json());
+    const el = document.getElementById("ms-pt-stat-realbal");
+    const subEl = document.getElementById("ms-pt-stat-realbal-sub");
+    if (el && d.usdc != null) {
+      el.textContent = `$${d.usdc.toFixed(2)}`;
+      el.style.color = d.usdc >= 100 ? "var(--long)" : "var(--short)";
+    }
+    if (subEl && d.address) {
+      subEl.innerHTML = `<a href="https://solscan.io/account/${d.address}" target="_blank" rel="noopener" style="color:var(--ac)">View wallet ↗</a>`;
+    }
+  } catch { /* ignore — wallet balance is best-effort */ }
+}
+
 async function loadMsPaperTrades() {
   try {
-    const d = await fetch(`${API}?view=papertrades`).then(r => r.json());
+    const [d] = await Promise.all([
+      fetch(`${API}?view=papertrades`).then(r => r.json()),
+      loadRealWalletBalance(),
+    ]);
     const trades  = d.trades  || [];
     const stats   = d.stats   || {};
     const balance = d.balance ?? 200;

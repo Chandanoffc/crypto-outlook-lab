@@ -284,6 +284,15 @@ module.exports = async function handler(req, res) {
       ].sort((a, b) => (b.detectedAt || 0) - (a.detectedAt || 0));
       return res.end(JSON.stringify({ ok: true, tokens: allTokens, lastScan: autoState.lastScan || 0 }));
     }
+    if (url.searchParams.get("view") === "walletbalance") {
+      try {
+        const { getWalletBalances } = require("../lib/solana-trader");
+        const bal = await getWalletBalances();
+        return res.end(JSON.stringify({ ok: true, ...bal }));
+      } catch (e) {
+        return res.end(JSON.stringify({ ok: false, error: e.message }));
+      }
+    }
     if (url.searchParams.get("view") === "papertrades") {
       let autoState = memeAutoDefault();
       if (hasDatabase()) {
