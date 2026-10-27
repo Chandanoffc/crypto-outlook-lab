@@ -302,12 +302,29 @@ module.exports = async function handler(req, res) {
       const pt = autoState.paperTrades || defaultPaperState();
       return res.end(JSON.stringify({ ok: true, trades: pt.trades || [], balance: pt.balance ?? 200, stats: calcMemePtStats(pt.trades), dailyLog: pt.dailyLog || [] }));
     }
+    if (url.searchParams.get("view") === "livetrades") {
+      let autoState = memeAutoDefault();
+      if (hasDatabase()) {
+        const row = await getRuntimeState("meme-autoscan");
+        if (row?.state) autoState = { ...memeAutoDefault(), ...row.state };
+      }
+      const trades = (autoState.paperTrades?.trades || []).filter(t => t.realTrade);
+      const paused = !!(state.settings?.liveTrading?.paused);
+      return res.end(JSON.stringify({ ok: true, trades, paused }));
+    }
     return res.end(JSON.stringify({ ok: true, settings: state.settings, history: state.history }));
   }
   if (req.method !== "POST") { res.statusCode = 405; return res.end(JSON.stringify({ error: "Method not allowed" })); }
 
   const body = await readBody(req);
   const { action } = body;
+
+  if (action === "live-trading-toggle") {
+    if (!state.settings.liveTrading) state.settings.liveTrading = {};
+    state.settings.liveTrading.paused = !!body.paused;
+    await saveState(state);
+    return res.end(JSON.stringify({ ok: true, paused: state.settings.liveTrading.paused }));
+  }
 
   if (action === "settings") {
     if (body.discordWebhook !== undefined) state.settings.discordWebhook = String(body.discordWebhook).trim();

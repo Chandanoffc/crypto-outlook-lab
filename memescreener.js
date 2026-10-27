@@ -700,11 +700,159 @@ async function resetMsPaperTrades() {
   }
 }
 
+// ── Live Trade Dashboard ──────────────────────────────────────────────────────
+
+let _ltPaused = false;
+
+function renderLtCard(t) {
+  const rt = t.realTrade || {};
+  const isClosed = rt.status === "closed" || rt.status === "sell_failed";
+  const hasBuy   = rt.status && rt.status !== "buy_failed";
+  const explorerBase = "https://solscan.io/tx/";
+
+  const realPnl   = (rt.usdcReceived != null && rt.usdcSpent != null)
+    ? rt.usdcReceived - rt.usdcSpent : null;
+  const pnlClass  = realPnl == null ? "" : realPnl > 0 ? "pnl-pos" : "pnl-neg";
+  const pnlStr    = realPnl == null ? "Pending" : (realPnl >= 0 ? "+" : "") + "$" + realPnl.toFixed(2);
+
+  const statusColor = rt.status === "open" ? "var(--long)"
+    : rt.status === "closed"      ? "var(--text-muted)"
+    : "var(--short)";
+
+  const el = document.createElement("div");
+  el.className = "paper-pos-card" + (isClosed ? " is-closed" : "");
+  el.innerHTML = `
+    <div class="paper-pos-row">
+      <div class="paper-pos-ident">
+        <span class="paper-pos-symbol">${t.symbol || "?"}</span>
+        <span class="paper-pos-side paper-pos-side--long">LONG</span>
+        <span style="font-size:11px;padding:2px 7px;border-radius:4px;background:var(--bg-2);color:${statusColor};font-weight:600">${(rt.status || "pending").toUpperCase()}</span>
+      </div>
+      <div class="paper-pos-right">
+        <span class="paper-pos-pnl ${pnlClass}">${pnlStr}</span>
+      </div>
+    </div>
+    <div class="paper-pos-meta">
+      <span>Entry $${(rt.actualEntry || t.entryPrice || 0).toExponential(3)} · USDC spent $${(rt.usdcSpent || 0).toFixed(2)}</span>
+      ${rt.usdcReceived != null ? `<span>Received $${rt.usdcReceived.toFixed(2)}</span>` : ""}
+    </div>
+    ${rt.txSig ? `<div class="paper-pos-meta"><a href="${explorerBase}${rt.txSig}" target="_blank" rel="noopener" style="color:var(--ac)">Buy tx ↗</a>${rt.exitTxSig ? ` · <a href="${explorerBase}${rt.exitTxSig}" target="_blank" rel="noopener" style="color:var(--ac)">Sell tx ↗</a>` : ""}</div>` : ""}
+    ${t.pair_url ? `<div class="paper-pos-meta"><a href="${t.pair_url}" target="_blank" rel="noopener" style="color:var(--ac)">View on DexScreener ↗</a></div>` : ""}
+    ${rt.error || rt.sellError ? `<div class="paper-pos-meta" style="color:var(--short);font-size:11px">${rt.error || rt.sellError}</div>` : ""}
+  `;
+  return el;
+}
+
+function renderLtStats(trades, walletUsdc) {
+  const closed = trades.filter(t => t.realTrade?.status === "closed");
+  const open   = trades.filter(t => t.realTrade?.status === "open");
+  const wins   = closed.filter(t => (t.realTrade.usdcReceived || 0) > (t.realTrade.usdcSpent || 0));
+  const losses = closed.filter(t => (t.realTrade.usdcReceived || 0) <= (t.realTrade.usdcSpent || 0));
+  const rpnl   = closed.reduce((s, t) => s + ((t.realTrade.usdcReceived || 0) - (t.realTrade.usdcSpent || 0)), 0);
+  const wr     = closed.length ? (wins.length / closed.length * 100) : null;
+
+  const q = id => document.getElementById(id);
+  const usdcEl = q("lt-stat-usdc");
+  if (usdcEl && walletUsdc != null) {
+    usdcEl.textContent = "$" + walletUsdc.toFixed(2);
+    usdcEl.style.color = walletUsdc >= 100 ? "var(--long)" : "var(--short)";
+  }
+  const rpnlEl = q("lt-stat-rpnl");
+  if (rpnlEl) {
+    rpnlEl.textContent = closed.length ? (rpnl >= 0 ? "+$" : "-$") + Math.abs(rpnl).toFixed(2) : "—";
+    rpnlEl.style.color = rpnl > 0 ? "var(--long)" : rpnl < 0 ? "var(--short)" : "";
+  }
+  const wrEl = q("lt-stat-wr");
+  if (wrEl) {
+    wrEl.textContent = wr != null ? wr.toFixed(1) + "%" : "—";
+    wrEl.style.color = wr != null ? (wr >= 50 ? "var(--long)" : "var(--short)") : "";
+  }
+  const openEl = q("lt-stat-open");
+  if (openEl) openEl.textContent = open.length;
+  const wlEl = q("lt-stat-wl");
+  if (wlEl) wlEl.textContent = closed.length ? `${wins.length}W / ${losses.length}L` : "—";
+}
+
+async function loadLiveTrades() {
+  try {
+    const [d, walBal] = await Promise.all([
+      fetch(`${API}?view=livetrades`).then(r => r.json()),
+      fetch(`${API}?view=walletbalance`).then(r => r.json()).catch(() => ({})),
+    ]);
+
+    _ltPaused = !!d.paused;
+    const btn = document.getElementById("lt-toggle-btn");
+    const statusEl = document.getElementById("lt-trading-status");
+    if (btn) {
+      btn.textContent = _ltPaused ? "▶ Resume Auto Trading" : "⏸ Pause Auto Trading";
+      btn.style.background = _ltPaused ? "var(--long)" : "var(--short)";
+      btn.style.color = "#fff";
+      btn.style.border = "none";
+    }
+    if (statusEl) {
+      statusEl.textContent = _ltPaused ? "🔴 Trading PAUSED — new signals will not execute" : "🟢 Trading ACTIVE";
+      statusEl.style.color = _ltPaused ? "var(--short)" : "var(--long)";
+    }
+
+    const trades = d.trades || [];
+    const solEl  = document.getElementById("lt-stat-sol");
+    if (solEl && walBal.sol != null) solEl.textContent = walBal.sol.toFixed(4) + " SOL";
+    const linkEl = document.getElementById("lt-stat-wallet-link");
+    if (linkEl && walBal.address) {
+      linkEl.innerHTML = `<a href="https://solscan.io/account/${walBal.address}" target="_blank" rel="noopener" style="color:var(--ac)">View wallet ↗</a>`;
+    }
+
+    renderLtStats(trades, walBal.usdc);
+
+    const openEl   = document.getElementById("lt-open");
+    const closedEl = document.getElementById("lt-closed");
+    if (!openEl || !closedEl) return;
+
+    const openTrades = trades.filter(t => t.realTrade?.status === "open" || t.realTrade?.status === "buy_failed");
+    const closedTrades = trades
+      .filter(t => t.realTrade?.status === "closed" || t.realTrade?.status === "sell_failed")
+      .sort((a, b) => (b.realTrade?.closedAt || b.closedAt || 0) - (a.realTrade?.closedAt || a.closedAt || 0));
+
+    openEl.innerHTML = "";
+    if (openTrades.length) {
+      openTrades.forEach(t => openEl.appendChild(renderLtCard(t)));
+    } else {
+      openEl.innerHTML = `<p style="color:var(--text-muted);font-size:.85rem;padding:.5rem 0;">${_ltPaused ? "Trading paused. No new positions will open." : "No open live positions."}</p>`;
+    }
+
+    closedEl.innerHTML = "";
+    if (closedTrades.length) {
+      closedTrades.slice(0, 50).forEach(t => closedEl.appendChild(renderLtCard(t)));
+    } else {
+      closedEl.innerHTML = "<p style='color:var(--text-muted);font-size:.85rem;padding:.5rem 0;'>No closed live trades yet.</p>";
+    }
+  } catch (e) {
+    console.error("live trades load error", e);
+  }
+}
+
+async function toggleLiveTrading() {
+  const newPaused = !_ltPaused;
+  const label = newPaused ? "pause" : "resume";
+  if (!confirm(`${newPaused ? "Pause" : "Resume"} auto trading? ${newPaused ? "No new real trades will open until you resume." : "Real trading will resume on next detected signal."}`)) return;
+  try {
+    await fetch(API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "live-trading-toggle", paused: newPaused }),
+    });
+    await loadLiveTrades();
+  } catch (e) {
+    console.error("toggle live trading error", e);
+  }
+}
+
 function initSectionTabs() {
   const tabs  = document.querySelectorAll(".ms-section-tab");
   const panels = {
     runners:     document.getElementById("ms-tab-runners"),
     papertrades: document.getElementById("ms-tab-papertrades"),
+    livetrades:  document.getElementById("ms-tab-livetrades"),
   };
   tabs.forEach(btn => {
     btn.addEventListener("click", () => {
@@ -714,6 +862,7 @@ function initSectionTabs() {
       Object.entries(panels).forEach(([k, el]) => {
         if (el) el.style.display = k === key ? "" : "none";
       });
+      if (key === "livetrades") loadLiveTrades();
     });
   });
 }
@@ -726,6 +875,9 @@ document.addEventListener("DOMContentLoaded", () => {
   initSectionTabs();
   document.getElementById("ms-auto-refresh")?.addEventListener("click", () => loadAutoScans({ triggerScan: true }));
   document.getElementById("ms-pt-reset")?.addEventListener("click", resetMsPaperTrades);
+  document.getElementById("lt-toggle-btn")?.addEventListener("click", toggleLiveTrading);
+  document.getElementById("lt-refresh")?.addEventListener("click", loadLiveTrades);
   // Poll paper trades every 30s so closed trades appear without a manual refresh
   setInterval(loadMsPaperTrades, 30_000);
+  setInterval(loadLiveTrades, 30_000);
 });

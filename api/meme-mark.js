@@ -44,8 +44,10 @@ module.exports = async function handler(req, res) {
     if (scanClaimed) {
       scanSummary = await runMemeAutoScan(memeState, { webhook });
 
-      // Real buys for each newly opened paper trade
-      if (scanSummary?.newTrades?.length && process.env.TRADING_WALLET_PRIVKEY) {
+      // Real buys for each newly opened paper trade (skip if paused)
+      const liveTrading = msRow?.state?.settings?.liveTrading;
+      const liveEnabled = process.env.TRADING_WALLET_PRIVKEY && !liveTrading?.paused;
+      if (scanSummary?.newTrades?.length && liveEnabled) {
         for (const trade of scanSummary.newTrades) {
           try {
             const result = await buyToken(trade.mint, REAL_TRADE_USDC, trade._liquidity || 0);
@@ -79,7 +81,7 @@ module.exports = async function handler(req, res) {
       paperResult = pr;
       msResult = ms;
 
-      // Real sells for each closed paper trade
+      // Real sells for each closed paper trade (always sell even if paused — need to exit open positions)
       if (paperResult?.closedTrades?.length && process.env.TRADING_WALLET_PRIVKEY) {
         for (const trade of paperResult.closedTrades) {
           if (!trade.realTrade || trade.realTrade.status !== "open") continue;

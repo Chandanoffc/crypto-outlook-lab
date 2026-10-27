@@ -161,6 +161,7 @@
       <div class="ms-section-tabs">
         <button class="ms-section-tab is-active" data-tab="runners" type="button">Auto-Detected Runners</button>
         <button class="ms-section-tab" data-tab="papertrades" type="button">📊 Paper Trades</button>
+        <button class="ms-section-tab" data-tab="livetrades" type="button">🔴 Live Trades</button>
       </div>
 
       <!-- Auto-scan results -->
@@ -264,6 +265,93 @@
         </div>
       </div>
       </div><!-- /ms-tab-papertrades -->
+
+      <!-- ── Live Trade Dashboard ──────────────────────────── -->
+      <div id="ms-tab-livetrades" style="display:none">
+        <div class="zc-pt-section">
+          <div class="zc-strategy-header" style="justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px">
+            <div>
+              <h2 class="zc-strategy-title">Live Trade Dashboard</h2>
+              <p class="zc-strategy-sub">Real on-chain trades executed via Jupiter. Mirrors paper trades 1:1. $10 USDC per position.</p>
+            </div>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+              <button id="lt-toggle-btn" class="btn" style="height:36px;padding:0 18px;font-weight:600;font-size:13px" type="button">⏸ Pause Auto Trading</button>
+              <span id="lt-trading-status" style="font-size:12px;color:var(--text-muted)">Loading…</span>
+            </div>
+          </div>
+
+          <!-- Wallet + P&L stat strip -->
+          <div class="paper-stats-row" style="margin-top:16px">
+            <div class="paper-stat">
+              <span class="stat-label">Wallet USDC</span>
+              <strong id="lt-stat-usdc" class="stat-value">—</strong>
+              <span class="stat-sub" id="lt-stat-wallet-link">On-chain balance</span>
+            </div>
+            <div class="paper-stat">
+              <span class="stat-label">SOL Balance</span>
+              <strong id="lt-stat-sol" class="stat-value">—</strong>
+              <span class="stat-sub">For gas fees</span>
+            </div>
+            <div class="paper-stat">
+              <span class="stat-label">Realised P&amp;L</span>
+              <strong id="lt-stat-rpnl" class="stat-value">—</strong>
+              <span class="stat-sub">USDC in − USDC out</span>
+            </div>
+            <div class="paper-stat">
+              <span class="stat-label">Win Rate</span>
+              <strong id="lt-stat-wr" class="stat-value">—</strong>
+              <span class="stat-sub">Closed real trades</span>
+            </div>
+            <div class="paper-stat">
+              <span class="stat-label">Open Positions</span>
+              <strong id="lt-stat-open" class="stat-value">0</strong>
+              <span class="stat-sub">Executing on-chain</span>
+            </div>
+            <div class="paper-stat">
+              <span class="stat-label">Wins / Losses</span>
+              <strong id="lt-stat-wl" class="stat-value">—</strong>
+              <span class="stat-sub">Closed breakdown</span>
+            </div>
+          </div>
+
+          <!-- Live position grid -->
+          <div class="paper-grid" style="margin-top:20px">
+            <section class="panel">
+              <div class="panel-hd">
+                <div>
+                  <p class="panel-label">Open Positions</p>
+                  <h2>Active on-chain trades</h2>
+                </div>
+                <button id="lt-refresh" class="btn btn-ghost" style="height:32px;padding:0 14px;font-size:12px" type="button">↻ Refresh</button>
+              </div>
+              <div id="lt-open" class="paper-positions">
+                <div class="zc-empty-state">
+                  <div class="zc-empty-icon">🔗</div>
+                  <p class="zc-empty-title">No open live trades</p>
+                  <p class="zc-empty-sub">Next detected runner will trigger a real swap.</p>
+                </div>
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-hd">
+                <div>
+                  <p class="panel-label">Trade History</p>
+                  <h2>Closed live trades</h2>
+                </div>
+              </div>
+              <div id="lt-closed" class="paper-positions">
+                <div class="zc-empty-state">
+                  <div class="zc-empty-icon">📈</div>
+                  <p class="zc-empty-title">No closed live trades yet</p>
+                  <p class="zc-empty-sub">Results appear here when positions exit.</p>
+                </div>
+              </div>
+            </section>
+          </div>
+
+        </div>
+      </div><!-- /ms-tab-livetrades -->
 
       <!-- History -->
       <div id="ms-history-wrap" class="ms-history-wrap" hidden>
