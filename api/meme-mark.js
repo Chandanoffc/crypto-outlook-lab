@@ -128,10 +128,15 @@ module.exports = async function handler(req, res) {
     const buyResults  = [];
     if (liveEnabled) {
       const pendingBuys = (memeState.paperTrades.trades || []).filter(pt =>
-        pt.status === "open" && (!pt.realTrade || pt.realTrade.status === "pending_buy")
+        pt.status === "open" &&
+        (!pt.realTrade || pt.realTrade.status === "pending_buy" || pt.realTrade.status === "buy_failed")
       );
 
       if (pendingBuys.length) {
+        // Process max 1 buy per tick — one buy takes ~50s (quote+swap+confirm),
+        // leaving no budget for a second. The retry loop picks up the next one next tick.
+        pendingBuys.splice(1);
+
         // Mark all as pending_buy and save BEFORE any RPC call.
         // If the function times out during buyToken, pending_buy is already in DB
         // and will be retried next tick.
