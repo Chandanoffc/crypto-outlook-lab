@@ -32,7 +32,8 @@ module.exports = async function handler(req, res) {
     // Load state once — shared across scan + mark
     let memeState = memeDefault();
     const msRow   = hasDatabase() ? await getRuntimeState("memescreener") : null;
-    const webhook = msRow?.state?.settings?.discordWebhook || "";
+    const webhook          = msRow?.state?.settings?.discordWebhook     || "";
+    const liveTradeWebhook = msRow?.state?.settings?.liveTradeWebhook   || webhook;
     if (hasDatabase()) {
       const row = await getRuntimeState("meme-autoscan");
       if (row?.state) memeState = { ...memeDefault(), ...row.state };
@@ -71,8 +72,8 @@ module.exports = async function handler(req, res) {
             trade.realTrade.usdcReceived = result.usdcReceived;
             trade.realTrade.actualExit   = result.actualPrice;
             trade.realTrade.closedAt     = Date.now();
-            // Phone alert via Discord
-            if (webhook) {
+            // Phone alert via Discord (private channel)
+            if (liveTradeWebhook) {
               const sym   = trade.symbol || trade.name || trade.mint.slice(0, 8);
               const pnl   = result.usdcReceived - (trade.realTrade.usdcSpent || 0);
               const pnlPct = trade.realTrade.usdcSpent
@@ -80,7 +81,7 @@ module.exports = async function handler(req, res) {
                 : "?";
               const isWin  = pnl >= 0;
               const reason = trade.closeReason === "tp" ? "TP hit" : trade.closeReason === "sl" ? "SL hit" : "Expired";
-              fetch(webhook, {
+              fetch(liveTradeWebhook, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ embeds: [{
@@ -137,11 +138,11 @@ module.exports = async function handler(req, res) {
               openedAt:       Date.now(),
             };
             buyResults.push({ mint: trade.mint, status: "ok", txSig: result.txSig });
-            // Phone alert via Discord
-            if (webhook) {
+            // Phone alert via Discord (private channel)
+            if (liveTradeWebhook) {
               const sym = trade.symbol || trade.name || trade.mint.slice(0, 8);
               const price = result.actualPrice ? `$${parseFloat(result.actualPrice).toExponential(3)}` : "—";
-              fetch(webhook, {
+              fetch(liveTradeWebhook, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ embeds: [{

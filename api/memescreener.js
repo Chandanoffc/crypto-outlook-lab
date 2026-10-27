@@ -343,7 +343,8 @@ module.exports = async function handler(req, res) {
   }
 
   if (action === "settings") {
-    if (body.discordWebhook !== undefined) state.settings.discordWebhook = String(body.discordWebhook).trim();
+    if (body.discordWebhook     !== undefined) state.settings.discordWebhook     = String(body.discordWebhook).trim();
+    if (body.liveTradeWebhook   !== undefined) state.settings.liveTradeWebhook   = String(body.liveTradeWebhook).trim();
     await saveState(state);
     return res.end(JSON.stringify({ ok: true, settings: state.settings }));
   }
