@@ -41,7 +41,7 @@ module.exports = async function handler(req, res) {
 
     // ── 1. Signal detection (every 2 min via scan lock) ──────────────────
     let scanSummary = null;
-    const scanClaimed = await tryClaimScanLock("meme-autoscan-lock", now, 90 * 1000);
+    const scanClaimed = await tryClaimScanLock("meme-autoscan-lock", now, 110 * 1000);
     if (scanClaimed) {
       scanSummary = await runMemeAutoScan(memeState, { webhook });
 
