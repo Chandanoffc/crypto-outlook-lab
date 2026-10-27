@@ -622,7 +622,7 @@ async function loadMsPaperTrades() {
     const d = await fetch(`${API}?view=papertrades`).then(r => r.json());
     const trades  = d.trades  || [];
     const stats   = d.stats   || {};
-    const balance = d.balance ?? 100;
+    const balance = d.balance ?? 200;
 
     renderMsPtStats(stats, balance);
 
@@ -633,14 +633,19 @@ async function loadMsPaperTrades() {
     const openTrades   = trades.filter(t => t.status === "open");
     const closedTrades = trades.filter(t => t.status !== "open");
 
+    // Always re-render both lists so closed trades appear immediately
+    openEl.innerHTML = "";
     if (openTrades.length) {
-      openEl.innerHTML = "";
       openTrades.forEach(t => openEl.appendChild(renderMsPtCard(t)));
+    } else {
+      openEl.innerHTML = "<p style='color:var(--text-muted);font-size:.85rem;padding:.5rem 0;'>No open positions.</p>";
     }
 
+    closedEl.innerHTML = "";
     if (closedTrades.length) {
-      closedEl.innerHTML = "";
-      closedTrades.slice(0, 30).forEach(t => closedEl.appendChild(renderMsPtCard(t)));
+      closedTrades.slice(0, 50).forEach(t => closedEl.appendChild(renderMsPtCard(t)));
+    } else {
+      closedEl.innerHTML = "<p style='color:var(--text-muted);font-size:.85rem;padding:.5rem 0;'>No closed trades yet.</p>";
     }
   } catch (e) {
     console.error("paper trades load error", e);
@@ -648,7 +653,7 @@ async function loadMsPaperTrades() {
 }
 
 async function resetMsPaperTrades() {
-  if (!confirm("Reset all MemeScreener paper trades? Balance returns to $100.")) return;
+  if (!confirm("Reset all MemeScreener paper trades? Balance returns to $200.")) return;
   try {
     await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "paper-reset" }) });
     await loadMsPaperTrades();
@@ -683,4 +688,6 @@ document.addEventListener("DOMContentLoaded", () => {
   initSectionTabs();
   document.getElementById("ms-auto-refresh")?.addEventListener("click", () => loadAutoScans({ triggerScan: true }));
   document.getElementById("ms-pt-reset")?.addEventListener("click", resetMsPaperTrades);
+  // Poll paper trades every 30s so closed trades appear without a manual refresh
+  setInterval(loadMsPaperTrades, 30_000);
 });
