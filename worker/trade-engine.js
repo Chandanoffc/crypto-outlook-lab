@@ -78,10 +78,21 @@ async function tick() {
   if (milestonesFired) log("Milestones fired: %d", milestonesFired);
 
   // ── 2. Real sells for closed paper trades ──────────────────────────────────
-  if (paperResult?.closedTrades?.length && process.env.TRADING_WALLET_PRIVKEY) {
-    for (const trade of paperResult.closedTrades) {
+  // Also retry any trade that was paper-closed in a previous tick but whose
+  // on-chain sell never ran (e.g. engine restarted after DB save, before sell).
+  const stuckSells = (memeState.paperTrades.trades || []).filter(t =>
+    t.status !== "open" && t.realTrade?.status === "open"
+  );
+  const tradesToSell = [
+    ...(paperResult?.closedTrades || []).filter(t => t.realTrade?.status === "open"),
+    ...stuckSells.filter(s => !(paperResult?.closedTrades || []).some(c => c.mint === s.mint)),
+  ];
+
+  if (tradesToSell.length && process.env.TRADING_WALLET_PRIVKEY) {
+    for (const trade of tradesToSell) {
       if (!trade.realTrade || trade.realTrade.status !== "open") continue;
-      log("Selling %s (%s)…", trade.symbol, trade.closeReason);
+      const isRetry = !paperResult?.closedTrades?.some(c => c.mint === trade.mint);
+      log("%sSelling %s (%s)…", isRetry ? "[retry] " : "", trade.symbol, trade.closeReason || "closed");
       try {
         const result = await sellToken(trade.mint, trade.realTrade.tokensReceived);
         trade.realTrade.status       = "closed";
