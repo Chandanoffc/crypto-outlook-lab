@@ -816,7 +816,7 @@ async function loadLiveTrades() {
     const solEl  = document.getElementById("lt-stat-sol");
     if (solEl) {
       if (walBal.sol != null) solEl.textContent = walBal.sol.toFixed(4) + " SOL";
-      else if (walBal.error) solEl.textContent = "Error";
+      else if (walBal.error) { solEl.textContent = walBal.error.slice(0, 80); solEl.style.cssText += ";font-size:11px;color:var(--short)"; }
     }
     const linkEl = document.getElementById("lt-stat-wallet-link");
     if (linkEl) {
