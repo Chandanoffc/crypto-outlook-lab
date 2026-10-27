@@ -21,15 +21,17 @@ require("dotenv").config({ path: require("path").resolve(__dirname, "../.env") }
 const { hasDatabase, getRuntimeState, upsertRuntimeState } = require("../lib/neon-db");
 const { defaultState: memeDefault, runMemeAutoScan, checkMemeMilestones, fireMilestonePending } = require("../lib/meme-autoscan");
 const { checkPaperTrades } = require("../lib/meme-papertrades");
-const { buyToken, sellToken, getTokenBalance, REAL_TRADE_USDC } = require("../lib/solana-trader");
+const { buyToken, sellToken, getTokenBalance, topUpSolIfNeeded, closeEmptyTokenAccounts, REAL_TRADE_USDC } = require("../lib/solana-trader");
 
 const TICK_MS       = parseInt(process.env.TICK_MS || "30000");
 const SCAN_EVERY_MS = 120_000; // run full signal scan every 2 min (same cadence as before)
 
 // ── State held in memory between ticks ───────────────────────────────────────
-let memeState       = memeDefault();
-let lastScanAt      = 0;
+let memeState        = memeDefault();
+let lastScanAt       = 0;
 let consecutiveFails = 0;
+let closedTradeCount = 0;
+let lastCleanupAt    = 0;
 const MAX_CONSECUTIVE_FAILS = 5;
 
 // ── Logging ───────────────────────────────────────────────────────────────────
@@ -131,7 +133,31 @@ async function tick() {
     }
   }
 
-  // ── 3. Signal scan (every 2 min) ───────────────────────────────────────────
+  // ── 3. SOL top-up (after every sell) + token account cleanup (daily) ────────
+  const justSold = tradesToSell.filter(t => t.realTrade?.status === "closed" && !t.realTrade?.manualClose).length;
+  if (justSold > 0 && process.env.TRADING_WALLET_PRIVKEY) {
+    closedTradeCount += justSold;
+    try {
+      const topUp = await topUpSolIfNeeded();
+      if (topUp) log("SOL topped up: swapped $%d USDC → SOL (was %s SOL, tx %s)", topUp.usdcSpent, topUp.solBefore.toFixed(4), topUp.txSig);
+    } catch (e) {
+      err("SOL top-up failed: %s", e.message);
+    }
+  }
+
+  const CLEANUP_EVERY_MS = 24 * 60 * 60 * 1000;
+  if (now - lastCleanupAt >= CLEANUP_EVERY_MS && process.env.TRADING_WALLET_PRIVKEY) {
+    lastCleanupAt = now;
+    log("Running daily token account cleanup…");
+    try {
+      const closed = await closeEmptyTokenAccounts();
+      log("Closed %d empty token accounts (reclaimed ~%s SOL)", closed, (closed * 0.002).toFixed(3));
+    } catch (e) {
+      err("Token account cleanup failed: %s", e.message);
+    }
+  }
+
+  // ── 5. Signal scan (every 2 min) ───────────────────────────────────────────
   if (now - lastScanAt >= SCAN_EVERY_MS) {
     lastScanAt = now;
     memeState._lastScanAt = now; // persist so restarts don't immediately re-scan
@@ -140,7 +166,7 @@ async function tick() {
     if (hasDatabase()) await upsertRuntimeState("meme-autoscan", memeState);
   }
 
-  // ── 4. Real buys ────────────────────────────────────────────────────────────
+  // ── 6. Real buys ────────────────────────────────────────────────────────────
   const MAX_BUY_RETRIES = 3;
   if (liveEnabled) {
     const toBuy = (memeState.paperTrades.trades || []).filter(pt =>
