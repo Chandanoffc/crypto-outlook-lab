@@ -319,7 +319,11 @@ async function loop() {
   log("Soloris trade engine starting (tick=%ds)…", TICK_MS / 1000);
   if (!process.env.TRADING_WALLET_PRIVKEY) log("WARN: TRADING_WALLET_PRIVKEY not set — live trading disabled");
   if (!process.env.HELIUS_API_KEY)         log("WARN: HELIUS_API_KEY not set — using public RPC (rate-limited)");
-  await loadState();
+  try {
+    await loadState();
+  } catch (e) {
+    err("Failed to load state from DB (will start fresh): %s", e.message);
+  }
   log("First tick starting…");
   loop();
 })();
