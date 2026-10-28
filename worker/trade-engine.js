@@ -23,7 +23,8 @@ const { defaultState: memeDefault, runMemeAutoScan, checkMemeMilestones, fireMil
 const { checkPaperTrades } = require("../lib/meme-papertrades");
 const { buyToken, sellToken, getTokenBalance, topUpSolIfNeeded, closeEmptyTokenAccounts, REAL_TRADE_USDC } = require("../lib/solana-trader");
 
-const TICK_MS       = parseInt(process.env.TICK_MS || "30000");
+const PRICE_TICK_MS = parseInt(process.env.PRICE_TICK_MS || "15000"); // price check + sell every 15s
+const TICK_MS       = parseInt(process.env.TICK_MS || "30000");       // full tick (buys + scan) every 30s
 const SCAN_EVERY_MS = 120_000; // run full signal scan every 2 min (same cadence as before)
 
 // ── State held in memory between ticks ───────────────────────────────────────
@@ -76,13 +77,13 @@ async function saveIfDirty(force = false) {
   stateDirty = false;
 }
 
-// ── Main tick ─────────────────────────────────────────────────────────────────
-async function tick() {
+// ── Price tick (fast — runs every 15s independently of buys) ──────────────────
+// Checks prices, fires SL/TP, executes sells. Never blocked by buy transactions.
+async function priceTick() {
   const now      = Date.now();
   const settings = await getSettings();
   const webhook          = settings.discordWebhook   || process.env.DISCORD_WEBHOOK || "";
   const liveTradeWebhook = settings.liveTradeWebhook || process.env.LIVE_TRADE_WEBHOOK || webhook;
-  const liveEnabled      = !!(process.env.TRADING_WALLET_PRIVKEY) && !settings.liveTrading?.paused;
 
   // ── 1. Price checks + paper trade TP/SL ────────────────────────────────────
   const [paperResult, msRaw] = await Promise.all([
@@ -93,15 +94,12 @@ async function tick() {
   if (paperResult?.closedTrades?.length) stateDirty = true;
   if (msRaw?.pending?.length) stateDirty = true;
 
-  // Save BEFORE firing Discord — milestone dedup record must hit DB first
   await saveIfDirty();
 
   const milestonesFired = await fireMilestonePending(msRaw?.pending);
   if (milestonesFired) log("Milestones fired: %d", milestonesFired);
 
   // ── 2. Real sells for closed paper trades ──────────────────────────────────
-  // Also retry any trade that was paper-closed in a previous tick but whose
-  // on-chain sell never ran (e.g. engine restarted after DB save, before sell).
   const MAX_SELL_RETRIES = 3;
   const stuckSells = (memeState.paperTrades.trades || []).filter(t =>
     t.status !== "open" &&
@@ -119,7 +117,6 @@ async function tick() {
       const isRetry = !paperResult?.closedTrades?.some(c => c.mint === trade.mint);
       log("%sSelling %s (%s)…", isRetry ? "[retry] " : "", trade.symbol, trade.closeReason || "closed");
       try {
-        // Check on-chain balance first — if 0, token was manually sold; mark closed and skip
         const onChainBalance = await getTokenBalance(trade.mint);
         if (onChainBalance <= 0) {
           log("No on-chain balance for %s — marking as manually closed", trade.symbol);
@@ -147,12 +144,11 @@ async function tick() {
           err("Sell failed for %s (attempt %d/%d): %s", trade.symbol, sellRetryCount, MAX_SELL_RETRIES, e.message);
         }
       }
-      // Always force-save after a real trade operation
       await saveIfDirty(true);
     }
   }
 
-  // ── 3. SOL top-up (after every sell) + token account cleanup (daily) ────────
+  // ── 3. SOL top-up after sells ─────────────────────────────────────────────
   const justSold = tradesToSell.filter(t => t.realTrade?.status === "closed" && !t.realTrade?.manualClose).length;
   if (justSold > 0 && process.env.TRADING_WALLET_PRIVKEY) {
     closedTradeCount += justSold;
@@ -163,6 +159,20 @@ async function tick() {
       err("SOL top-up failed: %s", e.message);
     }
   }
+
+  return { justSold };
+}
+
+// ── Main tick (30s — buys + signal scan only) ─────────────────────────────────
+async function tick() {
+  const now      = Date.now();
+  const settings = await getSettings();
+  const webhook          = settings.discordWebhook   || process.env.DISCORD_WEBHOOK || "";
+  const liveTradeWebhook = settings.liveTradeWebhook || process.env.LIVE_TRADE_WEBHOOK || webhook;
+  const liveEnabled      = !!(process.env.TRADING_WALLET_PRIVKEY) && !settings.liveTrading?.paused;
+
+  // Price check + sells run in priceTick() — skip duplicating here
+  const { justSold } = await priceTick();
 
   const CLEANUP_EVERY_MS = 24 * 60 * 60 * 1000;
   if (now - lastCleanupAt >= CLEANUP_EVERY_MS && process.env.TRADING_WALLET_PRIVKEY) {
@@ -298,7 +308,25 @@ function sendDiscordSell(webhook, trade, result) {
   }).catch(() => {});
 }
 
-// ── Loop ──────────────────────────────────────────────────────────────────────
+// ── Price-check loop (fast — 15s, never blocked by buys) ─────────────────────
+// Only runs price checks + sells. Buys are in the full tick below.
+// This ensures SL/TP fires within 15s even if a buy is in progress.
+let priceCheckRunning = false;
+async function priceLoop() {
+  if (!priceCheckRunning) {
+    priceCheckRunning = true;
+    try {
+      await priceTick();
+    } catch (e) {
+      err("Price tick failed: %s", e.message);
+    } finally {
+      priceCheckRunning = false;
+    }
+  }
+  setTimeout(priceLoop, PRICE_TICK_MS);
+}
+
+// ── Full loop (30s — buys + signal scan) ─────────────────────────────────────
 async function loop() {
   try {
     await tick();
@@ -325,5 +353,6 @@ async function loop() {
     err("Failed to load state from DB (will start fresh): %s", e.message);
   }
   log("First tick starting…");
-  loop();
+  loop();         // full tick: buys + scan every 30s
+  priceLoop();   // fast tick: price checks + sells every 15s (runs independently)
 })();
