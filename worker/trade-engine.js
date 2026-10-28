@@ -200,7 +200,7 @@ async function tick() {
   }
 
   // ── 6. Real buys ────────────────────────────────────────────────────────────
-  const MAX_BUY_RETRIES = 3;
+  const MAX_BUY_RETRIES = 2;
   if (liveEnabled) {
     const toBuy = (memeState.paperTrades.trades || []).filter(pt =>
       pt.status === "open" &&
