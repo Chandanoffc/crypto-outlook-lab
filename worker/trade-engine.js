@@ -81,7 +81,7 @@ async function tick() {
   const now      = Date.now();
   const settings = await getSettings();
   const webhook          = settings.discordWebhook   || process.env.DISCORD_WEBHOOK || "";
-  const liveTradeWebhook = settings.liveTradeWebhook || webhook;
+  const liveTradeWebhook = settings.liveTradeWebhook || process.env.LIVE_TRADE_WEBHOOK || webhook;
   const liveEnabled      = !!(process.env.TRADING_WALLET_PRIVKEY) && !settings.liveTrading?.paused;
 
   // ── 1. Price checks + paper trade TP/SL ────────────────────────────────────
