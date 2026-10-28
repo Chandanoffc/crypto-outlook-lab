@@ -1,5 +1,58 @@
 # Soloris Signals — Daily Agent Log
 
+## 2026-10-28
+
+**EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 25).
+
+**BTC**: ⚠️ Could not fetch — same blocker.
+
+---
+
+### ⚠️ Blocker persists (day 25)
+
+Identical denial to every prior day, re-confirmed via `curl` (direct and via the explicit proxy with the CA bundle — `CONNECT tunnel failed, response 403`) and `/__agentproxy/status` (`gateway answered 403 to CONNECT`, policy denial). Both `soloris-signals.vercel.app:443` and `fapi.binance.com:443` are still denied. `WebSearch` worked fine; Tasks 1 and 3 could not run for the 25th consecutive day — no live balance/positions, no BTC ticker, no closed-trade data.
+
+Side channel re-confirmed healthy: attached the repo with push access via `add_repo`/`gh`, checked all four GitHub Actions workflows directly. **Hourly Scan**, **Daily Strategy Digest**, and **Upbit Listing Alerts** are all green and firing on schedule (most recent runs 2026-10-27 23:34Z / 15:01Z / 23:57Z respectively). The platform and its crons remain confirmed healthy — this is purely this container's egress policy on the two specific hosts, not a platform problem.
+
+**No new push notification sent today.** One was already sent yesterday (day 24, 2026-10-27) escalating this exact unresolved blocker, and nothing material has changed in the 24 hours since — re-notifying a day later for the identical, already-flagged condition would just be noise. If the blocker is still in place in a few more days, the next run should re-escalate with a fresh notification rather than waiting out another long cadence.
+
+Still outstanding: `soloris-signals.vercel.app` and `fapi.binance.com` need to be added to this environment's network allowlist (Environment settings → Network access → Custom → add both hosts under Allowed domains, or broaden the access level).
+
+---
+
+### Research findings (Task 2)
+
+- **Trending setups & coins**: no reliable dated-this-week ranking surfaced via `WebSearch`; results were stale/undated (old Wintermute/Bybit derivatives commentary, unverified promotional social posts). Nothing new versus prior days' logs.
+- **EMA pullback backtests**: same wide, statistically noisy spread as every prior day — one shared backtest reported 19% WR / 0.32 profit factor (losing) on a Jul–Sep 2026 BTC 15m sample, another 32.2% WR / 1.04 profit factor with the author's own caveat that it could easily be luck. No actionable, validated change; consistent with 24 days of prior findings that vendor win-rate claims aren't reliable.
+- **MACD/RSI/ADX combinations**: generic vendor consensus again (RSI divergence over static 70/30, MACD+RSI pairing on 4H/daily to cut noise, ADX>25 as trend-confirmation) — none out-of-sample verified, none improving on the existing `adx4h >= 25` / `<18` gates already in the engine.
+- **Market structure**: no fresh October 2026 $500M-volume altcoin ranking found; most recent dated note (Aug 2026) repeats HYPE/TRX/ZEC/XLM as relative outperformers, already logged on prior days.
+- **Funding rate edge**: BitMEX's own research (cited again this run) found funding rate has no meaningful predictive power for next-8h returns; TradingView/LuxAlgo practitioner sources treat extreme funding + high OI as a crowded-positioning context flag, not a timing signal. Consistent with the research-rejected verdict from day 23 — still no validated case for a funding-rate quality bonus.
+
+### Changes implemented
+
+One surgical comment-only fix in `lib/emaperps-runtime.js` (no behavior change), found by a targeted adversarial code-review subagent pass:
+
+1. **Stale `G1/G2/H1/H2` pattern-code references in 3 comments** — these signal types haven't existed since the `G1/G2/H1/H2` → `P20/P50/Q20/Q50` rename (commit `e678dcb`); `emaperps.js`'s Pattern Breakdown table got this same fix on a prior day, but the engine file's own comments were never cleaned up:
+   - Line ~51-52: deleted a doubly-stale historical changelog comment (referenced the old 80→83 threshold-raise *and* dead `H1/H2` EMA-bounce types; superseded by the 83→95 comment directly above it).
+   - Line ~313: `signalType` example codes corrected from `(A1/B2/G2/H1/…)` to `(A1/B2/P50/Q20/…)`.
+   - Line ~725: the S/R level-gap-check comment corrected from "`(G/H)` don't use S1/S2/R1/R2" to "`(P/Q)` don't use S1/S2/R1/R2" — this one was actively misleading since it sits directly above the `srLevelsUsable` gate and named the wrong signal types for what the gate exempts.
+
+The same subagent also did a full pass over `PAPER_BE_TRIGGER_PCT`/breakeven math, all quality-tier UI thresholds (Elite/Strong/Good, Q95-99...Q110+), fixed SL/TP1/TP2 %, circuit-breaker logic, `anchorTests`/`isEMAPullbackSignal` gating, and TP1-partial/breakeven P&L accounting — all internally consistent with current constants, no further issues found.
+
+Re-confirmed guardrails intact (read, not changed): `MIN_ALERT_QUALITY = 95`, `$200M` volume floor, `PAPER_SIZE_QUALITY_CEIL = 110`, `PAPER_LEVERAGE = 5`.
+
+**Considered but deferred**:
+- EMA-pullback volume-confirmation filter, RSI-band widening — still no trade data to validate against, now 25 days running.
+- Funding-rate-extreme quality bonus — research-rejected as of day 23, reconfirmed today, not reconsidered.
+
+### Watch tomorrow
+
+- **Priority, now 25 days running**: network access to `soloris-signals.vercel.app` and `fapi.binance.com` needs to be restored so Tasks 1 and 3 can finally run. No notification sent today (one went out yesterday for the same issue); if still blocked after a few more days, re-escalate with a fresh notification.
+- Once access is restored: run the full health check + performance analysis backlog before considering either deferred research idea above.
+- The easy code-review backlog is now very likely close to fully exhausted after 25 days — today's find (3 stale comments) was a genuine but minor miss from the `G/H`→`P/Q` rename, not a new category of bug. Future no-live-data days may legitimately have zero changes to report.
+
+---
+
 ## 2026-10-27
 
 **EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 24).
