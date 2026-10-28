@@ -33,6 +33,7 @@ let lastScanAt       = 0;
 let consecutiveFails = 0;
 let closedTradeCount = 0;
 let lastCleanupAt    = 0;
+let lastDailyReportAt = 0;
 let stateDirty       = false; // only save to DB when state actually changed
 let cachedSettings   = {};
 let settingsCachedAt = 0;
@@ -180,6 +181,14 @@ async function tick() {
   // Price check + sells run in priceTick() — skip duplicating here
   const { justSold } = await priceTick();
 
+  // ── Daily report at midnight UTC ─────────────────────────────────────────
+  const REPORT_EVERY_MS = 24 * 60 * 60 * 1000;
+  if (now - lastDailyReportAt >= REPORT_EVERY_MS) {
+    lastDailyReportAt = now;
+    sendDailyReport(liveTradeWebhook, memeState.paperTrades?.trades || []);
+    log("Daily report sent");
+  }
+
   const CLEANUP_EVERY_MS = 24 * 60 * 60 * 1000;
   if (now - lastCleanupAt >= CLEANUP_EVERY_MS && process.env.TRADING_WALLET_PRIVKEY) {
     lastCleanupAt = now;
@@ -313,6 +322,49 @@ function sendDiscordSell(webhook, trade, result) {
       footer: { text: "Soloris · Live Trade Closed" },
       timestamp: new Date().toISOString(),
     }]}),
+  }).catch(() => {});
+}
+
+// ── Daily report ─────────────────────────────────────────────────────────────
+function sendDailyReport(webhook, trades) {
+  if (!webhook) return;
+  const closed = trades.filter(t => t.status !== "open" && t.realTrade?.status === "closed" && !t.realTrade?.manualClose);
+  const today  = new Date().toISOString().slice(0, 10);
+  const todayTrades = closed.filter(t => {
+    const d = t.realTrade?.closedAt;
+    return d && new Date(d).toISOString().slice(0, 10) === today;
+  });
+
+  const wins   = todayTrades.filter(t => (t.realTrade.usdcReceived || 0) > (t.realTrade.usdcSpent || 0));
+  const losses = todayTrades.filter(t => (t.realTrade.usdcReceived || 0) <= (t.realTrade.usdcSpent || 0));
+  const totalIn  = todayTrades.reduce((s, t) => s + (t.realTrade.usdcSpent    || 0), 0);
+  const totalOut = todayTrades.reduce((s, t) => s + (t.realTrade.usdcReceived || 0), 0);
+  const netPnl   = totalOut - totalIn;
+  const isProfit = netPnl >= 0;
+
+  const openTrades = trades.filter(t => t.status === "open" && t.realTrade?.status === "open");
+
+  const rows = todayTrades.map(t => {
+    const pnl = (t.realTrade.usdcReceived || 0) - (t.realTrade.usdcSpent || 0);
+    const pct = t.realTrade.usdcSpent ? ((pnl / t.realTrade.usdcSpent) * 100).toFixed(1) : "?";
+    const icon = pnl >= 0 ? "✅" : "❌";
+    return `${icon} **${t.symbol}** ${pnl >= 0 ? "+" : ""}$${pnl.toFixed(2)} (${pct}%) — ${t.closeReason || "closed"}`;
+  }).join("\n") || "No closed trades today";
+
+  fetch(webhook, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ embeds: [{
+      title: `📊 Daily Report — ${today}`,
+      color: isProfit ? 0x22c55e : 0xef4444,
+      fields: [
+        { name: "Trades Today", value: `${todayTrades.length} closed (${wins.length}W / ${losses.length}L)`, inline: true },
+        { name: "Net P&L", value: `${isProfit ? "+" : ""}$${netPnl.toFixed(2)}`, inline: true },
+        { name: "Currently Open", value: `${openTrades.length} trade${openTrades.length !== 1 ? "s" : ""}`, inline: true },
+        { name: "Trades", value: rows, inline: false },
+      ],
+      footer: { text: "Soloris · Daily Summary" },
+      timestamp: new Date().toISOString(),
+    }] }),
   }).catch(() => {});
 }
 
