@@ -100,11 +100,11 @@ async function priceTick() {
   if (milestonesFired) log("Milestones fired: %d", milestonesFired);
 
   // ── 2. Real sells for closed paper trades ──────────────────────────────────
-  const MAX_SELL_RETRIES = 3;
+  // Sells are retried forever — never abandon. Every 5th failure sends a Discord
+  // alert so the user can manually intervene if the token is truly dead.
   const stuckSells = (memeState.paperTrades.trades || []).filter(t =>
     t.status !== "open" &&
-    (t.realTrade?.status === "open" ||
-      (t.realTrade?.status === "sell_failed" && (t.realTrade?.sellRetryCount || 0) < MAX_SELL_RETRIES))
+    (t.realTrade?.status === "open" || t.realTrade?.status === "sell_failed")
   );
   const tradesToSell = [
     ...(paperResult?.closedTrades || []).filter(t => t.realTrade?.status === "open"),
@@ -138,10 +138,16 @@ async function priceTick() {
         trade.realTrade.status         = "sell_failed";
         trade.realTrade.sellError      = e.message;
         trade.realTrade.sellRetryCount = sellRetryCount;
-        if (sellRetryCount >= MAX_SELL_RETRIES) {
-          err("Sell abandoned for %s after %d attempts: %s", trade.symbol, sellRetryCount, e.message);
-        } else {
-          err("Sell failed for %s (attempt %d/%d): %s", trade.symbol, sellRetryCount, MAX_SELL_RETRIES, e.message);
+        err("Sell failed for %s (attempt %d): %s", trade.symbol, sellRetryCount, e.message);
+        // Alert on every 5th failure so user can manually intervene
+        if (sellRetryCount % 5 === 0 && liveTradeWebhook) {
+          fetch(liveTradeWebhook, { method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ embeds: [{ color: 0xff0000,
+              title: `⚠️ SELL STUCK — ${trade.symbol} (${sellRetryCount} attempts)`,
+              description: `Cannot sell **${trade.symbol}** after ${sellRetryCount} attempts.\nReason: ${trade.closeReason || "closed"}\nError: ${e.message}\n\n**Please sell manually on Jupiter.**`,
+              footer: { text: "Soloris · Sell Alert" }, timestamp: new Date().toISOString(),
+            }] }),
+          }).catch(() => {});
         }
       }
       await saveIfDirty(true);
