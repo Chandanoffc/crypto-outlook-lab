@@ -32,6 +32,10 @@ let lastScanAt       = 0;
 let consecutiveFails = 0;
 let closedTradeCount = 0;
 let lastCleanupAt    = 0;
+let stateDirty       = false; // only save to DB when state actually changed
+let cachedSettings   = {};
+let settingsCachedAt = 0;
+const SETTINGS_TTL   = 5 * 60 * 1000; // re-read settings every 5 min
 const MAX_CONSECUTIVE_FAILS = 5;
 
 // ── Logging ───────────────────────────────────────────────────────────────────
@@ -54,11 +58,22 @@ async function loadState() {
   }
 }
 
-// ── Settings from memescreener row ───────────────────────────────────────────
+// ── Settings from memescreener row (cached 5 min) ────────────────────────────
 async function getSettings() {
   if (!hasDatabase()) return {};
+  if (Date.now() - settingsCachedAt < SETTINGS_TTL) return cachedSettings;
   const row = await getRuntimeState("memescreener");
-  return row?.state?.settings || {};
+  cachedSettings   = row?.state?.settings || {};
+  settingsCachedAt = Date.now();
+  return cachedSettings;
+}
+
+// ── Save state only when dirty ────────────────────────────────────────────────
+async function saveIfDirty(force = false) {
+  if (!hasDatabase()) return;
+  if (!stateDirty && !force) return;
+  await upsertRuntimeState("meme-autoscan", memeState);
+  stateDirty = false;
 }
 
 // ── Main tick ─────────────────────────────────────────────────────────────────
@@ -75,8 +90,11 @@ async function tick() {
     checkMemeMilestones(memeState, { webhook }),
   ]);
 
+  if (paperResult?.closedTrades?.length) stateDirty = true;
+  if (msRaw?.pending?.length) stateDirty = true;
+
   // Save BEFORE firing Discord — milestone dedup record must hit DB first
-  if (hasDatabase()) await upsertRuntimeState("meme-autoscan", memeState);
+  await saveIfDirty();
 
   const milestonesFired = await fireMilestonePending(msRaw?.pending);
   if (milestonesFired) log("Milestones fired: %d", milestonesFired);
@@ -105,8 +123,8 @@ async function tick() {
         const onChainBalance = await getTokenBalance(trade.mint);
         if (onChainBalance <= 0) {
           log("No on-chain balance for %s — marking as manually closed", trade.symbol);
-          trade.realTrade.status    = "closed";
-          trade.realTrade.closedAt  = now;
+          trade.realTrade.status      = "closed";
+          trade.realTrade.closedAt    = now;
           trade.realTrade.manualClose = true;
         } else {
           const result = await sellToken(trade.mint, onChainBalance);
@@ -129,7 +147,8 @@ async function tick() {
           err("Sell failed for %s (attempt %d/%d): %s", trade.symbol, sellRetryCount, MAX_SELL_RETRIES, e.message);
         }
       }
-      if (hasDatabase()) await upsertRuntimeState("meme-autoscan", memeState);
+      // Always force-save after a real trade operation
+      await saveIfDirty(true);
     }
   }
 
@@ -160,10 +179,14 @@ async function tick() {
   // ── 5. Signal scan (every 2 min) ───────────────────────────────────────────
   if (now - lastScanAt >= SCAN_EVERY_MS) {
     lastScanAt = now;
-    memeState._lastScanAt = now; // persist so restarts don't immediately re-scan
+    memeState._lastScanAt = now;
     const scanResult = await runMemeAutoScan(memeState, { webhook });
-    if (scanResult?.newTrades?.length) log("New signals: %d", scanResult.newTrades.length);
-    if (hasDatabase()) await upsertRuntimeState("meme-autoscan", memeState);
+    if (scanResult?.newTrades?.length) {
+      log("New signals: %d", scanResult.newTrades.length);
+      stateDirty = true;
+    }
+    // Always save after scan to persist cooldowns + _lastScanAt
+    await saveIfDirty(true);
   }
 
   // ── 6. Real buys ────────────────────────────────────────────────────────────
@@ -195,9 +218,9 @@ async function tick() {
         log("Balance check failed for %s: %s — proceeding with buy", pt.symbol, e.message);
       }
 
-      // Mark pending_buy first — survives a crash mid-buy
+      // Mark pending_buy first — force-save before any RPC call
       pt.realTrade = { status: "pending_buy", queuedAt: now };
-      if (hasDatabase()) await upsertRuntimeState("meme-autoscan", memeState);
+      await saveIfDirty(true);
 
       try {
         const result = await buyToken(pt.mint, REAL_TRADE_USDC, pt._liquidity || 0);
@@ -220,7 +243,7 @@ async function tick() {
           err("Buy failed for %s (attempt %d/%d): %s", pt.symbol, retryCount, MAX_BUY_RETRIES, e.message);
         }
       }
-      if (hasDatabase()) await upsertRuntimeState("meme-autoscan", memeState);
+      await saveIfDirty(true);
     }
   }
 }
