@@ -192,11 +192,13 @@ async function tick() {
     memeState._lastScanAt = now;
     const scanResult = await runMemeAutoScan(memeState, { webhook });
     if (scanResult?.newTrades?.length) {
-      log("New signals: %d", scanResult.newTrades.length);
+      log("New signals: %d — buying immediately", scanResult.newTrades.length);
       stateDirty = true;
+      // Save state before buy so trade record exists if engine crashes mid-buy
+      await saveIfDirty(true);
+    } else {
+      await saveIfDirty(true);
     }
-    // Always save after scan to persist cooldowns + _lastScanAt
-    await saveIfDirty(true);
   }
 
   // ── 6. Real buys ────────────────────────────────────────────────────────────
