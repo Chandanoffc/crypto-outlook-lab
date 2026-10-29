@@ -733,7 +733,7 @@ function createNativeBannerFrame(event, flashText) {
     drawCenteredText(frame, secondary, 222, 2, 7);
   }
 
-  drawText(frame, "SOLARIS-SIGNALS.VERCEL.APP", 96, BANNER_HEIGHT - 51, 1, 7);
+  drawText(frame, "SOLORIS-SIGNALS.VERCEL.APP", 96, BANNER_HEIGHT - 51, 1, 7);
   drawText(frame, resolveNativeBannerLabel(event), BANNER_WIDTH - 212, BANNER_HEIGHT - 51, 1, 6);
   return frame;
 }

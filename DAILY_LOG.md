@@ -1,5 +1,47 @@
 # Soloris Signals — Daily Agent Log
 
+## 2026-10-29
+
+**EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 26).
+
+**BTC**: ⚠️ Could not fetch — same blocker.
+
+---
+
+### ⚠️ Blocker persists (day 26) — re-escalating with a fresh notification
+
+Re-confirmed via direct `curl` through the agent proxy: both `soloris-signals.vercel.app:443` and `fapi.binance.com:443` still return `connect_rejected` (`/__agentproxy/status` shows the gateway answering 403 to CONNECT — policy denial, not a transient failure). This is the 26th consecutive day this exact denial has blocked Task 1 (health check) and Task 3 (performance analysis). No live balance, positions, BTC price, or closed-trade data was available today; none of today's numbers are fabricated.
+
+Per the plan logged on day 25 ("if still blocked after a few more days, re-escalate with a fresh notification" — the last one went out day 24, 2026-10-27, two days ago), today's run sends a new push notification, since two more days have passed with zero progress on an issue flagged 26 times running.
+
+**Still outstanding, unchanged**: `soloris-signals.vercel.app` and `fapi.binance.com` need to be added to this environment's network allowlist (Environment settings → Network access → Custom → add both hosts under Allowed domains, or broaden the access level).
+
+### Research findings (Task 2)
+
+- **Trending setups/coins**: a dated (Oct 21, 2026) CoinStats watchlist names ETH, SOL, XRP, ZEC, HYPE, NEAR, LINK, Canton Coin as the names with active catalysts into late October; CoinMarketCap's Altcoin Season Index sits at 58 (BTC dominance ~60%) — a selective/rotational regime, not broad altseason. No specific actionable chart setups found.
+- **EMA pullback backtests**: still no validated improvement. Self-reported win rates ranged 19–45% across different scripts/samples (same wide, unreliable spread as prior weeks); profitability tracks R:R, not win rate, consistent with this engine's fixed 2:1/4:1 TP1/TP2 design. A "Micro Pullback" community sub-signal (shallow retrace + trend + volume impulse) is just the same unvalidated pullback-volume-confirmation idea from prior days, rephrased.
+- **Indicator research**: nothing newly validated. One script requires RSI>55 AND MFI>55 jointly for longs (volume-aware momentum filter) — a concrete, testable rule, but unverified; flagged for a future backtest once trade data is available, not implemented today.
+- **Funding rate edge — genuinely new this round**: BitMEX's 9-year XBTUSD study reports extreme funding readings have structurally dropped ~90% vs. historical norms and now cluster near minimum levels (fast arbitrage normalization) — meaning any *fixed* extreme-funding threshold calibrated on older data is now likely too loose. A MEXC note gives a concrete alternative: a bottom-15th-percentile trailing-funding-distribution rank, with historical mean-reversion in 2–5 weeks. Kraken's guide adds a methodology fix: compare funding to its own trailing 30d/90d rolling average and normalize for settlement interval (hourly vs. 8-hourly) rather than using a fixed cutoff. None implemented today — worth backtesting against this platform's own trade data once Task 1/3 access is restored, since it would replace a fixed-threshold design with a percentile/rolling-average one.
+
+### Changes implemented
+
+Two small, verified logic/content fixes found during an adversarial code-review pass (no trading-logic, quality-score, or threshold changes):
+
+1. **`lib/emaperps-runtime.js:689`** — the $200M volume floor (`quoteVolume > 0 && quoteVolume < 200_000_000`) only blocked signals when `quoteVolume` was a *positive* number below the floor. Since `Number(ticker?.quoteVolume) || 0` collapses a missing/malformed ticker field to `0`, a data-fetch failure would silently bypass the floor entirely instead of failing closed. Changed the guard to `quoteVolume < 200_000_000`, so missing/zero volume now blocks the signal like any other sub-floor reading. This does not lower the floor — it closes a bypass path around the existing one.
+2. **`api/notify.js:736`** — the legacy `createNativeBannerFrame` Discord banner (used for DLMM alerts and other non-perps fallback types) misspelled the footer URL "SOLARIS-SIGNALS.VERCEL.APP" (should be "SOLORIS"); the correctly-spelled version already exists at line 456 (`drawBannerBase`, used by all EMAPerps perps/TP1/TP2/SL alerts). Zero live impact on EMAPerps today since it always sets `type: "perps"` and never hits this path, but it's a real typo in shared, shipped code — fixed for correctness.
+
+**Considered but deferred** (no trade data to validate against, now 26 days running):
+- EMA-pullback volume-confirmation filter, RSI/MFI joint gate, RSI-band widening.
+- Funding-rate quality bonus — now with a concrete percentile/rolling-average design to try (see above) instead of a fixed threshold, once data access returns.
+
+### Watch tomorrow
+
+- **Priority, now 26 days running**: network access to `soloris-signals.vercel.app` and `fapi.binance.com` needs to be restored. A fresh push notification was sent today re-escalating this; if it's still unresolved in a few more days, escalate again rather than letting it go stale silently.
+- Once access is restored: run the full health check + performance analysis backlog, then backtest the funding-rate percentile/rolling-average idea and the RSI/MFI joint gate before implementing either.
+- The easy code-review backlog is likely very close to fully exhausted (two small real findings today, after none yesterday) — future no-live-data days may legitimately have zero changes to report.
+
+---
+
 ## 2026-10-28
 
 **EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 25).
