@@ -138,6 +138,7 @@ async function priceTick() {
   const stuckSells = (memeState.paperTrades.trades || []).filter(t =>
     t.status !== "open" &&
     (t.realTrade?.status === "open" || t.realTrade?.status === "sell_failed")
+    // dead_token is intentionally excluded — no routes = no point retrying
   );
   const tradesToSell = [
     ...(paperResult?.closedTrades || []).filter(t => t.realTrade?.status === "open"),
@@ -167,20 +168,37 @@ async function priceTick() {
           sendDiscordSell(liveTradeWebhook, trade, result);
         }
       } catch (e) {
-        const sellRetryCount = (trade.realTrade.sellRetryCount || 0) + 1;
-        trade.realTrade.status         = "sell_failed";
-        trade.realTrade.sellError      = e.message;
-        trade.realTrade.sellRetryCount = sellRetryCount;
-        err("Sell failed for %s (attempt %d): %s", trade.symbol, sellRetryCount, e.message);
-        // Alert on every 5th failure so user can manually intervene
-        if (sellRetryCount % 5 === 0 && liveTradeWebhook) {
-          fetch(liveTradeWebhook, { method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ embeds: [{ color: 0xff0000,
-              title: `⚠️ SELL STUCK — ${trade.symbol} (${sellRetryCount} attempts)`,
-              description: `Cannot sell **${trade.symbol}** after ${sellRetryCount} attempts.\nReason: ${trade.closeReason || "closed"}\nError: ${e.message}\n\n**Please sell manually on Jupiter.**`,
-              footer: { text: "Soloris · Sell Alert" }, timestamp: new Date().toISOString(),
-            }] }),
-          }).catch(() => {});
+        const isDeadToken = e.message.includes("NO_ROUTES_FOUND") || e.message.includes("No routes found");
+        if (isDeadToken) {
+          // No liquidity — token is dead/rugged. Stop retrying, mark closed at $0.
+          trade.realTrade.status    = "dead_token";
+          trade.realTrade.closedAt  = now;
+          trade.realTrade.sellError = e.message;
+          err("Dead token %s — no routes found, marking closed (balance is worthless)", trade.symbol);
+          if (liveTradeWebhook) {
+            fetch(liveTradeWebhook, { method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ embeds: [{ color: 0x6b7280,
+                title: `💀 DEAD TOKEN — ${trade.symbol}`,
+                description: `No liquidity routes found for **${trade.symbol}**.\nToken is likely rugged/dead. Marked as closed at $0.\nNo further sell attempts will be made.`,
+                footer: { text: "Soloris · Dead Token" }, timestamp: new Date().toISOString(),
+              }] }),
+            }).catch(() => {});
+          }
+        } else {
+          const sellRetryCount = (trade.realTrade.sellRetryCount || 0) + 1;
+          trade.realTrade.status         = "sell_failed";
+          trade.realTrade.sellError      = e.message;
+          trade.realTrade.sellRetryCount = sellRetryCount;
+          err("Sell failed for %s (attempt %d): %s", trade.symbol, sellRetryCount, e.message);
+          if (sellRetryCount % 5 === 0 && liveTradeWebhook) {
+            fetch(liveTradeWebhook, { method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ embeds: [{ color: 0xff0000,
+                title: `⚠️ SELL STUCK — ${trade.symbol} (${sellRetryCount} attempts)`,
+                description: `Cannot sell **${trade.symbol}** after ${sellRetryCount} attempts.\nReason: ${trade.closeReason || "closed"}\nError: ${e.message}\n\n**Please sell manually on Jupiter.**`,
+                footer: { text: "Soloris · Sell Alert" }, timestamp: new Date().toISOString(),
+              }] }),
+            }).catch(() => {});
+          }
         }
       }
       await saveIfDirty(true);
