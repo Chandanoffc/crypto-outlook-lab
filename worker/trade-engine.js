@@ -54,8 +54,10 @@ async function loadState() {
   const row = await getRuntimeState("meme-autoscan");
   if (row?.state) {
     memeState = { ...memeDefault(), ...row.state };
-    // Restore lastScanAt so restarts don't immediately re-scan and fire duplicate buys
-    if (row.state._lastScanAt) lastScanAt = row.state._lastScanAt;
+    // Restore persisted timestamps so restarts don't re-trigger one-per-day actions
+    if (row.state._lastScanAt)        lastScanAt        = row.state._lastScanAt;
+    if (row.state._lastDailyReportAt) lastDailyReportAt = row.state._lastDailyReportAt;
+    if (row.state._lastCleanupAt)     lastCleanupAt     = row.state._lastCleanupAt;
     log("State loaded — %d open trades", (memeState.paperTrades?.trades || []).filter(t => t.status === "open").length);
   }
 }
@@ -251,13 +253,16 @@ async function tick() {
   const REPORT_EVERY_MS = 24 * 60 * 60 * 1000;
   if (now - lastDailyReportAt >= REPORT_EVERY_MS) {
     lastDailyReportAt = now;
+    memeState._lastDailyReportAt = now; // persist so restarts don't retrigger
     sendDailyReport(liveTradeWebhook, memeState.paperTrades?.trades || []);
     log("Daily report sent");
+    stateDirty = true;
   }
 
   const CLEANUP_EVERY_MS = 24 * 60 * 60 * 1000;
   if (now - lastCleanupAt >= CLEANUP_EVERY_MS && process.env.TRADING_WALLET_PRIVKEY) {
     lastCleanupAt = now;
+    memeState._lastCleanupAt = now;
     log("Running daily token account cleanup…");
     try {
       const closed = await closeEmptyTokenAccounts();
