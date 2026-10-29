@@ -93,12 +93,44 @@ async function priceTick() {
   ]);
 
   if (paperResult?.closedTrades?.length) stateDirty = true;
+  if (paperResult?.partialExits?.length) stateDirty = true;
   if (msRaw?.pending?.length) stateDirty = true;
 
   await saveIfDirty();
 
   const milestonesFired = await fireMilestonePending(msRaw?.pending);
   if (milestonesFired) log("Milestones fired: %d", milestonesFired);
+
+  // ── 2a. Partial exits (house-money strategy) ───────────────────────────────
+  // At +110% sell 50%, at +200% sell 25% more. Remainder rides on free money.
+  if ((paperResult?.partialExits || []).length && process.env.TRADING_WALLET_PRIVKEY) {
+    for (const { trade, level, fraction, gainPct } of paperResult.partialExits) {
+      if (!trade.realTrade || trade.realTrade.status !== "open") continue;
+      log("Partial exit L%d for %s at +%s%% — selling %d%%…", level, trade.symbol, gainPct.toFixed(0), fraction * 100);
+      try {
+        const onChainBalance = await getTokenBalance(trade.mint);
+        if (onChainBalance <= 0) {
+          log("No on-chain balance for partial exit %s — skipping", trade.symbol);
+          continue;
+        }
+        const sellAmount = onChainBalance * fraction;
+        const result     = await sellToken(trade.mint, sellAmount);
+        trade.realTrade.partialExits = trade.realTrade.partialExits || [];
+        trade.realTrade.partialExits.push({
+          level, fraction, gainPct: parseFloat(gainPct.toFixed(1)),
+          usdcReceived: result.usdcReceived, txSig: result.txSig, soldAt: now,
+        });
+        log("Partial exit L%d %s → $%s USDC (tx %s)", level, trade.symbol, result.usdcReceived.toFixed(2), result.txSig);
+        sendDiscordPartialExit(liveTradeWebhook, trade, result, level, fraction, gainPct);
+      } catch (e) {
+        err("Partial exit L%d failed for %s: %s", level, trade.symbol, e.message);
+        // Reset flag so it retries next tick
+        if (level === 1) trade.partialExit1Done = false;
+        if (level === 2) trade.partialExit2Done = false;
+      }
+      await saveIfDirty(true);
+    }
+  }
 
   // ── 2. Real sells for closed paper trades ──────────────────────────────────
   // Sells are retried forever — never abandon. Every 5th failure sends a Discord
@@ -293,6 +325,30 @@ function sendDiscordBuy(webhook, pt, result) {
         { name: "Tx",          value: `[View on Solscan](https://solscan.io/tx/${result.txSig})`, inline: false },
       ],
       footer: { text: "Soloris · Live Trade Opened" },
+      timestamp: new Date().toISOString(),
+    }]}),
+  }).catch(() => {});
+}
+
+function sendDiscordPartialExit(webhook, trade, result, level, fraction, gainPct) {
+  if (!webhook) return;
+  const sym  = trade.symbol || trade.name || trade.mint.slice(0, 8);
+  const pct  = (fraction * 100).toFixed(0);
+  const label = level === 1 ? "Initials recovered 💰" : "Profit locked 🔒";
+  fetch(webhook, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ embeds: [{
+      title: `🏦 PARTIAL EXIT — ${sym} (+${gainPct.toFixed(0)}%)`,
+      url: trade.pair_url || undefined,
+      color: 0xf59e0b,
+      description: `**${label}** — sold ${pct}% of position\nRemainder rides on house money.`,
+      fields: [
+        { name: "Mint CA",      value: `\`${trade.mint}\``, inline: false },
+        { name: "USDC Out",     value: `$${result.usdcReceived.toFixed(2)}`, inline: true },
+        { name: "Gain at Exit", value: `+${gainPct.toFixed(0)}%`, inline: true },
+        { name: "Tx", value: `[View on Solscan](https://solscan.io/tx/${result.txSig})`, inline: false },
+      ],
+      footer: { text: `Soloris · Partial Exit L${level}` },
       timestamp: new Date().toISOString(),
     }]}),
   }).catch(() => {});
