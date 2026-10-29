@@ -138,7 +138,7 @@ async function priceTick() {
   const stuckSells = (memeState.paperTrades.trades || []).filter(t =>
     t.status !== "open" &&
     (t.realTrade?.status === "open" || t.realTrade?.status === "sell_failed")
-    // dead_token is intentionally excluded — no routes = no point retrying
+    // dead_token and dust_closed are intentionally excluded — no point retrying
   );
   const tradesToSell = [
     ...(paperResult?.closedTrades || []).filter(t => t.realTrade?.status === "open"),
@@ -169,7 +169,23 @@ async function priceTick() {
         }
       } catch (e) {
         const isDeadToken = e.message.includes("NO_ROUTES_FOUND") || e.message.includes("No routes found");
-        if (isDeadToken) {
+        const isDust      = e.message.startsWith("DUST_AMOUNT");
+        if (isDust) {
+          // Dust remaining after partial exits — not worth selling, close cleanly.
+          trade.realTrade.status    = "dust_closed";
+          trade.realTrade.closedAt  = now;
+          trade.realTrade.sellError = e.message;
+          err("Dust position %s — below $0.10 value, marking closed", trade.symbol);
+          if (liveTradeWebhook) {
+            fetch(liveTradeWebhook, { method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ embeds: [{ color: 0x6b7280,
+                title: `🧹 DUST CLOSED — ${trade.symbol}`,
+                description: `Remaining position in **${trade.symbol}** is worth less than $0.10 (dust from partial exits).\nMarked as closed — no further sell attempts.`,
+                footer: { text: "Soloris · Dust Closed" }, timestamp: new Date().toISOString(),
+              }] }),
+            }).catch(() => {});
+          }
+        } else if (isDeadToken) {
           // No liquidity — token is dead/rugged. Stop retrying, mark closed at $0.
           trade.realTrade.status    = "dead_token";
           trade.realTrade.closedAt  = now;
