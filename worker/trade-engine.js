@@ -283,7 +283,9 @@ async function tick() {
   }
 
   // ── 6. Real buys ────────────────────────────────────────────────────────────
-  const MAX_BUY_RETRIES = 2;
+  // All pending buys run in parallel so multiple signals don't queue up.
+  // Each buy is independent — a failure on one doesn't block the others.
+  const MAX_BUY_RETRIES = 5; // raised from 2 — RPC blips shouldn't kill a valid signal
   if (liveEnabled) {
     const toBuy = (memeState.paperTrades.trades || []).filter(pt =>
       pt.status === "open" &&
@@ -293,49 +295,50 @@ async function tick() {
     );
 
     if (toBuy.length) {
-      // Process one per tick — a full buy cycle takes ~50s; no time limit here
-      // but we still do one at a time to keep logs clean and avoid parallel RPC spam
-      const pt = toBuy[0];
-      log("Buying %s (liquidity $%s)…", pt.symbol, pt._liquidity || "unknown");
+      log("Buying %d signal(s) in parallel…", toBuy.length);
 
-      // Check on-chain balance first — prevents double-buy after a crash mid-save
-      try {
-        const existingBalance = await getTokenBalance(pt.mint);
-        if (existingBalance > 0) {
-          log("Already hold %s on-chain (%s tokens) — recovering trade state", pt.symbol, existingBalance);
-          pt.realTrade = { status: "open", tokensReceived: existingBalance, openedAt: now, recoveredFromChain: true };
-          if (hasDatabase()) await upsertRuntimeState("meme-autoscan", memeState);
-          return;
+      await Promise.all(toBuy.map(async pt => {
+        // Check on-chain balance first — prevents double-buy after a crash mid-save
+        try {
+          const existingBalance = await getTokenBalance(pt.mint);
+          if (existingBalance > 0) {
+            log("Already hold %s on-chain (%s tokens) — recovering trade state", pt.symbol, existingBalance);
+            pt.realTrade = { status: "open", tokensReceived: existingBalance, openedAt: now, recoveredFromChain: true };
+            stateDirty = true;
+            return;
+          }
+        } catch (e) {
+          log("Balance check failed for %s: %s — proceeding with buy", pt.symbol, e.message);
         }
-      } catch (e) {
-        log("Balance check failed for %s: %s — proceeding with buy", pt.symbol, e.message);
-      }
 
-      // Mark pending_buy first — force-save before any RPC call
-      pt.realTrade = { status: "pending_buy", queuedAt: now };
-      await saveIfDirty(true);
+        // Mark pending_buy first — force-save before any RPC call
+        pt.realTrade = { status: "pending_buy", queuedAt: now };
+        stateDirty = true;
 
-      try {
-        const result = await buyToken(pt.mint, REAL_TRADE_USDC, pt._liquidity || 0);
-        pt.realTrade = {
-          status:         "open",
-          txSig:          result.txSig,
-          usdcSpent:      result.usdcSpent,
-          tokensReceived: result.tokensReceived,
-          actualEntry:    result.actualPrice,
-          openedAt:       now,
-        };
-        log("Bought %s → tx %s", pt.symbol, result.txSig);
-        sendDiscordBuy(liveTradeWebhook, pt, result);
-      } catch (e) {
-        const retryCount = (pt.realTrade?.retryCount || 0) + 1;
-        pt.realTrade = { status: "buy_failed", error: e.message, failedAt: now, retryCount };
-        if (retryCount >= MAX_BUY_RETRIES) {
-          err("Buy abandoned for %s after %d attempts: %s", pt.symbol, retryCount, e.message);
-        } else {
-          err("Buy failed for %s (attempt %d/%d): %s", pt.symbol, retryCount, MAX_BUY_RETRIES, e.message);
+        try {
+          const result = await buyToken(pt.mint, REAL_TRADE_USDC, pt._liquidity || 0);
+          pt.realTrade = {
+            status:         "open",
+            txSig:          result.txSig,
+            usdcSpent:      result.usdcSpent,
+            tokensReceived: result.tokensReceived,
+            actualEntry:    result.actualPrice,
+            openedAt:       now,
+          };
+          log("Bought %s → tx %s", pt.symbol, result.txSig);
+          sendDiscordBuy(liveTradeWebhook, pt, result);
+        } catch (e) {
+          const retryCount = (pt.realTrade?.retryCount || 0) + 1;
+          pt.realTrade = { status: "buy_failed", error: e.message, failedAt: now, retryCount };
+          if (retryCount >= MAX_BUY_RETRIES) {
+            err("Buy abandoned for %s after %d attempts: %s", pt.symbol, retryCount, e.message);
+          } else {
+            err("Buy failed for %s (attempt %d/%d): %s", pt.symbol, retryCount, MAX_BUY_RETRIES, e.message);
+          }
         }
-      }
+        stateDirty = true;
+      }));
+
       await saveIfDirty(true);
     }
   }
