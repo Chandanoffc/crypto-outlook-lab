@@ -423,46 +423,143 @@ function sendDiscordSell(webhook, trade, result) {
   }).catch(() => {});
 }
 
-// ── Daily report ─────────────────────────────────────────────────────────────
+// ── Daily journal ─────────────────────────────────────────────────────────────
 function sendDailyReport(webhook, trades) {
   if (!webhook) return;
-  const closed = trades.filter(t => t.status !== "open" && t.realTrade?.status === "closed" && !t.realTrade?.manualClose);
-  const today  = new Date().toISOString().slice(0, 10);
-  const todayTrades = closed.filter(t => {
-    const d = t.realTrade?.closedAt;
-    return d && new Date(d).toISOString().slice(0, 10) === today;
+  const now   = Date.now();
+  const today = new Date().toISOString().slice(0, 10);
+
+  // Include all real trades closed today (closed, dead_token, dust_closed, manual)
+  const realStatuses = new Set(["closed", "dead_token", "dust_closed"]);
+  const todayTrades  = trades.filter(t => {
+    if (t.status === "open") return false;
+    const rt = t.realTrade;
+    if (!rt || !realStatuses.has(rt.status)) return false;
+    const closedAt = rt.closedAt || t.closedAt;
+    return closedAt && new Date(closedAt).toISOString().slice(0, 10) === today;
   });
 
-  const wins   = todayTrades.filter(t => (t.realTrade.usdcReceived || 0) > (t.realTrade.usdcSpent || 0));
-  const losses = todayTrades.filter(t => (t.realTrade.usdcReceived || 0) <= (t.realTrade.usdcSpent || 0));
-  const totalIn  = todayTrades.reduce((s, t) => s + (t.realTrade.usdcSpent    || 0), 0);
-  const totalOut = todayTrades.reduce((s, t) => s + (t.realTrade.usdcReceived || 0), 0);
-  const netPnl   = totalOut - totalIn;
-  const isProfit = netPnl >= 0;
-
   const openTrades = trades.filter(t => t.status === "open" && t.realTrade?.status === "open");
+  const allClosed  = trades.filter(t => t.realTrade && realStatuses.has(t.realTrade.status));
 
-  const rows = todayTrades.map(t => {
-    const pnl = (t.realTrade.usdcReceived || 0) - (t.realTrade.usdcSpent || 0);
-    const pct = t.realTrade.usdcSpent ? ((pnl / t.realTrade.usdcSpent) * 100).toFixed(1) : "?";
-    const icon = pnl >= 0 ? "✅" : "❌";
-    return `${icon} **${t.symbol}** ${pnl >= 0 ? "+" : ""}$${pnl.toFixed(2)} (${pct}%) — ${t.closeReason || "closed"}`;
-  }).join("\n") || "No closed trades today";
+  // P&L helper — includes partial exit proceeds
+  function tradePnl(t) {
+    const rt       = t.realTrade || {};
+    const partials = (rt.partialExits || []).reduce((s, p) => s + (p.usdcReceived || 0), 0);
+    const pIn      = rt.usdcSpent      || 0;
+    const pOut     = (rt.usdcReceived  || 0) + partials;
+    return { pIn, pOut, net: pOut - pIn, partials };
+  }
+
+  function holdStr(t) {
+    const ms = (t.realTrade?.closedAt || t.closedAt || now) - (t.realTrade?.openedAt || t.openedAt || now);
+    if (ms < 0) return "?";
+    const m = Math.round(ms / 60000);
+    return m >= 60 ? `${Math.floor(m/60)}h ${m%60}m` : `${m}m`;
+  }
+
+  function reasonLabel(t) {
+    const r  = t.closeReason || "";
+    const rs = t.realTrade?.status || "";
+    if (rs === "dead_token")  return "💀 Rug";
+    if (rs === "dust_closed") return "🧹 Dust";
+    if (r  === "trail")       return "🎯 Trail";
+    if (r  === "sl")          return "🛑 SL";
+    if (r  === "tp")          return "✅ TP";
+    if (r  === "expired")     return "⏰ Expired";
+    return r || "?";
+  }
+
+  let totalIn = 0, totalOut = 0;
+  const wins = [], losses = [];
+  for (const t of todayTrades) {
+    const { pIn, pOut, net } = tradePnl(t);
+    if (pIn > 0) { totalIn += pIn; totalOut += pOut; }
+    if (net >= 0) wins.push(t); else losses.push(t);
+  }
+  const netPnl    = totalOut - totalIn;
+  const isProfit  = netPnl >= 0;
+  const winRate   = todayTrades.length ? Math.round(wins.length / todayTrades.length * 100) : 0;
+
+  // All-time stats
+  let atIn = 0, atOut = 0, atWins = 0;
+  for (const t of allClosed) {
+    const { pIn, pOut, net } = tradePnl(t);
+    if (pIn > 0) { atIn += pIn; atOut += pOut; }
+    if (net >= 0) atWins++;
+  }
+  const atNetPnl  = atOut - atIn;
+  const atWinRate = allClosed.length ? Math.round(atWins / allClosed.length * 100) : 0;
+
+  // Best/worst today
+  const sorted    = [...todayTrades].sort((a, b) => tradePnl(b).net - tradePnl(a).net);
+  const bestTrade = sorted[0];
+  const worstTrade= sorted[sorted.length - 1];
+
+  // Trade rows — split into wins and losses sections
+  function tradeRow(t) {
+    const { pIn, pOut, net, partials } = tradePnl(t);
+    const pct    = pIn > 0 ? ((net / pIn) * 100).toFixed(1) : "?";
+    const icon   = net >= 0 ? "✅" : "❌";
+    const link   = t.pair_url ? `[${t.symbol}](${t.pair_url})` : `**${t.symbol}**`;
+    const partialNote = partials > 0 ? ` *(+$${partials.toFixed(2)} partials)*` : "";
+    return `${icon} ${link} | ${reasonLabel(t)} | ${net >= 0 ? "+" : ""}$${net.toFixed(2)} (${net >= 0 ? "+" : ""}${pct}%)${partialNote} | ⏱ ${holdStr(t)}`;
+  }
+
+  const winRows  = wins.map(tradeRow).join("\n")   || "—";
+  const lossRows = losses.map(tradeRow).join("\n") || "—";
+
+  // Open trade statuses
+  const openRows = openTrades.map(t => {
+    const cur    = t.currentPrice && t.entryPrice
+      ? ((t.currentPrice / t.entryPrice - 1) * 100).toFixed(1) + "%" : "?";
+    const p1     = t.partialExit1Done ? " | 💰 initials out" : "";
+    const link   = t.pair_url ? `[${t.symbol}](${t.pair_url})` : t.symbol;
+    return `📈 ${link} | ${cur}${p1}`;
+  }).join("\n") || "None";
+
+  const embeds = [
+    {
+      title: `📒 Daily Trade Journal — ${today}`,
+      color: isProfit ? 0x22c55e : 0xef4444,
+      fields: [
+        { name: "📊 Today's Performance",
+          value: [
+            `**Trades:** ${todayTrades.length}  |  **Wins:** ${wins.length}  |  **Losses:** ${losses.length}  |  **Win Rate:** ${winRate}%`,
+            `**Deployed:** $${totalIn.toFixed(2)}  |  **Returned:** $${totalOut.toFixed(2)}  |  **Net P&L:** ${isProfit ? "+" : ""}$${netPnl.toFixed(2)}`,
+          ].join("\n"), inline: false },
+        { name: "🏆 All-Time Stats",
+          value: `**${allClosed.length} trades** | **${atWinRate}% win rate** | **Net: ${atNetPnl >= 0 ? "+" : ""}$${atNetPnl.toFixed(2)}**`,
+          inline: false },
+      ],
+      footer: { text: "Soloris · Daily Journal" },
+      timestamp: new Date().toISOString(),
+    },
+    {
+      color: 0x22c55e,
+      fields: [
+        { name: `✅ Wins (${wins.length})`, value: winRows.slice(0, 1020), inline: false },
+      ],
+    },
+    {
+      color: 0xef4444,
+      fields: [
+        { name: `❌ Losses (${losses.length})`, value: lossRows.slice(0, 1020), inline: false },
+      ],
+    },
+    {
+      color: 0x6366f1,
+      fields: [
+        ...(bestTrade ? [{ name: "🥇 Best Trade", value: tradeRow(bestTrade), inline: false }] : []),
+        ...(worstTrade && worstTrade !== bestTrade ? [{ name: "💩 Worst Trade", value: tradeRow(worstTrade), inline: false }] : []),
+        { name: `🔓 Currently Open (${openTrades.length})`, value: openRows.slice(0, 1020), inline: false },
+      ],
+    },
+  ];
 
   fetch(webhook, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ embeds: [{
-      title: `📊 Daily Report — ${today}`,
-      color: isProfit ? 0x22c55e : 0xef4444,
-      fields: [
-        { name: "Trades Today", value: `${todayTrades.length} closed (${wins.length}W / ${losses.length}L)`, inline: true },
-        { name: "Net P&L", value: `${isProfit ? "+" : ""}$${netPnl.toFixed(2)}`, inline: true },
-        { name: "Currently Open", value: `${openTrades.length} trade${openTrades.length !== 1 ? "s" : ""}`, inline: true },
-        { name: "Trades", value: rows, inline: false },
-      ],
-      footer: { text: "Soloris · Daily Summary" },
-      timestamp: new Date().toISOString(),
-    }] }),
+    body: JSON.stringify({ embeds }),
   }).catch(() => {});
 }
 
