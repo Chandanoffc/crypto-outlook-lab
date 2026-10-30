@@ -1,5 +1,49 @@
 # Soloris Signals — Daily Agent Log
 
+## 2026-10-30
+
+**EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 27).
+
+**BTC**: ⚠️ Could not fetch — same blocker.
+
+---
+
+### ⚠️ Blocker persists (day 27)
+
+Re-confirmed via direct `curl` through the agent proxy and `/__agentproxy/status`: both `soloris-signals.vercel.app:443` and `fapi.binance.com:443` still return `connect_rejected` (gateway answers 403 to CONNECT — policy denial, not transient). 27th consecutive day Task 1 (health check) and Task 3 (performance analysis) have been blocked. No live balance, positions, BTC price, or closed-trade data was available today; none of today's numbers are fabricated.
+
+Side channel re-confirmed healthy: attached the repo with push access and checked all four GitHub Actions workflows directly — **Hourly Scan**, **Daily Strategy Digest**, **Upbit Listing Alerts**, and **Background Scanners** are all green and firing on schedule (most recent runs through 2026-10-30 02:36Z). The platform and its crons remain confirmed healthy; this is purely this container's egress policy on the two specific hosts.
+
+**No new push notification sent today.** One was already sent yesterday (day 26, 2026-10-29) re-escalating this exact unresolved blocker; today is only one day later with nothing materially new, so re-notifying now would just be noise per the day-25/26 cadence plan. If still unresolved in a few more days, the next run should escalate again.
+
+Still outstanding: `soloris-signals.vercel.app` and `fapi.binance.com` need to be added to this environment's network allowlist (Environment settings → Network access → Custom → add both hosts under Allowed domains, or broaden the access level).
+
+### Research findings (Task 2)
+
+- No reliable, dated-this-week ranking of trending perp setups or coins surfaced; results were mostly undated or months-old (Wintermute/Kaiko commentary, May/Aug 2026 reports). Nothing new versus prior days.
+- EMA pullback backtests: same wide, noisy, self-reported spread as every prior day (19–45% WR depending on script/sample) — still no independently verified, actionable improvement.
+- MACD/RSI/ADX research repeated the same generic vendor consensus (RSI divergence, MACD+volume to cut false breakouts, ADX>25 trend-confirmation) already encoded in the engine's existing `adx4h >= 25` / `<18` gates — nothing new to implement.
+- Funding rate edge: Kraken/LuxAlgo/BloFin sources again converge on "extreme funding marks crowded positioning, not a standalone timing signal — combine with OI/price action, no universal threshold." Consistent with the research-rejected verdict logged on prior days; still no validated case for a funding-rate quality bonus.
+- Market structure: no current October $500M-volume altcoin ranking found; HYPE/TRX/ZEC/XLM (from Kaiko, undated) remain the only recurring names across multiple days' searches.
+
+### Changes implemented
+
+Two surgical, verified bugs found by an adversarial code-review subagent pass (no trading-logic, quality-score, or threshold changes):
+
+1. **`lib/emaperps-runtime.js` (`sanitizeSignal`)** — every signal gets a `volume24h` field from `detectSignal()`, but `sanitizeSignal()` (which every signal passes through on every API response) had no `volume24h` key, silently stripping it to `undefined`. This broke two frontend displays in `emaperps.js`: the `· $XXXM 24H vol` badge on signal cards never rendered, and worse, the Pre-Trade Checklist's "Volume > $200M 24H" item always evaluated false — showing a red X on *every* signal even though each one necessarily cleared that exact $200M gate server-side to exist at all. Added `volume24h: sanitizeNumber(s.volume24h, 0)` to the sanitizer.
+2. **`emaperps.js` (token-search "Analyze" card, `renderAnalysisResult`)** — TP1/TP2 sublabels still read `R1/S1` and `R2/S2`, implying targets equal structural swing levels. That was true before the fixed-% exit redesign; the main Signal Feed card was already fixed to show `+3.0%`/`+6.0%` on 2026-10-11, but this second display path was missed. Applied the same fix here for consistency.
+
+**Considered but deferred** (no trade data to validate against, now 27 days running):
+- EMA-pullback volume-confirmation filter, RSI/MFI joint gate, RSI-band widening, funding-rate percentile/rolling-average bonus.
+
+### Watch tomorrow
+
+- **Priority, now 27 days running**: network access to `soloris-signals.vercel.app` and `fapi.binance.com` needs to be restored. No notification sent today (one went out yesterday); escalate again if still unresolved after a few more days.
+- Once access is restored: run the full health check + performance analysis backlog, then backtest the queued filter ideas before implementing any.
+- The easy code-review backlog continues to thin out (two small real findings today, both display/sanitization bugs rather than engine logic) — future no-live-data days may legitimately have zero changes to report.
+
+---
+
 ## 2026-10-29
 
 **EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 26).

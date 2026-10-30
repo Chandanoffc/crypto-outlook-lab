@@ -1018,8 +1018,8 @@ function renderAnalysisResult(data) {
           <div class="analysis-signal-title">${signal.side} · ${signal.signalLabel || signal.reasonLabels?.[0] || ""}</div>
           <div class="analysis-levels">
             <span class="level-chip-sm">Entry ${fp(signal.entryPrice, prec)}</span>
-            <span class="level-chip-sm tp">TP1 ${fp(signal.tp1, prec)} <small>${isUp ? "R1" : "S1"}</small></span>
-            <span class="level-chip-sm tp">TP2 ${fp(signal.tp2, prec)} <small>${isUp ? "R2" : "S2"}</small></span>
+            <span class="level-chip-sm tp">TP1 ${fp(signal.tp1, prec)} <small>+3.0%</small></span>
+            <span class="level-chip-sm tp">TP2 ${fp(signal.tp2, prec)} <small>+6.0%</small></span>
             <span class="level-chip-sm sl">SL ${fp(signal.sl, prec)}</span>
           </div>
         </div>` : `
