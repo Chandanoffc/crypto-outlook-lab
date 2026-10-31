@@ -1184,7 +1184,15 @@ function computeEquityCurve(startingBalance, closedTrades) {
   const points = [{ time: Math.floor((sorted[0].openedAt || sorted[0].closedAt) / 1000) - 1, value: balance }];
   for (const trade of sorted) {
     balance = Math.max(0, Math.round((balance + Number(trade.pnl || 0)) * 100) / 100);
-    points.push({ time: Math.floor(trade.closedAt / 1000), value: balance });
+    // Multiple positions can close within the same markPaperPositions cycle and
+    // share an identical closedAt millisecond — after flooring to seconds that
+    // collapses to the same `time` for consecutive points. lightweight-charts'
+    // line series requires strictly ascending, unique times and throws on a tie,
+    // which would break the whole equity curve render. Bump by 1s per collision.
+    let time = Math.floor(trade.closedAt / 1000);
+    const prevTime = points[points.length - 1].time;
+    if (time <= prevTime) time = prevTime + 1;
+    points.push({ time, value: balance });
   }
   return points;
 }

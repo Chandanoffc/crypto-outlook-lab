@@ -1,5 +1,53 @@
 # Soloris Signals — Daily Agent Log
 
+## 2026-10-31
+
+**EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 28).
+
+**BTC**: ⚠️ Could not fetch — same blocker.
+
+---
+
+### ⚠️ Blocker persists (day 28) — re-escalating with a fresh notification
+
+Re-confirmed via direct `curl` through the agent proxy and `/__agentproxy/status`: both `soloris-signals.vercel.app:443` and `fapi.binance.com:443` still return `connect_rejected` (gateway answers 403 to CONNECT — policy denial, not transient). 28th consecutive day Task 1 (health check) and Task 3 (performance analysis) have been blocked. No live balance, positions, BTC price, or closed-trade data was available today; none of today's numbers are fabricated.
+
+`gh auth status` also failed today (`GH_TOKEN` invalid) so the GitHub Actions side-channel health check that stood in for Task 1 on day 27 couldn't be repeated; this is a separate, smaller issue from the main network blocker and doesn't affect the ability to commit/push (git push uses a different credential path).
+
+Per the day-26/27 escalation cadence (re-notify after a few more days of no progress; last notification sent day 26, 2026-10-29), today's run sends a fresh push notification — two days have passed with zero movement on an issue now flagged 28 times running.
+
+**Still outstanding, unchanged**: `soloris-signals.vercel.app` and `fapi.binance.com` need to be added to this environment's network allowlist (Environment settings → Network access → Custom → add both hosts under Allowed domains, or broaden the access level).
+
+### Research findings (Task 2)
+
+- No dated, this-week ranking of trending perp setups or coins surfaced — results were mostly undated vendor/social content or months-old reports. Nothing new vs. prior days.
+- EMA pullback backtests: same wide, noisy, self-reported spread as every prior day (19–45% WR depending on script/sample, no fees/slippage) — still no independently verified, actionable improvement.
+- MACD/RSI confluence: same generic vendor checklist (RSI>50 + MACD histogram cross + MACD-over-signal, exit at RSI 70) repeated across KuCoin's localized blog network — no new out-of-sample evidence beyond what's already logged.
+- ADX+RSI+MACD combo: only community TradingView scripts and disclaimers ("not a standalone signal"), no backtests or academic evidence of an edge — consistent with prior days' rejected verdict.
+- Funding rate edge: same consensus as every prior day — extreme funding marks crowded positioning and precedes mean-reversion, but timing is unreliable alone and works best combined with OI/price action. One new-ish data point (BitMEX's XBTUSD study) was already captured on day 26; nothing further today.
+- Market structure: no current October $500M-volume altcoin ranking found; a March 2026 CryptoQuant report notes altcoin spot volume fell from a $91B peak to $18.8B, with a partial rebound reported in May — background context only, not an actionable list of names.
+
+### Changes implemented
+
+One genuine, verified bug found during an adversarial code-review pass (no trading-logic, quality-score, or threshold changes — per the now-standard fallback for no-live-data days):
+
+1. **`emaperps.js` (`computeEquityCurve`)** — when two or more paper positions close within the same `markPaperPositions` cycle, their `closedAt` timestamps can share the same millisecond; flooring to seconds for the chart's `time` field then produces duplicate consecutive values. `lightweight-charts`' line series requires strictly ascending, unique `time` values and throws on a tie, which would have broken the Paper tab's equity-curve render with no surrounding try/catch. Fixed by bumping a colliding point's `time` forward by 1 second, leaving balances and ordering untouched.
+
+**Considered but deferred** (reviewed, not bugs or not worth the risk):
+- `signal.status` is schema'd with `"tp1_hit"/"tp2_hit"/"sl_hit"/"expired"` values but the runtime only ever sets `"active"` (resolution is tracked separately via `outcome`); every `status === "active"` check is therefore always true — redundant, not incorrect, and fixing it would be an unrequested refactor.
+- A price move that jumps straight past TP1 to TP2 within one scan cycle skips the TP1 partial-booking branch and closes the full position at TP2 directly — looks intentional (a favorable outcome), unverifiable without trade data.
+- `api/emaperps.js`'s `paper-reset` action returns a partial `paper` object; the sanitizer fills in all missing fields with correct defaults on the next read, so no observable bug.
+- Research-sourced ideas (volume-confirmation filter, RSI/MFI joint gate, funding-rate percentile bonus, RSI-band widening) remain unimplemented, now 28 days running without trade data to validate any of them against.
+
+### Watch tomorrow
+
+- **Priority, now 28 days running**: network access to `soloris-signals.vercel.app` and `fapi.binance.com` needs to be restored. A fresh notification went out today; if still unresolved, hold off re-notifying again until a few more days have passed with no progress (per the established cadence).
+- Also flag: `gh auth status` failed today (`GH_TOKEN` invalid) — worth checking whether this is a one-off or a new, separate credential issue; it didn't block git push today but blocked the GitHub Actions side-channel health check.
+- Once access is restored: run the full health check + performance analysis backlog, then backtest the queued filter ideas before implementing any.
+- The easy code-review backlog continues to thin out (one small, genuine bug today) — future no-live-data days may legitimately turn up zero findings.
+
+---
+
 ## 2026-10-30
 
 **EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 27).
