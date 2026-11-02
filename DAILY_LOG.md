@@ -1,5 +1,48 @@
 # Soloris Signals — Daily Agent Log
 
+## 2026-11-02
+
+**EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 30).
+
+**BTC**: ⚠️ Could not fetch — same blocker.
+
+---
+
+### ⚠️ Blocker persists (day 30) — re-escalating with a fresh notification
+
+Re-confirmed via direct `curl -v` through the agent proxy: both `soloris-signals.vercel.app:443` and `fapi.binance.com:443` still return a 403 to the CONNECT tunnel request (policy denial, not transient). 30th consecutive day Task 1 (health check) and Task 3 (performance analysis) have been blocked. No live balance, positions, BTC price, or closed-trade data was available today; none of today's numbers are fabricated.
+
+`gh auth status` failed again today (`GH_TOKEN` invalid) — now the 3rd consecutive day (days 28, 29, 30). Still doesn't block `git push` (different credential path), but worth fixing since it's now persisted past the "watch if it hits a 3rd day" threshold set in yesterday's log.
+
+Per the established cadence (re-notify after a few more days of no progress; last notification sent day 28, 2026-10-31), today's run sends a fresh push notification — two days have passed with zero movement on an issue now flagged 30 times running, a full month.
+
+**Still outstanding, unchanged**: `soloris-signals.vercel.app` and `fapi.binance.com` need to be added to this environment's network allowlist (Environment settings → Network access → Custom → add both hosts under Allowed domains, or broaden the access level).
+
+### Research findings (Task 2)
+
+Nothing genuinely new vs. the last ~10 days — same recycled, non-actionable results:
+- No dated November 2026 ranking of trending perp setups or coins surfaced (results were old: May 2026 HYPE ATH, Sept 2025 perp-DEX volume data, undated social posts).
+- EMA pullback backtests: same noisy, self-reported 19–45% WR spread across unrelated TradingView scripts, no independent out-of-sample validation.
+- MACD/RSI confluence: no source beyond the already-logged Crypto.com Nov 2024 backtest, which itself flags overfitting/leverage-inflated results.
+- ADX+RSI+MACD combo: only vendor TradingView scripts, one of which self-contradicts its own in-sample vs. commission-adjusted results — not evidence of an edge.
+- Funding rate edge: same Kraken/KuCoin/BitMEX consensus as every prior day — extreme funding flags crowded positioning, no universal threshold, best combined with OI. Nothing new.
+- Market structure: no current $500M+ altcoin ranking found; only a background piece on an 80–85% altcoin-volume collapse since Oct 2025.
+
+### Changes implemented
+
+No code changes. A full adversarial review pass (`lib/emaperps-runtime.js` — 1415 lines, signal detection/quality scoring/circuit breaker/paper trade lifecycle; `api/emaperps.js`; `lib/neon-db.js` including atomic scan/mark locks; `api/daily-digest.js`; targeted passes over `emaperps.js`'s P&L math and auto-close triggers) turned up **zero genuine new bugs** — exactly what day 29's log anticipated ("the easy code-review backlog continues to thin out... future no-live-data days may legitimately turn up zero findings"). Config constants re-verified against the architecture doc with no drift: `MIN_ALERT_QUALITY=95` (floor 83 respected), `PAPER_SIZE_QUALITY_CEIL=110`, `$200M` volume floor, fixed SL/TP1/TP2 = 1.5%/3.0%/6.0%.
+
+**Considered but deferred** (unchanged — still no trade data to validate any of them against):
+- EMA-pullback volume-confirmation filter, funding-rate percentile bonus, RSI-band widening — all still unimplemented, now 30 days running without trade data.
+
+### Watch tomorrow
+
+- **Priority, now 30 days running (one full month)**: network access to `soloris-signals.vercel.app` and `fapi.binance.com` needs to be restored. This is the single blocking issue preventing any data-driven strategy work.
+- `gh auth status` (`GH_TOKEN` invalid) has now failed 3 days running — flagged for a closer look per yesterday's threshold, though it still hasn't blocked git push.
+- Once access is restored: run the full health check + performance analysis backlog, then backtest the queued filter ideas before implementing any. Given the code-review backlog has now hit zero for the first time, future no-live-data days should likely shift to a lighter-touch review (confirm no drift, skip re-deriving the same research) rather than a full adversarial pass every day.
+
+---
+
 ## 2026-11-01
 
 **EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 29).
