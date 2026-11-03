@@ -1,5 +1,47 @@
 # Soloris Signals — Daily Agent Log
 
+## 2026-11-03
+
+**EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 31).
+
+**BTC**: ⚠️ Could not fetch — same blocker.
+
+---
+
+### ⚠️ Blocker persists (day 31) — not re-notifying today, per the established cadence
+
+Re-confirmed via direct `curl` through the agent proxy and `/__agentproxy/status`: `soloris-signals.vercel.app:443` and `fapi.binance.com:443` both still return `connect_rejected` / HTTP 000 (gateway denies the CONNECT tunnel — policy denial, not transient). 31st consecutive day Task 1 (health check) and Task 3 (performance analysis) have been blocked. No live balance, positions, BTC price, or closed-trade data was available today; none of today's numbers are fabricated.
+
+`gh auth status` failed again today (`GH_TOKEN` invalid) — now the 4th consecutive day (days 28–31). Still doesn't block `git push`, `gh run list`, or `gh api` calls (those go through a different credential path than the plain token check), so it remains cosmetic, but it's now outlasted the "watch if it hits a 3rd day" threshold set two logs ago without any change.
+
+Last push notification was sent day 30 (2026-11-02, "two days with zero movement on an issue flagged 30 times"). Per that same cadence rule, today — one day later, with no new information — does **not** warrant a fresh notification.
+
+**Still outstanding, unchanged**: `soloris-signals.vercel.app` and `fapi.binance.com` need to be added to this environment's network allowlist (Environment settings → Network access → Custom → add both hosts under Allowed domains, or broaden the access level).
+
+### Research findings (Task 2)
+
+Fresh searches across all five areas (trending setups/coins, EMA pullback backtests, MACD/RSI confluence, indicator combos, market structure, funding rate edge) surfaced nothing dated to the current week and nothing that changes any existing threshold:
+- No live November 2026 ranking of trending perp setups/coins — results skewed to Aug–Sept 2026 (ZEC/BNB/ARB/XRP/SOL open-interest growth) or undated vendor posts.
+- EMA pullback backtests: same pattern as prior days — self-reported, vendor/community TradingView scripts in the 19–45% WR range, none independently verified, none specific to perps.
+- MACD/RSI confluence and ADX+RSI+MACD combos: generic guides repeating "MACD for trend, RSI for momentum, ADX>20-25 for trend strength" with no out-of-sample backtest evidence — matches what our ADX<18-skip/≥25-bonus and RSI-zone gates already encode.
+- Market structure: Solana, XRP, Hyperliquid/BNB, Sui, Avalanche, Aptos, Injective are the names recurring across 2026 coverage; nothing suggesting a change to the $200M volume floor or symbol universe.
+- Funding rate edge: same consensus as every prior day (extreme funding = crowded positioning, no universal threshold, best combined with OI/liquidation context) — still unvalidated against this platform's own trades.
+
+### Changes implemented
+
+No code changes — a lighter-touch review (per day 30's note that the adversarial-pass backlog had hit zero) found nothing new: no residual `ClaudePerps`/`cpSig`/`cpPaper`/`cpTiers` references, no `TODO`/`FIXME`/`XXX` markers in `lib/` or `api/`, zero open GitHub issues or PRs. The `daily-digest.yml` GitHub Action (fixed on 2026-10-04) has run successfully every day since, including today's most recent 5 runs — confirmed healthy. Config constants re-verified against the architecture doc with no drift: `MIN_ALERT_QUALITY=95` (floor 83 respected), `PAPER_SIZE_QUALITY_CEIL=110`, `$200M` volume floor, fixed SL/TP1/TP2 = 1.5%/3.0%/6.0%.
+
+**Considered but deferred** (unchanged — still no trade data to validate any of them against):
+- EMA-pullback volume-confirmation filter, funding-rate percentile bonus, RSI-band widening — all still unimplemented, now 31 days running without trade data.
+
+### Watch tomorrow
+
+- **Priority, now 31 days running (one full month plus one day)**: network access to `soloris-signals.vercel.app` and `fapi.binance.com` needs to be restored. This remains the single blocking issue preventing any data-driven strategy work.
+- `gh auth status` (`GH_TOKEN` invalid) has now failed 4 days running without affecting `git push`/`gh api` — low priority but worth a one-time look if convenient.
+- Once access is restored: run the full health check + performance analysis backlog, then backtest the queued filter ideas (volume confirmation, funding-rate bonus, RSI-band widening) before implementing any.
+
+---
+
 ## 2026-11-02
 
 **EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 30).
