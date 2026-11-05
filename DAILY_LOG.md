@@ -1,5 +1,45 @@
 # Soloris Signals — Daily Agent Log
 
+## 2026-11-05
+
+**EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 33).
+
+**BTC**: ⚠️ Could not fetch — same blocker.
+
+---
+
+### ⚠️ Blocker persists (day 33) — not re-notifying today, per the established cadence
+
+Re-confirmed via direct `curl` through the agent proxy and `/__agentproxy/status`: `soloris-signals.vercel.app:443` and `fapi.binance.com:443` both still return `connect_rejected` / HTTP 000 (gateway answers 403 to CONNECT — policy denial, not transient). 33rd consecutive day Task 1 (health check) and Task 3 (performance analysis) have been blocked. No live balance, positions, BTC price, or closed-trade data was available today; none of today's numbers are fabricated.
+
+`gh auth status` still fails (`GH_TOKEN` invalid) — now the 6th consecutive day (days 28–33). Confirmed again it doesn't block `git push`, `gh api`, or the GitHub REST calls this session uses (issues/PRs/Actions runs all reachable) — it remains cosmetic, low priority.
+
+Last push notification was sent day 32 (2026-11-04, "two days with zero movement on an issue flagged 32 times"). Per that same cadence rule, today — one day later, with no new information — does **not** warrant a fresh notification. If still blocked in a couple more days, the next run should re-escalate.
+
+**Still outstanding, unchanged**: `soloris-signals.vercel.app` and `fapi.binance.com` need to be added to this environment's network allowlist (Environment settings → Network access → Custom → add both hosts under Allowed domains, or broaden the access level).
+
+### Research findings (Task 2)
+
+- No reliable November 2026 ranking of trending perp setups/coins surfaced — results skew to Q1–Q3 2026 reports (Hyperliquid HIP-3 oil/metals perps now >67% of that venue's volume as altcoins slide) or undated vendor content; nothing actionable for the symbol universe.
+- EMA pullback backtests: same pattern as prior days — self-reported TradingView/TradeSviz scripts ranging 19–45% WR depending on window/params, none independently verified, none specific to perps or to this engine's exact rules. No change warranted.
+- Funding-rate edge: sources converge on the same framing logged before (extreme funding + OI in the *same* direction = strongest reversal signal; extreme funding + OI *opposite* = weakest; deeply negative funding has preceded squeezes). One source cites BTC funding >0.05%/8h sustained as an "extreme long crowding" threshold — single-source, unbacktested. Still nothing that clears the bar for a new quality bonus without validation against this platform's own closed trades.
+- Market structure: no dated November 2026 altcoin ranking found; sources disagree on whether an altseason rotation is underway (one Delphi Digital piece reportedly calls altseason over). Nothing suggesting a change to the $200M volume floor or symbol universe.
+
+### Changes implemented
+
+No code changes — nothing new to justify any, 33 days running without trade data. Code review re-confirmed the codebase is still clean: zero residual `ClaudePerps`/`cpSig`/`cpPaper`/`cpTiers`/`CLAUDEPERPS` references, zero `TODO`/`FIXME`/`XXX` markers in `lib/`/`api/` (the one `XXX` hit is a burn-address placeholder string in `lib/meme-autoscan.js`, unrelated). Config constants re-verified with no drift: `MIN_ALERT_QUALITY=95` (83 floor respected), `PAPER_SIZE_QUALITY_CEIL=110`, `$200M` volume floor, fixed SL/TP1/TP2 = 1.5%/3.0%/6.0%. GitHub REST API confirmed reachable this session (repo attached with push access): zero open issues, zero open PRs, and the last 5 scheduled Action runs (`Upbit Listing Alerts`, `Hourly Scan` ×2, `Daily Strategy Digest`) all completed successfully.
+
+**Considered but deferred** (unchanged — still no trade data to validate any of them against):
+- EMA-pullback volume-confirmation filter, funding-rate percentile bonus (with OI-direction refinement), RSI-band widening — all still unimplemented, now 33 days running without trade data.
+
+### Watch tomorrow
+
+- **Priority, now 33 days running (one month and three days)**: network access to `soloris-signals.vercel.app` and `fapi.binance.com` needs to be restored. This remains the single blocking issue preventing any data-driven strategy work.
+- `gh auth status` (`GH_TOKEN` invalid) has now failed 6 days running without affecting `git push`/`gh api` — low priority, cosmetic only, fixable in environment settings whenever convenient.
+- Once access is restored: run the full health check + performance analysis backlog, then backtest the queued filter ideas (volume confirmation, funding-rate bonus w/ OI direction, RSI-band widening) before implementing any.
+
+---
+
 ## 2026-11-04
 
 **EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 32).
