@@ -1,5 +1,47 @@
 # Soloris Signals — Daily Agent Log
 
+## 2026-11-08
+
+**EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 36).
+
+**BTC**: ⚠️ Could not fetch — same blocker.
+
+---
+
+### ⚠️ Blocker persists (day 36) — no new notification today, per cadence
+
+Re-confirmed: `soloris-signals.vercel.app:443` and `fapi.binance.com:443` both still `connect_rejected` through the agent proxy. Attempted `update_environment` again to add both hosts to the Default environment's allowlist — refused again with the same reason as day 35 ("needs a person's approval, and nobody is present on this routine run"). Nothing new to add beyond day 35's finding that this is now a one-click fix away, waiting on a live "Run now" session. Day 35's run already sent a push notification for this; since nothing has changed since yesterday, this run does **not** send a duplicate — next notification will go out if the blocker is still live in a few more days.
+
+`gh auth status` (`GH_TOKEN` invalid) still unresolved since day 28 — confirmed again it doesn't block `git push` or `gh api` REST calls (issues/PRs/Actions all reachable via the session's GitHub repo attachment). Still cosmetic, low priority.
+
+Tasks 1 and 3 (health check, performance analysis) not run today — no live balance, positions, BTC price, or closed-trade data was available; none of today's numbers are fabricated.
+
+### Research findings (Task 2)
+
+- No dated November 2026 source for trending perp setups or altcoin volume rankings surfaced — same pattern as every prior run. Nothing actionable for the symbol universe or quality scoring.
+- EMA-pullback win rates: same wide, unverified spread as always (self-reported scripts ~32–45% WR depending on asset/params, one promotional claim of 67.9% with no methodology). No independent source ties a specific volume-confirmation rule to a measured win-rate lift. No change warranted.
+- MACD/RSI/ADX confluence: still no rigorous out-of-sample evidence beating a no-filter baseline in 2026 perp markets specifically; our existing ADX<18-skip / ADX≥25-bonus gate remains consistent with the conventional thresholds research keeps surfacing.
+- Funding-rate edge: same caveats as every prior day — useful only at extremes, needs OI/liquidation confirmation, no reliable universal threshold, and timing can lag days to weeks. Still unvalidated against this platform's own trades.
+- Market structure: one undated/possibly-stale item suggested broad altcoin volume compression (-80%) and BTC trading near $80K, but nothing dated to November 2026 specifically — not reliable enough to act on.
+
+### Changes implemented
+
+One confirmed, surgical UI bug fix (code-review only — no trade data today, so no quality-score or trading-logic changes):
+
+1. **`emaperps.js:244`** — fixed a duplicate/inconsistent 24H-volume display on signal cards. `lib/emaperps-runtime.js` always appends a `"$XXXM 24H vol"` / `"$X.XB 24H vol"` entry to `signal.reasonLabels` (every alerted signal already cleared the $200M floor, so this label is never absent), and the card footer *also* appends its own freshly-formatted volume string from `signal.volume24h`. Net effect: for signals with ≤6 reason labels (the common case for a Q95-floor signal with few bonuses), the volume appeared twice in the footer (e.g. `... · $450M 24H vol · $450M`); for signals with >6 reasons, the `reasonLabels` instance got sliced out and only the appended one showed — so the bug also made volume display inconsistent across cards depending on bonus count, not just duplicated. Fixed by filtering any `reasonLabels` entry matching `/24H vol/` out of the footer's reason list before slicing, leaving the single explicit volume append as the sole source. No API field names, `reasonLabels` contents, or trading logic touched.
+
+Verified via code review (not re-litigated further, 36 days of prior sweeps already clean): zero `ClaudePerps`/`cpSig`/`cpPaper`/`cpTiers`/`CLAUDEPERPS` references, zero `TODO`/`FIXME`. Config re-checked with no drift: `MIN_ALERT_QUALITY=95` (83 floor respected), `PAPER_SIZE_QUALITY_CEIL=110`, `$200M` volume floor, fixed SL/TP1/TP2 = 1.5%/3.0%/6.0%. GitHub: 0 open issues, 0 open PRs, last 8 scheduled Action runs (`Hourly Scan`, `Upbit Listing Alerts`, `Daily Strategy Digest`) all `success`.
+
+**Considered but deferred** (unchanged — still no trade data to validate any of them against): EMA-pullback volume-confirmation filter, funding-rate percentile bonus (with OI-direction refinement), RSI-band widening.
+
+### Watch tomorrow
+
+- **Priority, now 36 days running**: network access to `soloris-signals.vercel.app` and `fapi.binance.com` needs to be restored — one `update_environment` approval on a live "Run now" session would close this out.
+- `gh auth status` (`GH_TOKEN` invalid) still unresolved since day 28 — low priority, cosmetic only.
+- Once access is restored: run the full health check + performance analysis backlog, then backtest the queued filter ideas (volume confirmation, funding-rate bonus w/ OI direction, RSI-band widening) before implementing any.
+
+---
+
 ## 2026-11-07
 
 **EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 35; no run fired on 2026-11-06, so this is a 2-day gap since the last entry).

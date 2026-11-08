@@ -241,7 +241,7 @@ function renderSignalCard(signal) {
         </div>` : ""}
 
         <div class="sc-footer">
-          <span class="sc-reasons">${(signal.reasonLabels || []).slice(0,6).join(" · ")}${signal.volume24h ? ` · $${signal.volume24h >= 1e9 ? (signal.volume24h/1e9).toFixed(1)+"B" : (signal.volume24h/1e6).toFixed(0)+"M"}` : ""}</span>
+          <span class="sc-reasons">${(signal.reasonLabels || []).filter(r => !/24H vol/.test(r)).slice(0,6).join(" · ")}${signal.volume24h ? ` · $${signal.volume24h >= 1e9 ? (signal.volume24h/1e9).toFixed(1)+"B" : (signal.volume24h/1e6).toFixed(0)+"M"}` : ""}</span>
           ${signal.outcome ? `<span class="sc-outcome-badge sc-outcome--${signal.outcome.toLowerCase()}">${
             signal.outcome === "TP2" ? "🏆 TP2" :
             signal.outcome === "TP1" ? "✅ TP1" : "❌ SL"
