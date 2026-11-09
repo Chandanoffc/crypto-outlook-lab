@@ -1,5 +1,47 @@
 # Soloris Signals — Daily Agent Log
 
+## 2026-11-09
+
+**EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 37).
+
+**BTC**: ⚠️ Could not fetch — same blocker.
+
+---
+
+### ⚠️ Blocker persists (day 37) — no new notification today, per cadence
+
+Re-confirmed via `curl` through the agent proxy and `/__agentproxy/status`: `soloris-signals.vercel.app:443` and `fapi.binance.com:443` both still `connect_rejected`. Attempted `update_environment` again to add both hosts to the Default environment's allowlist — refused again, same reason as days 35/36 ("needs a person's approval, and nobody is present on this routine run"). Still a one-click fix away on a live "Run now" session. Last push notification was day 35 (2026-11-07); day 36 held off and said the next one would go out "if the blocker is still live in a few more days" — only one day has passed since, so this run holds to that plan rather than re-notifying.
+
+This run also re-attached the repo via `add_repo`/`register_repo_root` (prior sessions had GitHub REST access; this one started from a plain unauthenticated `git clone` and needed it re-established) — GitHub API confirmed healthy once attached: 0 open issues, 0 open PRs, last 10 scheduled Action runs (`Hourly Scan`, `Upbit Listing Alerts`, `Daily Strategy Digest`) all `success`.
+
+Tasks 1 and 3 (health check, performance analysis) not run today — no live balance, positions, BTC price, or closed-trade data was available; none of today's numbers are fabricated.
+
+### Research findings (Task 2)
+
+- No dated November 2026 source for trending perp setups, altcoin rankings, or specific setups surfaced — same pattern as every prior run. One Blockworks item (undated) notes perps as the best-performing sector in a week where BTC ETFs saw outflows; not actionable without a date.
+- EMA pullback win rates: same wide, unverified spread as always — self-reported scripts ~19–52% WR depending on asset/params/window, one unverifiable 67.9% vendor claim. No independent, methodology-backed number exists for this exact rule set. No change warranted.
+- ADX/RSI/MACD confluence: still no rigorous out-of-sample evidence beating a no-filter baseline; conceptual rationale (ADX as trend-strength gate for MACD/RSI signals) continues to match our existing `adx4h` gate/bonus, nothing to change.
+- Funding-rate edge: sources converge again on "extreme funding = crowded positioning, not a timing tool" — works best paired with OI/liquidation direction, can lag the eventual reversal by days to weeks. Still unvalidated against this platform's own trades.
+- Market structure: Kaiko-style data (undated this run) points to altcoin volume staying thin and concentrated in a handful of names (HYPE/TRX/ZEC/XLM-type leaders in prior reports), with BTC dominance still high (~55–60% range across sources). Nothing suggesting a change to the $200M volume floor or symbol universe.
+
+### Changes implemented
+
+No code changes. Fresh review today (`node --check` on every tracked `.js` file — all clean; repo-wide `TODO`/`FIXME` grep — zero hits) found nothing new to fix:
+
+- Guardrails re-verified with no drift: `MIN_ALERT_QUALITY=95` (83 floor respected, `lib/emaperps-runtime.js:50`), `$200M` volume floor (`:691,985`), `PAPER_LEVERAGE=5` (`:56`), `PAPER_SIZE_QUALITY_CEIL=110` (`:69`).
+- Re-checked yesterday's duplicate-24H-vol fix (`emaperps.js:244`) — confirmed correct: `reasonLabels` is filtered to drop any `/24H vol/` match *before* the 6-item slice, then the single explicit `signal.volume24h` append is the only volume shown. No regression.
+- Read `worker/trade-engine.js` and `scripts/check24h.js` in full (previously under-reviewed, each mentioned only once in 36 days of this log) — confirmed both belong to the separate meme-autoscan/Solana-trading system, not EMAPerps, and are out of scope for this daily agent's instructions. No changes made there.
+- Noted but not changed (cosmetic, debatable): `emaperps.js:654`'s reasoning-chip "positive" regex (`/uptrend|aligned|pullback|wick|demand|supply|rsi|adx|4H|tested|conflu/i`) incidentally matches the `"4H"` substring inside every `"$XXXM 24H vol"` label, so the volume chip always renders green like a technical confirmation. Arguably harmless (higher volume is a genuinely positive attribute), so not treated as a bug worth a fix without more signal it misleads anyone.
+
+**Considered but deferred** (unchanged — still no trade data to validate any of them against): EMA-pullback volume-confirmation filter, funding-rate percentile bonus (with OI-direction refinement), RSI-band widening.
+
+### Watch tomorrow
+
+- **Priority, now 37 days running**: network access to `soloris-signals.vercel.app` and `fapi.binance.com` needs to be restored — one `update_environment` approval on a live "Run now" session would close this out.
+- Once access is restored: run the full health check + performance analysis backlog, then backtest the queued filter ideas (volume confirmation, funding-rate bonus w/ OI direction, RSI-band widening) before implementing any.
+
+---
+
 ## 2026-11-08
 
 **EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 36).
