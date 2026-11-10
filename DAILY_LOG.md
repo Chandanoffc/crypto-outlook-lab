@@ -1,5 +1,50 @@
 # Soloris Signals — Daily Agent Log
 
+## 2026-11-10
+
+**EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 38).
+
+**BTC**: ⚠️ Could not fetch — same blocker.
+
+---
+
+### ⚠️ Blocker persists (day 38) — re-notifying today
+
+Re-confirmed via `curl` through the agent proxy and `/__agentproxy/status`: `soloris-signals.vercel.app:443` and `fapi.binance.com:443` both still `connect_rejected`. Attempted `update_environment` again to add both hosts to the Default environment's allowlist — refused again, same reason as every prior attempt ("needs a person's approval, and nobody is present on this routine run"). Confirmed via `get_environment` that the Default environment is otherwise editable by this account (`editable_by_you: true`, network type `limited`, empty `allowed_hosts`) — the only missing piece is a live approval, which requires a person to start this routine with "Run now" and approve the prompt in that session, or add the two hosts themselves in environment settings.
+
+This run also had to re-establish GitHub API access from scratch: it started from a plain unauthenticated `git clone` (no prior `add_repo`/`register_repo_root` state carried over) and needed both tool calls again before `gh api` worked. Once attached: 0 open issues, 0 open PRs, last 10 scheduled Action runs (`Hourly Scan`, `Upbit Listing Alerts`, `Daily Strategy Digest`) all `success`. The `GH_TOKEN`-invalid cosmetic issue from day 28 is also still present (`gh auth status` fails) but, as on every prior day, does not block `gh api` REST calls or `git push`.
+
+Tasks 1 and 3 (health check, performance analysis) not run today — no live balance, positions, BTC price, or closed-trade data was available; none of today's numbers are fabricated.
+
+**Notifying today**: last push notification was day 35 (2026-11-07); days 36–37 held off per cadence ("re-notify if still blocked in a few more days"). Three days have now passed with no resolution, so sending an update today.
+
+### Research findings (Task 2)
+
+- No dated November 2026 source for trending perp setups, altcoin rankings, or specific setups surfaced this run either — same pattern as every prior day since this log started. Most "current" results returned by search are actually November 2025 (DEX perp volume ~$1.13T that month) or September/October 2026 altcoin-open-interest pieces (ZEC, BNB, ARB, XRP, SOL gaining OI), not anything dated to this week.
+- EMA pullback win rates: once again a wide, unverified spread — self-reported community backtests ranged ~19–50% WR depending on asset/timeframe/params, a Coinbase-attributed 6-month EMA/RSI study found no variant cleared the ~33% WR needed to break even at 2:1 R:R, and a 67.9% figure traces to a promotional signals-bot post with no disclosed methodology. No independent source ties a specific rule change to a measured win-rate lift on this exact setup. No change warranted.
+- ADX/RSI/MACD confluence: sources actively disagree with each other this run (one anecdote: MACD added as a filter "didn't meaningfully change" win rate; two blogs cite conflicting Glassnode-attributed numbers — 43% vs. 71% for "confluence" — with no shared methodology). The one thing that keeps replicating across days is the ADX-as-trend-strength-gate heuristic, which already matches our `adx4h` gate/bonus. Nothing to change.
+- Funding-rate edge: same conclusion as every prior day — extreme funding marks crowded positioning, not a timing tool; most reliable only when combined with OI direction, and can lag the eventual reversal by days to weeks (one source: funding can stay extreme for weeks during a strong trend without the expected reversal). Still unvalidated against this platform's own trades.
+- Market structure: no November-2026-dated altcoin volume ranking was found (closest was a July 2026 trending snapshot — PENGU/ARROW/ADI/CASHCAT/AERO — too stale to act on). Nothing here suggests a change to the $200M volume floor or symbol universe.
+
+### Changes implemented
+
+No code changes. Fresh review today found nothing new to fix, consistent with the last several days:
+
+- `node --check` on every tracked `.js` file in the repo — all clean.
+- Repo-wide `TODO`/`FIXME` grep — zero hits.
+- Zero `ClaudePerps`/`CLAUDEPERPS`/`cpSig`/`cpPaper`/`cpTiers`/`claudeperps` references anywhere in `.js`/`.html` files.
+- Guardrails re-verified with no drift: `MIN_ALERT_QUALITY=95` (83 floor respected, `lib/emaperps-runtime.js:50`), `$200M` volume floor (`:691`), `PAPER_LEVERAGE=5` (`:56`), `PAPER_BE_TRIGGER_PCT=10` (`:58`), `PAPER_SIZE_QUALITY_CEIL=110` (`:69`).
+- Reviewed the 6 most recent commits not authored by this daily agent (`b2febeb` tighten entry filters, `5370d2d` resubmit tx on blockhash expiry, `30bb095` remove stale `inGrace` ref, `35f4b2b` SL grace period, `b876104` daily trade journal, `39e60c5` buy/sell-ratio + holder filters) — confirmed all touch only `lib/meme-autoscan.js`, `lib/solana-trader.js`, `lib/meme-papertrades.js`, and `worker/trade-engine.js`, i.e. the separate meme-autoscan/Solana-trading system already established as out of scope for this daily agent (previously confirmed day 37). No EMAPerps files touched by them; no action needed here.
+
+**Considered but deferred** (unchanged — still no trade data to validate any of them against): EMA-pullback volume-confirmation filter, funding-rate percentile bonus (with OI-direction refinement), RSI-band widening.
+
+### Watch tomorrow
+
+- **Priority, now 38 days running**: network access to `soloris-signals.vercel.app` and `fapi.binance.com` needs to be restored — one `update_environment` approval on a live "Run now" session would close this out.
+- Once access is restored: run the full health check + performance analysis backlog, then backtest the queued filter ideas (volume confirmation, funding-rate bonus w/ OI direction, RSI-band widening) before implementing any.
+
+---
+
 ## 2026-11-09
 
 **EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 37).
