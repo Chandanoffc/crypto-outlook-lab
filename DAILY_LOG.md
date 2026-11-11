@@ -1,5 +1,54 @@
 # Soloris Signals — Daily Agent Log
 
+## 2026-11-11
+
+**EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 39).
+
+**BTC**: ⚠️ Could not fetch — same blocker.
+
+---
+
+### ⚠️ Blocker persists (day 39) — no new notification today, per cadence
+
+Re-confirmed via `curl` through the agent proxy and `/__agentproxy/status`: `soloris-signals.vercel.app:443` and `fapi.binance.com:443` both still `connect_rejected`. Attempted `update_environment` again to add both hosts to the Default environment's allowlist — refused again, same reason as every prior attempt ("needs a person's approval, and nobody is present on this routine run"). `get_environment` confirms the Default environment is still editable (`editable_by_you: true`, network type `limited`, empty `allowed_hosts`) — a live "Run now" approval is still the only missing piece.
+
+This run started from a plain unauthenticated `git clone` and needed `add_repo`/`register_repo_root` again before `gh api` worked. Once attached: 0 open issues, 0 open PRs, last 15 scheduled Action runs (`Hourly Scan`, `Upbit Listing Alerts`, `Daily Strategy Digest`) all `completed`/`success` through 2026-11-11T01:58 UTC.
+
+Tasks 1 and 3 (health check, performance analysis) not run today — no live balance, positions, BTC price, or closed-trade data was available; none of today's numbers are fabricated.
+
+**Notification**: last push notification was day 38 (2026-11-10, one day ago). Holding off today per the established cadence (re-notify only after the blocker has persisted a few more days with nothing new) — nothing has changed since yesterday's update.
+
+### Research findings (Task 2)
+
+- Still no November-2026-dated source for trending perp setups or altcoin rankings; results keep resolving to April–July 2026 items (e.g. a Blockworks note that perps were the best-performing sector at +16.3% on the week during a 3-week ETF outflow stretch) or 2025 volume records. Nothing actionable for this exact week.
+- EMA pullback win rates: same wide, unverified spread as every prior day — independent-looking backtests range ~19–32% WR, a Coinbase-data comparison found no EMA/RSI variant cleared buy-and-hold or the ~33% breakeven WR at 2:1 R:R, and a 67.9% figure traces to an unverifiable promotional bot post. No change warranted.
+- MACD/RSI/ADX confluence: one new, more rigorous-looking data point — a trader's own test found adding MACD as a trend filter cut signal count ~30% but barely moved win rate; the benefit was smaller drawdowns (losses occurred with-trend, not against it), and moving the same RSI setup from 4H→1H dropped win rate 64%→51% (more noise on lower timeframes). This is consistent with how our 4H-trend hard-block and 1H-entry/4H-confirmation split are already structured — no rule change indicated, but worth remembering if a future 1H-only filter is ever proposed (lower-timeframe noise is a real cost).
+- Funding-rate edge: unchanged conclusion — extreme funding flags crowded positioning, not a timing tool; most reliable paired with OI direction, can stay extreme for weeks without reverting during a strong trend. Still unvalidated against this platform's own trades.
+- Market structure: no dated November 2026 altcoin-volume ranking surfaced (closest usable snapshot is still the July 2026 PENGU/ARROW/ADI/CASHCAT/AERO list). Nothing suggests a change to the $200M volume floor or symbol universe.
+
+### Changes implemented
+
+No code changes. Fresh review today found nothing new to fix:
+
+- `node --check` on every tracked `.js` file in the repo — all clean.
+- Repo-wide `TODO`/`FIXME`/`XXX` grep — zero hits (outside an unrelated base58 placeholder string in `lib/meme-autoscan.js`).
+- Zero `ClaudePerps`/`CLAUDEPERPS`/`cpSig`/`cpPaper`/`cpTiers`/`claudeperps` references anywhere in `.js`/`.html` files.
+- Guardrails re-verified with no drift: `MIN_ALERT_QUALITY=95` (83 floor respected, `lib/emaperps-runtime.js:50`), `$200M` volume floor (`:691`), `PAPER_LEVERAGE=5` (`:56`), `PAPER_BE_TRIGGER_PCT=10` (`:58`), `PAPER_SIZE_QUALITY_CEIL=110` (`:69`).
+- Re-read `api/emaperps.js` in full: lock-claiming (`tryClaimScanLock`/`tryClaimMarkLock`), state load/save, and all action branches (`analyze`/`scan`/`settings`/`reset`/`mark`/`paper-reset`) checked line-by-line — correct. Noted that `paper-reset` constructs its reset object by hand (`{ balance, startingBalance, openPositions, closedTrades, lastMarkAt }`) instead of calling `defaultPaper()` (which isn't exported), omitting `peakBalance`/`consecutiveLosses`/`pausedUntil`/`pauseReason`/`symbolCooldowns` — but `sanitizePaper()` fills every one of those back to its correct default (`PAPER_START`/`0`/`0`/`null`/`{}`) on the next read, which is exactly the right behavior for a full paper-account reset (drawdown peak and loss-streak history should *not* survive a reset). Not a bug — just doesn't round-trip through a single shared default, so flagging for awareness rather than changing it.
+- Re-read `lib/neon-db.js`'s `tryClaimScanLock`/`tryClaimMarkLock`/`getRuntimeState`/`upsertRuntimeState` — the atomic `INSERT ... ON CONFLICT DO UPDATE ... WHERE` cooldown-gated pattern is race-free and correct on both locks.
+- Re-read `emaperps.js` circuit-breaker UI banner, equity-curve (`computeEquityCurve`/`renderEquityCurve`, including the same-millisecond collision bump), and both win-rate/profit-factor stat blocks (paper-trade tab and signals-stats tab) — all consistent with each other and with the runtime's own accounting.
+- Reviewed `git log` since day 38 — no new non-daily-agent commits; the 6 meme-autoscan/Solana-trader commits already confirmed out of scope on day 37 are still the most recent ones outside this agent's own commits.
+
+**Considered but deferred** (unchanged — still no trade data to validate any of them against): EMA-pullback volume-confirmation filter, funding-rate percentile bonus (with OI-direction refinement), RSI-band widening.
+
+### Watch tomorrow
+
+- **Priority, now 39 days running**: network access to `soloris-signals.vercel.app` and `fapi.binance.com` needs to be restored — one `update_environment` approval on a live "Run now" session would close this out.
+- Once access is restored: run the full health check + performance analysis backlog, then backtest the queued filter ideas (volume confirmation, funding-rate bonus w/ OI direction, RSI-band widening) before implementing any.
+- Re-notify if the blocker is still live in a few more days (last notification was day 38).
+
+---
+
 ## 2026-11-10
 
 **EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 38).
