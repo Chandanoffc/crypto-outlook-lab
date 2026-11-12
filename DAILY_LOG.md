@@ -1,5 +1,54 @@
 # Soloris Signals — Daily Agent Log
 
+## 2026-11-12
+
+**EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 40).
+
+**BTC**: ⚠️ Could not fetch — same blocker.
+
+---
+
+### ⚠️ Blocker persists (day 40) — no new notification today, per cadence
+
+Re-confirmed via `curl` through the agent proxy: `soloris-signals.vercel.app:443` returns `connect_rejected` (exit 56). `get_environment` confirms the Default environment is still `limited` network with an empty `allowed_hosts` list and is `editable_by_you`. Attempted `update_environment` again to add `soloris-signals.vercel.app` + `fapi.binance.com` — refused with the same reason as every prior attempt: "needs a person's approval, and nobody is present on this routine run." The fix remains exactly one approval away: start this routine with "Run now" and approve the host-allowlist prompt in that live session, or add the two hosts directly in environment settings.
+
+This run started from a plain unauthenticated `git clone` and needed `add_repo` again before `gh api` worked (no prior session state carried over). Once attached: 0 open issues, 0 open PRs, last 8 scheduled Action runs (`Hourly Scan`, `Upbit Listing Alerts`, `Daily Strategy Digest`) all `completed`/`success` through 2026-11-11T23:24 UTC — the platform itself is running fine from GitHub Actions' vantage point, this container's network policy is the only thing blocking this agent's own view of it.
+
+Tasks 1 and 3 (health check, performance analysis) not run today — no live balance, positions, BTC price, or closed-trade data was available; none of today's numbers are fabricated.
+
+**Notification**: last push notification was day 38 (2026-11-10). Holding off again today — nothing has changed since yesterday's entry and a person was already notified twice (day 35, day 38) about the exact same one-step fix.
+
+### Research findings (Task 2)
+
+Full web research completed (Task 2 unaffected by the egress blocker — different network path). Nothing found today changes the status of the ideas already logged as "considered but deferred":
+
+- **Trending coins/setups**: no reliable real-time dashboard data surfaced; named-for-November-2026 mentions across sources were scattered and mostly unverifiable (Zcash NU7 upgrade ~Nov 5, Stellar governance votes Nov 3/23, plus the usual AI/institutional names — Ondo, Bittensor, Sei, Hyperliquid, Aptos). Nothing dated/sourced well enough to justify a symbol-universe change.
+- **EMA pullback backtests**: same pattern as every prior day — no credible 2026 crypto-specific backtest found; candidate win-rate figures (67.9%, 57%, 32.2%) are each either marketing, tiny-sample, or non-crypto. No change warranted to entry rules.
+- **Indicator research**: RSI/MACD/Bollinger Bands remain the most-cited combo; one source specifically recommends Bollinger Bands + Volume Profile for intraday crypto. Mild, still-unquantified support for the already-deferred volume-confirmation filter idea — no rigorous win-rate evidence either way.
+- **Market structure**: no clean November 2026 dominance analysis found; the one piece located argues BTC dominance / "Bitcoin season" still has staying power — reinforces (doesn't change) the existing BTC-4H-macro gate.
+- **Funding rate edge**: best-supported finding this run — funding-rate *persistence* (a rate held positive/negative for 12h+) is a stronger signal than a snapshot level, but the contrarian funding edge is reportedly decaying and BTC-specific; a generic all-perps funding bonus is not supported. Reinforces the decision to keep this deferred rather than add a blanket funding-rate quality bonus.
+
+### Changes implemented
+
+No code changes. Fresh review today found nothing new to fix:
+
+- `node --check` on every tracked `.js` file in the repo — all clean.
+- Read `lib/emaperps-runtime.js` (full, 1415 lines), `api/emaperps.js` (full), and the stats/equity-curve/paper-position-card sections of `emaperps.js` line-by-line — signal detection, quality scoring, fixed-%, SL/TP, circuit breaker, TP1 partial-close accounting, and the Stats/Equity-curve rendering are all internally consistent with each other and with their own documenting comments. No new display or accounting bugs found.
+- Re-checked the `CLAUDEPERPS` fallback-label item flagged as cosmetic/deferred on 2026-10-04 — already fixed (every `sanitizeBannerText` fallback in `api/notify.js` now defaults to `"EMA PERPS"` or `"SOLORIS"`, no `CLAUDEPERPS` string remains anywhere in the repo).
+- Noted (not a bug, flagging for awareness only): `daily-agent.md` describes the platform as having "**One signal engine**" (EMAPerps), but the live repo also runs TA Perps (`lib/taperps-scanner.js`, added 2026-10-19) and MemeScreener (added 2026-10-21) as separate, active strategies with their own API routes and cron entries in `api/cron-scan.js`. That line in the instructions doc is stale as written — out of scope for this agent to fix since this agent's mandate is explicitly EMAPerps-only, but worth a human updating the doc so a future reader isn't misled into thinking EMAPerps is the only live strategy.
+- GitHub Actions (`Hourly Scan`, `Upbit Listing Alerts`, `Daily Strategy Digest`) all green; 0 open issues/PRs.
+
+**Considered but deferred** (unchanged — still no trade data to validate any of them against): EMA-pullback volume-confirmation filter, funding-rate persistence bonus, RSI-band widening.
+
+### Watch tomorrow
+
+- **Priority, now 40 days running**: network access to `soloris-signals.vercel.app` and `fapi.binance.com` needs to be restored — one `update_environment` approval on a live "Run now" session closes this out.
+- Once access is restored: run the full health check + performance analysis backlog, then backtest the queued filter ideas before implementing any.
+- Consider updating `.claude/daily-agent.md`'s "One signal engine" line to acknowledge TA Perps and MemeScreener now also run live (out of this agent's scope to edit, but worth a human fixing the doc).
+- Re-notify if the blocker is still live in a few more days (last notification was day 38).
+
+---
+
 ## 2026-11-11
 
 **EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 39).
