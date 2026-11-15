@@ -1,5 +1,55 @@
 # Soloris Signals — Daily Agent Log
 
+## 2026-11-15
+
+**EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 43).
+
+**BTC**: ⚠️ Could not fetch — same blocker.
+
+---
+
+### ⚠️ Blocker persists (day 43) — no new notification today, per cadence
+
+Re-confirmed via `curl` through the agent proxy: both `soloris-signals.vercel.app:443` and `fapi.binance.com:443` returned `connect_rejected` (exit 56/"000", gateway 403 to CONNECT). `get_environment` confirms the Default environment is still `limited` network with an empty `allowed_hosts` list and `editable_by_you: true`. Attempted `update_environment` again to add both hosts — refused with the same reason as every prior attempt: "needs a person's approval, and nobody is present on this routine run." The fix remains exactly one approval away: start this routine with "Run now" and approve the host-allowlist prompt in that live session, or add the two hosts directly in Environment settings → Network access.
+
+GitHub confirms the platform itself is healthy: 0 open issues, 0 open PRs, last 8 scheduled Action runs (`Hourly Scan`, `Upbit Listing Alerts`, `Daily Strategy Digest`) all `completed`/`success` through 2026-11-15T02:33 UTC — this container's network policy is the only thing blocking this agent's own view of it.
+
+Tasks 1 and 3 (health check, performance analysis) not run today — no live balance, positions, BTC price, or closed-trade data was available; none of today's numbers are fabricated.
+
+**Notification**: last push notification was day 41 (2026-11-13). Holding off today per the every-~3-day cadence (35 → 38 → 41 → next around 44) — nothing has changed since yesterday.
+
+### Research findings (Task 2)
+
+Full web research completed via a background research pass. Same conclusion as every recent day — no rigorously sourced, quantified backtest surfaced that would justify a strategy change:
+
+- **Trending coins/setups**: nothing dated to this specific week with real numbers; closest data (perp DEX volume ~$1.13T Nov 2025, BTC near $70k) is stale and not actionable.
+- **EMA pullback backtests**: no credible, methodology-backed improvement found. The recurring "67.9% WR" vendor claim (TrendRider) reappeared again with no disclosed methodology — not new evidence.
+- **Indicator combinations**: one academic lead (a Bilecik University thesis: RSI better in ranging markets, MACD better in trending) surfaced but without usable combined-indicator numbers. No peer-reviewed ADX+RSI+MACD backtest found. Our existing `adx4h` trend/range gate already reflects this RSI-vs-MACD regime split.
+- **Market structure**: conflicting, undated altcoin reports; no source meets the $500M+/day-this-week bar. No change to the $200M volume floor or symbol universe justified.
+- **Funding rate edge**: most rigorous finding today — a cross-asset backtest (100+ Binance perps) found negative funding did NOT act as a standalone buy signal: forward 24h returns (-0.55%) roughly matched the cost of holding short through 3 funding intervals (-0.3%), i.e. no edge once funding cost is netted out. A separate cross-sectional carry note found only a thin dollar-neutral long-low/short-high funding factor (Sharpe ≈0.39) — a market-neutral carry strategy, not applicable to this platform's single-asset directional signals. Reinforces (if anything, weakens) the existing deferred status of a funding-rate quality bonus.
+- Also notable: today `WebFetch` to an external research host (`4lex.substack.com`) was itself blocked by the same egress policy — unlike some prior days, the research path isn't fully exempt from the host allowlist; `WebSearch` still worked fine.
+
+### Changes implemented
+
+No code changes. Static review confirms nothing has changed in the repo since yesterday's sweep (HEAD is still yesterday's commit `8dfc4cb` — no human or other-agent commits landed overnight):
+
+- `node --check` on every tracked `.js` file (including `scripts/check24h.js`, `worker/trade-engine.js`) — all clean.
+- Guardrails re-verified with no drift: `MIN_ALERT_QUALITY=95` (83 floor respected), `$200M` volume floor intact, `PAPER_LEVERAGE=5`, `PAPER_SIZE_QUALITY_CEIL=110`, fixed SL/TP1/TP2 (1.5%/3.0%/6.0%).
+- Grepped for stale-value regressions (`CLAUDEPERPS` strings, old `92` ceiling, hardcoded R-multiple labels) — none found.
+- GitHub Actions (`Hourly Scan`, `Upbit Listing Alerts`, `Daily Strategy Digest`) all green; 0 open issues/PRs.
+
+After 43 consecutive days of review sweeps with no new code landing, the discoverable-by-static-review backlog remains exhausted — further daily full-file re-reads without new commits or new trade data are unlikely to find anything the prior 42 sweeps didn't.
+
+**Considered but deferred** (unchanged — still no trade data to validate any of them against): EMA-pullback volume-confirmation filter, funding-rate persistence bonus (further weakened by today's backtest finding), RSI-band widening.
+
+### Watch tomorrow
+
+- **Priority, now 43 days running**: network access to `soloris-signals.vercel.app` and `fapi.binance.com` needs to be restored — one `update_environment` approval on a live "Run now" session closes this out.
+- Once access is restored: run the full health check + performance analysis backlog, then backtest the queued filter ideas before implementing any.
+- Re-notify if the blocker is still live around day 44 (last notification was day 41).
+
+---
+
 ## 2026-11-14
 
 **EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 42).
