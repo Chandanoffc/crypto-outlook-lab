@@ -1,5 +1,55 @@
 # Soloris Signals — Daily Agent Log
 
+## 2026-11-23
+
+**EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 51).
+
+**BTC**: ⚠️ Could not fetch — same blocker.
+
+---
+
+### ⚠️ Blocker persists (day 51) — no new notification today, per cadence
+
+Re-confirmed via `curl` through the agent proxy: both `soloris-signals.vercel.app:443` and `fapi.binance.com:443` refused with `connect_rejected` (HTTP 403 — policy denial, per `/root/.ccr/README.md`). `get_environment` confirms the Default environment is still `limited` network with an empty `allowed_hosts` list. Attempted `update_environment` to add both hosts — refused for the same reason as every prior attempt: it needs a person's live approval, and nobody is present on this scheduled run. The fix is unchanged: start this routine with "Run now" and approve the host-allowlist prompt, or add `soloris-signals.vercel.app` and `fapi.binance.com` directly in Environment settings → Network access.
+
+GitHub Actions confirm the platform itself is healthy and running independently of this blocker (checked today via `gh` with the repo properly attached): last 10 runs of `Hourly Scan`, `Upbit Listing Alerts`, `Daily Strategy Digest` all `completed`/`success` through 2026-11-22T23:48 UTC. 0 open issues, 0 open PRs.
+
+Tasks 1 and 3 (health check, performance analysis) not run today — no live balance, positions, BTC price, or closed-trade data was available; none of today's numbers are fabricated.
+
+**Notification**: last push notification was day 50 (2026-11-22). Per the established cadence (…47 → 50 → 53), the next scheduled re-notify is day 53 (2026-11-25). Today is not a cadence day and nothing material changed, so no notification is sent today.
+
+### Research findings (Task 2)
+
+Full web research completed via `WebSearch` across all five required areas. Same conclusion as every recent day — no rigorously sourced, quantified backtest surfaced that would justify a strategy change:
+
+- **Trending coins/setups**: nothing dated to this specific week with verifiable volume numbers tied to current setups. Results skewed toward undated or 2025 coverage; no source met the bar for a market-structure or symbol-universe change.
+- **EMA pullback backtests**: no credible, methodology-backed improvement found. The recurring "67.9% WR" claim (dev.to/TrendRider) remains unverified promotional content with no disclosed methodology. The altFINS five-year backtest again shows a high win rate does not imply profitability (fees/slippage erase the edge) — consistent with this engine's existing fixed 1.5%/3%/6% SL/TP1/TP2 structure (2R/4R) being built around R-multiple rather than raw hit rate. A TradesViz-indexed backtest sample showed a pullback-style strategy losing money despite activity, reinforcing that dip-buying underperforms trend-following in crypto per the same source family as prior days.
+- **Indicator combinations**: RSI+MACD confluence and ADX-as-regime-filter keep replicating as the most-recommended heuristics, but still with no independently-audited, out-of-sample validation attached — only vendor/exchange blog claims. Existing `adx4h` gate/bonus already captures the validated part of this idea; no new justified change.
+- **CVD/OI data caveat (new detail this run)**: one TradingView script description explicitly notes its "CVD" is actually delta volume (volume × sign(close−open)) and its "OI" is volume-simulated, not real order-flow or real open-interest. Reinforces the existing deferred decision not to add a funding/OI-based quality bonus without first confirming any such input would be real exchange data, not a proxy.
+- **Funding rate edge**: unchanged conclusion — extreme funding is a crowding/positioning gauge, most reliable paired with open-interest direction and price action, not a standalone entry signal; no universal threshold across sources. No change to the deferred funding-rate-bonus idea.
+- **Market structure**: no altcoin confirmed at the $500M+/day bar for this specific week with a clear, undisputed read; most volume-ranking sources returned were undated or stale. No change to the $200M volume floor or symbol universe justified.
+
+### Changes implemented
+
+No code changes. Static review confirms nothing has drifted since yesterday's sweep (HEAD still yesterday's commit `5bfc6c2`):
+
+- `node --check` on every tracked `.js` file in the repo — all clean.
+- Guardrails re-verified with no drift: `MIN_ALERT_QUALITY=95` (83 floor respected), `$200M` volume floor (`quoteVolume < 200_000_000` gate intact), `PAPER_LEVERAGE=5`, `PAPER_SIZE_QUALITY_CEIL=110`.
+- Grepped for stale-value regressions (`CLAUDEPERPS`/`ClaudePerps` strings) — none found outside the intentional historical mention in `.claude/daily-agent.md`.
+- GitHub Actions all green (10/10 recent runs success); 0 open issues/PRs.
+
+After 51 consecutive days of review sweeps with no new code landing, the discoverable-by-static-review backlog remains exhausted — further daily full-file re-reads without new commits or new trade data are unlikely to find anything the prior 50 sweeps didn't.
+
+**Considered but deferred** (unchanged — still no trade data to validate any of them against): EMA-pullback volume-confirmation filter, funding-rate persistence/contrarian bonus (recent research continues to argue against this one specifically — decaying, asset-specific edge, and today's CVD/OI-proxy caveat adds another reason to verify data quality first), RSI-band widening toward the 55–85 range research keeps surfacing.
+
+### Watch tomorrow
+
+- **Priority, now 51 days running**: network access to `soloris-signals.vercel.app` and `fapi.binance.com` needs to be restored — one `update_environment` (or `create_environment`) approval on a live "Run now" session closes this out.
+- Once access is restored: run the full health check + performance analysis backlog, then backtest the queued filter ideas before implementing any.
+- Next re-notify around day 53 (2026-11-25) if the blocker is still live.
+
+---
+
 ## 2026-11-22
 
 **EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 50).
