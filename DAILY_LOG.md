@@ -1,5 +1,54 @@
 # Soloris Signals — Daily Agent Log
 
+## 2026-11-28
+
+**EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 56).
+
+**BTC**: ⚠️ Could not fetch — same blocker.
+
+---
+
+### ⚠️ Blocker persists (day 56) — scheduled re-notify day
+
+Re-confirmed via `curl`: both `soloris-signals.vercel.app:443` and `fapi.binance.com:443` still return `connect_rejected` (HTTP 403 at the agent-proxy CONNECT level). `get_environment` still shows the Default environment as `limited` network with an empty `allowed_hosts` list. Attempted `update_environment` to add both hosts — refused again with the same reason as every prior attempt: it needs a person's live approval and nobody is present on this scheduled run. Fix is unchanged: start this routine with "Run now" and approve the host-allowlist prompt, or add both hosts directly in Environment settings → Network access (Default environment).
+
+GitHub confirms the platform is healthy independent of this blocker: last 15 Actions runs (`Hourly Scan`, `Upbit Listing Alerts`, `Daily Strategy Digest`) all `completed`/`success` through 2026-11-27T23:28 UTC. 0 open issues, 0 open PRs.
+
+Tasks 1 and 3 (health check, performance analysis) not run today — no live balance, positions, BTC price, or closed-trade data was available; none of today's numbers are fabricated.
+
+**Notification**: last push notification was day 53 (2026-11-25). Per the established cadence (…50 → 53 → 56), today is the scheduled re-notify day — a push notification was sent.
+
+### Research findings (Task 2)
+
+Full web research completed via `WebSearch` across all five required areas (WebFetch on tradingview.com/kraken.com was itself blocked by the proxy this time — snippet-only findings, flagged where lower-confidence). Same conclusion as every recent day — nothing rigorously sourced and dated enough to justify a strategy change:
+
+- **Trending coins/setups**: no current-week, verifiable setup list — results were stale (spring/mid-2026) derivatives-flow commentary (CryptoSlate, Decrypt, ChainUp) naming HYPE/SOL/ZEC/PEPE/TAO/ASTER as repeatedly-mentioned high-volume names, but nothing dated to this week. No market-structure or symbol-universe change justified; continuing to rely on the existing $200M volume floor rather than a curated coin list.
+- **EMA pullback backtests**: the recurring "67.9% WR" claim is confirmed vendor marketing for a multi-indicator bot (RSI+EMA+Bollinger+ADX+OBV+MACD), not pure EMA pullback — not evidence. AltFINS' 5-year fee-inclusive backtest again shows trend-following beats dip-buying in crypto, and notably that win rate alone was a poor profitability predictor (the lowest-WR strategy was most profitable) — consistent with this engine's fixed-% SL/TP (2R/4R) design being built around R-multiple, not raw hit rate. An arXiv paper found EMA-strategy performance is sensitive to window-size choice, supporting periodic re-validation of EMA20/50 rather than assuming it's fixed-optimal (not acted on today — no trade data to validate against).
+- **ADX/RSI/MACD combination**: no rigorous backtested combo found; KuCoin's RSI+MACD confluence rule (RSI>50 + MACD cross) matches our existing bonus-stacking design, no change needed. One real negative finding: a large (~8.6M trade) vendor backtest found CVD divergence did NOT outperform random-bar entry — explicitly not adding CVD divergence as a quality bonus based on this.
+- **Market structure**: no source confirmed a specific altcoin at the $500M+/day bar for this exact week with a clear, dated read. No change to the $200M volume floor or symbol universe.
+- **Funding rate edge**: most consistent theme across sources (Kraken, CryptoQuant, Cointelegraph, ForkLog) — extreme funding in either direction marks crowded leveraged positioning and tends to reverse sharply, but Kraken explicitly warns this fails during strong trends (funding stayed >0.05% for weeks during 2020–21 bull run without reversing). Best-supported combination rule: negative funding + sharp OI decline together is more reliable than funding alone. Still not implemented — would need backtesting against this platform's own closed trades to size correctly, and that data is exactly what's blocked right now.
+
+### Changes implemented
+
+No code changes. Static review confirms nothing has drifted since yesterday's sweep (HEAD still yesterday's commit `bfa2232`):
+
+- `node --check` on every tracked `.js` file in the repo — all clean.
+- Guardrails re-verified with no drift: `MIN_ALERT_QUALITY=95` (83 floor respected), `$200M` volume floor (`quoteVolume < 200_000_000` gate intact), `PAPER_LEVERAGE=5`, `PAPER_SIZE_QUALITY_CEIL=110`.
+- Grepped for `TODO`/`FIXME`/`XXX` markers and stale `ClaudePerps`/`CLAUDEPERPS` references across `lib/`, `api/`, `emaperps.js`, `emaperps.html` — none found (one unrelated `XXXXXXXX...` burn-address placeholder string in `lib/meme-autoscan.js`, not this engine).
+- GitHub Actions all green (15/15 recent runs success); 0 open issues/PRs.
+
+After 56 consecutive days of review sweeps with no new code landing and no fresh research finding, the discoverable-by-static-review backlog remains exhausted. No speculative changes made — none of today's research or code review produced data-backed justification for one.
+
+**Considered but deferred** (unchanged — still no trade data to validate any of them against): EMA-pullback volume-confirmation filter, funding-rate-extreme contrarian bonus gated on OI decline + not fighting the BTC 4H macro trend filter, RSI-band widening toward the 55–85 range research keeps surfacing. Explicitly rejected today: CVD divergence as a quality bonus (one real backtest found says it underperforms random entry).
+
+### Watch tomorrow
+
+- **Priority, now 56 days running**: network access to `soloris-signals.vercel.app` and `fapi.binance.com` needs to be restored — one `update_environment` (or `create_environment`) approval on a live "Run now" session closes this out.
+- Once access is restored: run the full health check + performance analysis backlog, then backtest the queued filter ideas (volume-confirmation, funding-rate-contrarian+OI, RSI-band widening) before implementing any of them.
+- Next re-notify around day 59 (2026-12-01) if the blocker is still live.
+
+---
+
 ## 2026-11-27
 
 **EMAPerps**: ⚠️ Could not fetch live state — same network blocker, unresolved (day 55).
